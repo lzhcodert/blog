@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>札记 · 极简静态博客</title>
+<style>
+:root{
+  --bg:#f5f5f7;--surface:#ffffff;--surface-3:#f2f2f7;
+  --text:#1d1d1f;--muted:#6e6e73;--faint:#a1a1a6;
+  --line:rgba(0,0,0,.09);--blue:#007aff;--blue-soft:#eaf3ff;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+button,input{font-family:inherit}
+.ic{width:17px;height:17px;display:block;flex:none}
+.pad{padding-left:clamp(14px,2.2vw,36px);padding-right:clamp(14px,2.2vw,36px)}
+
+.topbar{position:sticky;top:0;z-index:50;height:56px;background:rgba(250,250,252,.88);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:.5px solid var(--line)}
+.top-inner{max-width:2000px;margin:0 auto;height:100%;display:flex;align-items:center;gap:20px}
+.brand{font-size:16px;font-weight:600;letter-spacing:-.3px;white-space:nowrap}
+.search{position:relative;flex:1;max-width:620px;margin-left:auto}
+.search>.ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--faint)}
+.search input{width:100%;height:34px;border:.5px solid transparent;background:var(--surface);border-radius:10px;padding:0 32px 0 35px;font-size:13px;outline:none;color:var(--text)}
+.search input::placeholder{color:var(--faint)}
+.search input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,122,255,.1)}
+.clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:19px;height:19px;border:0;border-radius:50%;background:#c7c7cc;color:#fff;font-size:12px;line-height:19px;text-align:center;cursor:pointer;padding:0}
+
+.filters{position:sticky;top:56px;z-index:49;background:rgba(250,250,252,.88);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:.5px solid var(--line)}
+.filter-inner{max-width:2000px;margin:0 auto;display:flex;align-items:center;gap:8px;padding-top:8px;padding-bottom:8px}
+.chips{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{border:0;background:transparent;color:var(--muted);font-size:13px;padding:6px 13px;border-radius:999px;white-space:nowrap;cursor:pointer}
+.chip:hover{background:rgba(0,0,0,.045)}
+.chip.active{background:var(--text);color:#fff;font-weight:500}
+.count{margin-left:auto;font-size:12px;color:var(--faint);white-space:nowrap}
+
+main{max-width:2000px;margin:0 auto;padding-top:14px;padding-bottom:48px}
+.group{margin-bottom:18px}
+.month{font-size:12px;font-weight:500;color:var(--faint);margin:0 0 6px;padding-left:2px}
+.list{background:var(--surface);border:.5px solid var(--line);border-radius:14px;overflow:hidden}
+.entry{border-bottom:.5px solid var(--line)}
+.entry:last-child{border-bottom:0}
+.row{display:flex;align-items:center;gap:10px;padding:12px 16px}
+.row:hover{background:#fafafc}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;background:#8e8e93}
+.dot.design{background:#007aff}.dot.frontend{background:#5ac8fa}.dot.essay{background:#8e8e93}
+.dot.efficiency{background:#ff9500}.dot.tool{background:#1d9e75}.dot.reading{background:#af52de}
+.title{font-size:14px;line-height:1.35;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{font-size:12px;color:var(--faint);white-space:nowrap;flex:none}
+.embed-strip{margin:0 16px 10px 33px;padding:7px 10px;border-radius:8px;background:var(--blue-soft);color:var(--blue);font-size:11px;cursor:pointer;user-select:none}
+.embed-panel{margin:0 16px 12px 33px;border:.5px solid var(--line);border-radius:10px;overflow:hidden}
+.embed-panel iframe{display:block;width:100%;height:180px;border:0;background:#fff}
+.empty{padding:64px 20px;text-align:center;color:var(--faint);font-size:13px;background:var(--surface);border:.5px solid var(--line);border-radius:14px}
+
+@media(max-width:700px){
+  .brand{font-size:15px}
+  .search{max-width:none}
+  .row{padding:11px 13px;gap:8px}
+  .title{font-size:13px}
+  .meta{font-size:11px}
+  .embed-strip,.embed-panel{margin-left:28px;margin-right:13px}
+  .embed-panel iframe{height:200px}
+}
+</style>
+</head>
+<body>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+<symbol id="search-icon" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+</svg>
+
+<header class="topbar">
+  <div class="top-inner pad">
+    <div class="brand">札记</div>
+    <div class="search">
+      <svg class="ic"><use href="#search-icon"/></svg>
+      <input id="search" type="search" placeholder="搜索文章" autocomplete="off">
+      <button class="clear" id="clear" type="button" hidden>×</button>
+    </div>
+  </div>
+</header>
+
+<div class="filters">
+  <div class="filter-inner pad">
+    <div class="chips" id="chips">
+      <button class="chip active" data-cat="all">全部</button>
+      <button class="chip" data-cat="设计">设计</button>
+      <button class="chip" data-cat="前端">前端</button>
+      <button class="chip" data-cat="随笔">随笔</button>
+      <button class="chip" data-cat="效率">效率</button>
+      <button class="chip" data-cat="工具">工具</button>
+      <button class="chip" data-cat="阅读">阅读</button>
+    </div>
+    <span class="count" id="count">9 篇</span>
+  </div>
+</div>
+
+<main class="pad">
+
+  <section class="group">
+    <h2 class="month">2026 年 11 月</h2>
+    <div class="list">
+      <div class="entry" data-category="设计">
+        <div class="row"><span class="dot design"></span><span class="title">留白不是空白：长文的呼吸感从哪里来</span><span class="meta">11.18 · 6 分钟</span></div>
+      </div>
+      <div class="entry" data-category="前端">
+        <div class="row"><span class="dot frontend"></span><span class="title">用 iframe 承载交互内容的安全边界</span><span class="meta">11.12 · 9 分钟</span></div>
+      </div>
+      <div class="entry" data-category="工具">
+        <div class="row"><span class="dot tool"></span><span class="title">把图表与演示稿直接放进文章</span><span class="meta">11.05 · 5 分钟</span></div>
+        <div class="embed-strip" data-embed="embedPanel1">嵌入 HTML 内容预览 · 点击展开</div>
+        <figure class="embed-panel" id="embedPanel1" hidden>
+          <iframe title="嵌入内容示例" sandbox="allow-scripts" srcdoc='<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;font:13px -apple-system,"PingFang SC",sans-serif;color:#1d1d1f;padding:18px}.hd{display:flex;justify-content:space-between;font-size:12px;color:#8e8e93}.bars{height:100px;display:flex;align-items:flex-end;gap:12px;border-bottom:1px solid #e5e5ea;margin:14px 0 6px}.bar{flex:1;background:#007aff;border-radius:6px 6px 0 0;opacity:.85}.bar:nth-child(2),.bar:nth-child(4){background:#5ac8fa}.note{font-size:11px;color:#6e6e73;background:#f2f2f7;padding:9px 11px;border-radius:9px}</style></head><body><div class="hd"><b style="color:#1d1d1f;font-size:14px">阅读趋势</b><span>近 7 天</span></div><div class="bars"><i class="bar" style="height:38%"></i><i class="bar" style="height:62%"></i><i class="bar" style="height:48%"></i><i class="bar" style="height:86%"></i><i class="bar" style="height:70%"></i></div><div class="note">独立 HTML 内容，样式与博客主体隔离。</div></body></html>'></iframe>
+        </figure>
+      </div>
+      <div class="entry" data-category="随笔">
+        <div class="row"><span class="dot essay"></span><span class="title">周末的咖啡馆，和一本读到一半的书</span><span class="meta">11.02 · 4 分钟</span></div>
+      </div>
+      <div class="entry" data-category="效率">
+        <div class="row"><span class="dot efficiency"></span><span class="title">少一点工具，多一点完成</span><span class="meta">10.31 · 7 分钟</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2 class="month">2026 年 10 月</h2>
+    <div class="list">
+      <div class="entry" data-category="设计">
+        <div class="row"><span class="dot design"></span><span class="title">字体、网格与安静的界面</span><span class="meta">10.24 · 6 分钟</span></div>
+      </div>
+      <div class="entry" data-category="前端">
+        <div class="row"><span class="dot frontend"></span><span class="title">响应式布局的几个关键断点</span><span class="meta">10.16 · 8 分钟</span></div>
+      </div>
+      <div class="entry" data-category="阅读">
+        <div class="row"><span class="dot reading"></span><span class="title">把读过的书变成可以检索的笔记</span><span class="meta">10.08 · 5 分钟</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <h2 class="month">2026 年 09 月</h2>
+    <div class="list">
+      <div class="entry" data-category="随笔">
+        <div class="row"><span class="dot essay"></span><span class="title">深夜写下的短句</span><span class="meta">09.30 · 3 分钟</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="empty" id="empty" hidden>没有匹配的文章。</div>
+</main>
+
+<script>
+(function(){
+  var input = document.getElementById('search');
+  var clear = document.getElementById('clear');
+  var chips = [].slice.call(document.querySelectorAll('.chip'));
+  var groups = [].slice.call(document.querySelectorAll('.group'));
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+
+  function apply(){
+    var q = input.value.trim().toLowerCase();
+    var cat = chips.filter(function(c){ return c.classList.contains('active'); })[0].dataset.cat;
+    var total = 0;
+    groups.forEach(function(group){
+      var visible = 0;
+      [].forEach.call(group.querySelectorAll('.entry'), function(entry){
+        var text = (entry.querySelector('.title').textContent + ' ' + entry.dataset.category + ' ' + entry.querySelector('.meta').textContent).toLowerCase();
+        var ok = (cat === 'all' || entry.dataset.category === cat) && (!q || text.indexOf(q) > -1);
+        entry.hidden = !ok;
+        if (ok) { visible++; total++; }
+      });
+      group.hidden = visible === 0;
+    });
+    count.textContent = total + ' 篇';
+    empty.hidden = total !== 0;
+    clear.hidden = !q;
+  }
+
+  input.addEventListener('input', apply);
+  clear.addEventListener('click', function(){ input.value = ''; apply(); input.focus(); });
+  chips.forEach(function(c){ c.addEventListener('click', function(){
+    chips.forEach(function(x){ x.classList.remove('active'); });
+    c.classList.add('active'); apply();
+  }); });
+
+  document.addEventListener('click', function(e){
+    var strip = e.target.closest('.embed-strip');
+    if (!strip) return;
+    var panel = document.getElementById(strip.dataset.embed);
+    if (!panel) return;
+    var open = panel.hidden;
+    panel.hidden = !open;
+    strip.textContent = open ? '嵌入 HTML 内容预览 · 点击收起' : '嵌入 HTML 内容预览 · 点击展开';
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

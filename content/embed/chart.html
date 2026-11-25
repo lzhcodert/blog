@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>阅读趋势</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:13px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#1d1d1f;padding:18px}
+.hd{display:flex;justify-content:space-between;font-size:12px;color:#8e8e93}
+.hd b{color:#1d1d1f;font-size:14px}
+.bars{height:100px;display:flex;align-items:flex-end;gap:12px;border-bottom:1px solid #e5e5ea;margin:14px 0 6px}
+.bar{flex:1;background:#007aff;border-radius:6px 6px 0 0;opacity:.85}
+.bar:nth-child(2),.bar:nth-child(4){background:#5ac8fa}
+.note{font-size:11px;color:#6e6e73;background:#f2f2f7;padding:9px 11px;border-radius:9px}
+</style>
+</head>
+<body>
+<div class="hd"><b>阅读趋势</b><span>近 7 天</span></div>
+<div class="bars">
+<i class="bar" style="height:38%"></i>
+<i class="bar" style="height:62%"></i>
+<i class="bar" style="height:48%"></i>
+<i class="bar" style="height:86%"></i>
+<i class="bar" style="height:70%"></i>
+</div>
+<div class="note">独立 HTML 内容，样式与博客主体隔离。</div>
+</body>
+</html>
