@@ -478,19 +478,27 @@ function avoidLabelOverlap(){
 }
 
 /* ---------- 自适应画布：按树的实际边界扩展 viewBox ----------
-   内容变高（新增分类/分支）时向上扩展 y 与 height，左右保持不小于 1000，
-   树始终完整可见且不被压小；tip 坐标也随 VB 换算。 */
+   左右保持不小于 1000（树干仍在正中），垂直方向贴紧内容再留少量边距，
+   避免卡片顶部空出一大片，让整棵树在卡片里视觉居中。 */
 function fitCanvas(){
   var box;
   try { box=svg.getBBox(); } catch(e){ return; }
   if (!box || !box.width || !box.height) return;
   var padX=46, padTop=34, padBottom=30;
   var x0=Math.min(0, box.x-padX);
-  var y0=Math.min(0, box.y-padTop);
+  var y0=box.y-padTop;
   var x1=Math.max(1000, box.x+box.width+padX);
-  var y1=Math.max(480, box.y+box.height+padBottom);
+  var y1=box.y+box.height+padBottom;
   VB.x=x0; VB.y=y0; VB.w=x1-x0; VB.h=y1-y0;
   svg.setAttribute('viewBox', VB.x+' '+VB.y+' '+VB.w+' '+VB.h);
+}
+
+/* ---------- 窄屏居中：树需要横向滚动时，把树干放到可视区正中间 ---------- */
+var stageScroll=document.getElementById('stage-scroll');
+function centerStage(){
+  if(!stageScroll) return;
+  var over=stageScroll.scrollWidth-stageScroll.clientWidth;
+  stageScroll.scrollLeft = over>0 ? over/2 : 0;
 }
 
 /* ---------- 图例筛选 ---------- */
@@ -603,6 +611,13 @@ avoidLabelOverlap();
 fitCanvas();
 syncUI();
 clearSelect();
+/* 首屏让树干居中；窗口尺寸变化后重新校正 */
+requestAnimationFrame(centerStage);
+var stageRaf=null;
+window.addEventListener('resize',function(){
+  if(stageRaf) cancelAnimationFrame(stageRaf);
+  stageRaf=requestAnimationFrame(function(){ fitCanvas(); centerStage(); });
+});
 })();
 </script>
 </body>
