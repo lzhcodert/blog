@@ -1,7 +1,7 @@
 ---
 title: MCP Server 是干什么的？用一只桌宠讲明白
 date: 2026-11-26
-category: 项目调研
+category: 技术调研
 summary: AI 只会"想"，MCP Server 负责"做"。以 KuroCat 桌宠为例，讲清楚 MCP 的由来、连接方式、一次请求的完整流程和能力边界。
 tags: MCP, AI 工具调用, KuroCat, 科普
 embed: embed/mcp-explained.html
