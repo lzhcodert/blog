@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoldenDB 分布式事务协调图解 · 发号、派活、补偿、可见性</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#0a84ff,#5856d6 58%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.94}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;height:min(62vh,530px);min-height:330px;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  .pz-tip{position:absolute;left:12px;bottom:10px;z-index:5;background:rgba(255,255,255,.9);color:#64748b;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;pointer-events:none}
+  @media(max-width:600px){.pz-viewport{height:56vh;min-height:300px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>GoldenDB 分布式事务：发号、派活、补偿、可见性</h1>
+  <p>六张图讲清官方机制：GTM 发 GTID、CN 当协调者、DN 执行本地事务、DBAgent 靠 binlog 反解补偿回滚，以及读操作用全局活跃事务快照判断可见性。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#x1">谁在协调</a><a href="#x2">六步流程</a><a href="#x3">改进 2PC</a><a href="#x4">转账补偿</a><a href="#x5">读可见性</a><a href="#x6">高可用与批量</a>
+</div>
+
+<!-- 1 谁在协调 -->
+<div class="card" id="x1">
+  <div class="card-head">
+    <h2><span class="num">1</span>三方分工：发号的、派活的、干活的 <span class="tag">角色</span></h2>
+    <p>官方定义：GTM 负责生成 / 释放 GTID、维护活跃事务及其快照；CN 作为分布式事务协调者；DN 执行本地事务并落盘；DBAgent 在异常时解析 binlog 构造反向回滚语句。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 320" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="x1m" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="992" height="48" rx="11" fill="#fff6e8" stroke="#f2d9ae"/>
+        <text x="44" y="48" font-size="13" font-weight="700" fill="#8a5a00">一笔跨分片写事务：应用只发一条 SQL，后台要协调多个仓库同时改对</text>
+        <text x="44" y="65" font-size="11" fill="#6e6e73">官方定位：强一致、对应用透明，应用业务逻辑不用改</text>
+
+        <rect x="24" y="96" width="188" height="156" rx="13" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="42" y="122" font-size="13" font-weight="700" fill="#1d1d1f">应用</text>
+        <text x="42" y="148" font-size="11.5" fill="#6e6e73">发起 UPDATE / 转账</text>
+        <text x="42" y="174" font-size="11.5" fill="#6e6e73">通过 JDBC 等驱动</text>
+        <text x="42" y="208" font-size="11" fill="#1d1d1f">只看到「一张表」</text>
+        <text x="42" y="232" font-size="10.5" fill="#6e6e73">不知道数据被切成几片</text>
+
+        <g stroke="#007aff" stroke-width="1.7" marker-end="url(#x1m)" fill="none"><path d="M212,166 L240,166"/></g>
+
+        <rect x="242" y="96" width="266" height="156" rx="13" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="260" y="122" font-size="13.5" font-weight="700" fill="#0a58ca">CN 计算节点 = 总协调</text>
+        <text x="260" y="148" font-size="11.5" fill="#1d1d1f">生成分布式执行计划</text>
+        <text x="260" y="172" font-size="11.5" fill="#6e6e73">协调多个资源域的本地事务</text>
+        <text x="260" y="196" font-size="11.5" fill="#6e6e73">事务状态实时记到 GTM</text>
+        <text x="260" y="228" font-size="11" fill="#0a58ca">大白话：包工头</text>
+
+        <g stroke="#007aff" stroke-width="1.7" marker-end="url(#x1m)" fill="none">
+          <path d="M508,132 L556,132"/><path d="M508,200 L556,200"/>
+        </g>
+        <text x="512" y="124" font-size="10.5" fill="#007aff">申请 / 释放 GTID</text>
+        <text x="512" y="192" font-size="10.5" fill="#007aff">下发本地事务</text>
+
+        <rect x="558" y="96" width="218" height="156" rx="13" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="576" y="122" font-size="13.5" font-weight="700" fill="#3a2a7a">GTM = 发号 + 登记</text>
+        <text x="576" y="148" font-size="11" fill="#1d1d1f">分配全局唯一递增 GTID</text>
+        <text x="576" y="170" font-size="11" fill="#6e6e73">维护活跃事务及快照</text>
+        <text x="576" y="192" font-size="11" fill="#6e6e73">管 ID 生命周期</text>
+        <text x="576" y="226" font-size="11" fill="#3a2a7a">大白话：发号员 + 登记员</text>
+
+        <rect x="800" y="96" width="216" height="156" rx="13" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="818" y="122" font-size="13.5" font-weight="700" fill="#1d7a45">DN × N = 真干活</text>
+        <text x="818" y="148" font-size="11" fill="#1d1d1f">各管一片数据</text>
+        <text x="818" y="170" font-size="11" fill="#6e6e73">执行本地事务、写 binlog</text>
+        <text x="818" y="192" font-size="11" fill="#6e6e73">配套 DBAgent 纠错</text>
+        <text x="818" y="226" font-size="11" fill="#1d7a45">大白话：仓库 + 账本</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#x1m)" fill="none"><path d="M776,198 L800,198"/></g>
+
+        <rect x="24" y="270" width="992" height="36" rx="10" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="44" y="293" font-size="11.5" fill="#3a2a7a"><tspan font-weight="700">官方用词：</tspan>「全局事务管理器……协助计算节点进行分布式事务管理，主要包括生成、释放全局事务 ID（GTID）、维护活跃事务以及当前活跃 GTIDs 的快照」（白皮书术语表）。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>GTM 发工单号，CN 派活并盯着进度，DN 在各自仓库改账，DBAgent 是事后拿着监控录像（binlog）纠错的人。谁都不多余。</div>
+</div>
+
+<!-- 2 六步流程 -->
+<div class="card" id="x2">
+  <div class="card-head">
+    <h2><span class="num">2</span>协调全流程：从发号到给答案，一共六步 <span class="tag">流程</span></h2>
+    <p>白皮书 4.1.2 给出的控制链路：申请 GTID → 写进每行记录 → CN 下发 → 各 DN 统一提交 → 失败补偿 → 后续读到正确结果。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 350" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="x2m" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#x2m)" fill="none">
+          <path d="M188,112 L202,112"/><path d="M388,112 L402,112"/><path d="M588,112 L602,112"/><path d="M788,112 L802,112"/>
+        </g>
+        <rect x="22" y="62" width="166" height="120" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="36" y="88" font-size="12.5" font-weight="700" fill="#3a2a7a">① 申请 GTID</text>
+        <text x="36" y="112" font-size="11" fill="#1d1d1f">CN 向 GTM 要号</text>
+        <text x="36" y="134" font-size="10.5" fill="#6e6e73">批量申请减少交互</text>
+        <text x="36" y="160" font-size="10.5" fill="#3a2a7a">如 9527</text>
+
+        <rect x="202" y="62" width="186" height="120" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="216" y="88" font-size="12.5" font-weight="700" fill="#0a58ca">② 写隐含列</text>
+        <text x="216" y="112" font-size="11" fill="#1d1d1f">每行加 GTID 列</text>
+        <text x="216" y="134" font-size="10.5" fill="#6e6e73">更新时同步更新</text>
+        <text x="216" y="160" font-size="10.5" fill="#0a58ca">当「全局锁」用</text>
+
+        <rect x="402" y="62" width="186" height="120" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="416" y="88" font-size="12.5" font-weight="700" fill="#1d7a45">③ 下发子事务</text>
+        <text x="416" y="112" font-size="11" fill="#1d1d1f">CN 拆计划到 DN</text>
+        <text x="416" y="134" font-size="10.5" fill="#6e6e73">各 DN 执行本地事务</text>
+        <text x="416" y="160" font-size="10.5" fill="#1d7a45">改自己的那片数据</text>
+
+        <rect x="602" y="62" width="186" height="120" rx="11" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="616" y="88" font-size="12.5" font-weight="700" fill="#8a5a00">④ 统一 COMMIT</text>
+        <text x="616" y="112" font-size="11" fill="#1d1d1f">所有 SQL 执行完</text>
+        <text x="616" y="134" font-size="10.5" fill="#6e6e73">改进 2PC 协调</text>
+        <text x="616" y="160" font-size="10.5" fill="#8a5a00">状态实时记 GTM</text>
+
+        <rect x="802" y="62" width="216" height="120" rx="11" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="816" y="88" font-size="12.5" font-weight="700" fill="#c62828">⑤ 失败就补偿</text>
+        <text x="816" y="112" font-size="11" fill="#1d1d1f">某 DN 提交失败</text>
+        <text x="816" y="134" font-size="10.5" fill="#6e6e73">DBAgent 解析 binlog</text>
+        <text x="816" y="160" font-size="10.5" fill="#c62828">构造反向 SQL 回滚</text>
+
+        <rect x="22" y="206" width="996" height="124" rx="13" fill="#fff" stroke="#e5e5ea"/>
+        <text x="42" y="234" font-size="13" font-weight="700" fill="#1d1d1f">⑥ 给应用一个「就像单机一样」的答案</text>
+        <text x="42" y="260" font-size="11.5" fill="#6e6e73">官方定义强一致性：用户完成数据更新后，后续所有读操作都能且只能读到更新以后的值。</text>
+        <text x="42" y="284" font-size="11.5" fill="#6e6e73">读的时候 CN 从 GTM 拿「活跃事务名单」带到 DN：行上的 GTID 活跃就沿 undo 找前像，不活跃就返回当前值。</text>
+        <rect x="42" y="298" width="956" height="20" rx="6" fill="#e9f8ef"/>
+        <text x="52" y="312" font-size="10.5" fill="#1d7a45">结果：原子性靠 2PC + 补偿，隔离性靠 GTID 与全局快照，故障可恢复靠日志 + 全局事务列表快照。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>先领工单号，再把工单号写进每条货的标签，分头去改，最后统一交账；谁那边砸了，就按工单号把已经改过的原样改回来。</div>
+</div>
+
+<!-- 3 改进 2PC -->
+<div class="card" id="x3">
+  <div class="card-head">
+    <h2><span class="num">3</span>改进的两阶段提交：不是「一问一答」那么简单 <span class="tag">提交</span></h2>
+    <p>官方说法是「基于改进的两阶段提交事务控制方法，协调多个资源域内的本地事务，同时将全局事务状态实时记录在全局事务管理器中」。标准 XA 的 2PC 在白皮书 4.3.7 里另有说明。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 340" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="x3m" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="470" height="250" rx="14" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="44" y="52" font-size="14" font-weight="700" fill="#1d1d1f">标准 2PC（白皮书 4.3.7 的 XA 描述）</text>
+        <rect x="44" y="72" width="430" height="72" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="60" y="98" font-size="12.5" font-weight="700" fill="#1d1d1f">准备阶段</text>
+        <text x="60" y="122" font-size="11" fill="#6e6e73">事务管理器问所有参与者：准备好了吗？</text>
+        <text x="60" y="137" font-size="11" fill="#6e6e73">参与者回答「就绪 / 不就绪」</text>
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#x3m)" fill="none"><path d="M259,144 L259,166"/></g>
+        <rect x="44" y="168" width="430" height="82" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="60" y="194" font-size="12.5" font-weight="700" fill="#1d1d1f">提交阶段</text>
+        <text x="60" y="216" font-size="11" fill="#6e6e73">全就绪 → 发提交；有人失败 → 全员回滚</text>
+        <text x="60" y="238" font-size="10.5" fill="#6e6e73">XA 不描述隔离性，由每个 RM 的本地事务保证</text>
+
+        <rect x="546" y="24" width="470" height="250" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="566" y="52" font-size="14" font-weight="700" fill="#0a58ca">GoldenDB 的「改进」加了三样东西</text>
+        <rect x="566" y="72" width="430" height="54" rx="10" fill="#fff" stroke="#c9dcff"/>
+        <text x="582" y="94" font-size="12" font-weight="700" fill="#0a58ca">① GTID 全局锁</text>
+        <text x="582" y="115" font-size="10.5" fill="#6e6e73">每行记录带 GTID，靠它判断「谁改的、能不能见」</text>
+        <rect x="566" y="134" width="430" height="54" rx="10" fill="#fff" stroke="#c9dcff"/>
+        <text x="582" y="156" font-size="12" font-weight="700" fill="#0a58ca">② 状态实时写 GTM</text>
+        <text x="582" y="177" font-size="10.5" fill="#6e6e73">协调者把全局事务状态实时记到全局事务管理器</text>
+        <rect x="566" y="196" width="430" height="58" rx="10" fill="#fff" stroke="#c9dcff"/>
+        <text x="582" y="218" font-size="12" font-weight="700" fill="#0a58ca">③ 已提交事务也能回滚</text>
+        <text x="582" y="239" font-size="10.5" fill="#6e6e73">有的 DN 已经 COMMIT 了，靠 binlog 反解构造反向 SQL 补偿</text>
+
+        <rect x="24" y="292" width="992" height="36" rx="10" fill="#fff6e8" stroke="#f2d9ae"/>
+        <text x="44" y="315" font-size="11.5" fill="#8a5a00"><tspan font-weight="700">关键区别：</tspan>普通 2PC 遇到「有人已提交」就很难收场；GoldenDB 靠 GTID + binlog 反解，把已提交的改动也能撤回来——这就是官方说的「已提交事务自动回滚」。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>普通两阶段提交像「所有人举手表决再一起按下按钮」；GoldenDB 多了工单号和事后纠错机制——哪怕有人已经按下去了，也能照着监控录像把货搬回原位。</div>
+</div>
+
+<!-- 4 转账补偿 -->
+<div class="card" id="x4">
+  <div class="card-head">
+    <h2><span class="num">4</span>官方转账例子：A 成功了、B 失败了，钱去哪了？ <span class="tag">补偿</span></h2>
+    <p>白皮书 4.1.2 原例：A、B 账户原来各有 100 元，A 给 B 转 50 元，两人属于不同节点。A 执行成功、B 执行失败时，B 走单机事务异常回滚，A 走「已提交事务回滚」。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 380" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="x4m" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="992" height="44" rx="10" fill="#fff" stroke="#e5e5ea"/>
+        <text x="44" y="51" font-size="12.5" font-weight="700" fill="#1d1d1f">初始：A = 100 元（DN1）　B = 100 元（DN2）　CN 申请 GTID = 9527</text>
+
+        <rect x="24" y="86" width="472" height="176" rx="13" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="44" y="112" font-size="13.5" font-weight="700" fill="#1d7a45">DN1：A 扣 50 ✓ 成功</text>
+        <text x="44" y="140" font-size="11.5" fill="#1d1d1f">A：100 → 50</text>
+        <text x="44" y="164" font-size="11" fill="#6e6e73">行上写入 GTID 9527</text>
+        <text x="44" y="188" font-size="11" fill="#6e6e73">本地事务 COMMIT，记录 binlog</text>
+        <rect x="44" y="206" width="432" height="38" rx="9" fill="#fff" stroke="#bfe8cf"/>
+        <text x="58" y="230" font-size="11.5" fill="#1d7a45">进入「已提交事务回滚」流程</text>
+
+        <rect x="544" y="86" width="472" height="176" rx="13" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="564" y="112" font-size="13.5" font-weight="700" fill="#c62828">DN2：B 加 50 ✗ 失败</text>
+        <text x="564" y="140" font-size="11.5" fill="#1d1d1f">B：100（没变）</text>
+        <text x="564" y="164" font-size="11" fill="#6e6e73">本地事务提交失败</text>
+        <text x="564" y="188" font-size="11" fill="#6e6e73">进入单机事务异常回滚流程</text>
+        <rect x="564" y="206" width="432" height="38" rx="9" fill="#fff" stroke="#ffc9c4"/>
+        <text x="578" y="230" font-size="11.5" fill="#c62828">失败本身由 DN 自己收尾</text>
+
+        <g stroke="#8e8e93" stroke-width="1.6" marker-end="url(#x4m)" fill="none"><path d="M520,174 L544,174"/></g>
+
+        <rect x="24" y="280" width="992" height="48" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="44" y="300" font-size="12" font-weight="700" fill="#3a2a7a">补救：各节点的 DBAgent 解析 binlog，找出带 GTID 9527 的改动 → 构造反向 SQL → 下发给 DN 回滚</text>
+        <text x="44" y="320" font-size="11" fill="#6e6e73">注意是「所有节点的 DBAgent」都参与判断，不是只靠出错的那个节点；这样已提交的一侧也能被撤回来。</text>
+
+        <rect x="24" y="342" width="992" height="30" rx="9" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="44" y="362" font-size="11.5" fill="#1d7a45">结果：A 回到 100，B 还是 100。钱没凭空消失 —— 这就是跨节点事务的原子性。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>两个仓库搬货，总部发同一张运单号 9527。A 仓库搬成了、B 仓库砸了，就按运单号把 A 已经搬走的货原样搬回来。官方叫「通过已提交事务回滚，解决分布式一致性问题」。</div>
+</div>
+
+<!-- 5 读可见性 -->
+<div class="card" id="x5">
+  <div class="card-head">
+    <h2><span class="num">5</span>读的一致性：怎么知道哪版数据「算数」 <span class="tag">可见性</span></h2>
+    <p>白皮书 4.3.2：把全局活跃事务列表带到 DB 层判断；行上的 GTID 不活跃就返回当前数据，活跃就通过 undo 构造全局前像继续找。官方还支持 Read Committed 等四种隔离级别，推荐 RC。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 340" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="x5m" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="992" height="52" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="44" y="48" font-size="12.5" font-weight="700" fill="#3a2a7a">SELECT 发起时：CN 从 GTM 拿一份「当前活跃事务名单」</text>
+        <text x="44" y="67" font-size="11" fill="#6e6e73">active_gtm_gtid_list = [ 9527 ]，并把它随查询带到 DN</text>
+
+        <g stroke="#007aff" stroke-width="1.6" marker-end="url(#x5m)" fill="none"><path d="M344,150 L404,150"/></g>
+        <text x="350" y="142" font-size="10.5" fill="#007aff">带到 DN</text>
+
+        <rect x="24" y="96" width="320" height="150" rx="13" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="122" font-size="13.5" font-weight="700" fill="#0a58ca">CN 带着名单来</text>
+        <text x="44" y="150" font-size="11" fill="#1d1d1f">名单里是「还没最终生效」的改动</text>
+        <text x="44" y="174" font-size="11" fill="#6e6e73">9527 正在写，读的时候要绕开它</text>
+        <rect x="44" y="194" width="280" height="34" rx="8" fill="#fff" stroke="#c9dcff"/>
+        <text x="56" y="216" font-size="11" font-family="monospace" fill="#0a58ca">active = [ 9527 ]</text>
+
+        <rect x="406" y="96" width="610" height="150" rx="13" fill="#fff" stroke="#e5e5ea"/>
+        <text x="426" y="122" font-size="13.5" font-weight="700" fill="#1d1d1f">DN 逐行判断：这一版我能看见吗？</text>
+        <rect x="426" y="138" width="570" height="42" rx="9" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="442" y="158" font-size="11.5" font-weight="700" fill="#1d7a45">GTID 9526 不在名单里 → 全局可见</text>
+        <text x="442" y="174" font-size="10.5" fill="#6e6e73">直接返回当前数据，不用翻旧账</text>
+        <rect x="426" y="190" width="570" height="42" rx="9" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="442" y="210" font-size="11.5" font-weight="700" fill="#c62828">GTID 9527 在名单里 → 还没生效</text>
+        <text x="442" y="226" font-size="10.5" fill="#6e6e73">通过 undo 构造前像，继续往前找到全局可见版本</text>
+
+        <rect x="24" y="266" width="992" height="62" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="290" font-size="12" font-weight="700" fill="#0a58ca">大白话：读一本正在被人改的账簿</text>
+        <text x="44" y="314" font-size="11.5" fill="#6e6e73">每改一次就留一张旧页备份（undo）。管理员说「9527 号修改还没盖章」，你就跳过它，看上一版已经盖章生效的账页。读不加锁，所以读写不冲突。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>术语：</b>MVCC = 多版本并发控制；undo 前像 = 修改前的旧版本数据；active_gtm_gtid_list = GTM 给出的「活跃事务名单」。单机 MVCC 只看本地名单，GoldenDB 多带了一份全局名单。</div>
+</div>
+
+<!-- 6 高可用与批量 -->
+<div class="card" id="x6">
+  <div class="card-head">
+    <h2><span class="num">6</span>让协调本身别掉链子：主备、集群与批量 <span class="tag">可靠性</span></h2>
+    <p>官方明确：GTM 采用主备架构，主异常自动切到备；进一步扩展为 GTM 集群，多个 GTM 与多个租户绑定，切换只影响对应租户。申请与释放 GTID 都做了批量优化。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 350" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="316" height="196" rx="13" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="52" font-size="13.5" font-weight="700" fill="#0a58ca">① 主备自动切换</text>
+        <rect x="44" y="72" width="276" height="46" rx="9" fill="#fff" stroke="#c9dcff"/>
+        <text x="60" y="100" font-size="11.5" fill="#1d1d1f">GTM 主节点 · 正在发号</text>
+        <g stroke="#8e8e93" stroke-width="1.6" fill="none"><path d="M182,118 L182,142"/></g>
+        <text x="192" y="136" font-size="10.5" fill="#6e6e73">主异常</text>
+        <rect x="44" y="144" width="276" height="46" rx="9" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="60" y="172" font-size="11.5" fill="#1d7a45">GTM 备节点 · 自动接管</text>
+
+        <rect x="362" y="24" width="316" height="196" rx="13" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="382" y="52" font-size="13.5" font-weight="700" fill="#3a2a7a">② GTM 集群 + 租户绑定</text>
+        <rect x="382" y="72" width="130" height="44" rx="9" fill="#fff" stroke="#d2c8ff"/>
+        <text x="394" y="99" font-size="11" fill="#1d1d1f">GTM-A</text>
+        <rect x="548" y="72" width="110" height="44" rx="9" fill="#fff" stroke="#d2c8ff"/>
+        <text x="560" y="99" font-size="11" fill="#1d1d1f">GTM-B</text>
+        <text x="382" y="142" font-size="11" fill="#6e6e73">各自绑定不同租户</text>
+        <text x="382" y="166" font-size="11" fill="#1d1d1f">一个 GTM 切换时</text>
+        <text x="382" y="190" font-size="11" fill="#3a2a7a">只影响它绑定的租户</text>
+
+        <rect x="700" y="24" width="316" height="196" rx="13" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="720" y="52" font-size="13.5" font-weight="700" fill="#8a5a00">③ 批量申请 / 释放</text>
+        <text x="720" y="82" font-size="11" fill="#1d1d1f">原来：一个事务申请一次</text>
+        <text x="720" y="106" font-size="11" fill="#1d1d1f">　　　结束再释放一次</text>
+        <text x="720" y="138" font-size="11" fill="#6e6e73">优化后：一次申请一批 GTID</text>
+        <text x="720" y="162" font-size="11" fill="#6e6e73">　　　　一次释放一批</text>
+        <text x="720" y="192" font-size="11" fill="#8a5a00">减少 CN ↔ GTM 交互次数</text>
+
+        <rect x="24" y="238" width="992" height="96" rx="13" fill="#fff" stroke="#e5e5ea"/>
+        <text x="44" y="264" font-size="13" font-weight="700" fill="#1d1d1f">还有一层兜底：全局一致性备份与恢复</text>
+        <text x="44" y="290" font-size="11.5" fill="#6e6e73">官方 4.5.3：备份了运行过程中的日志及每个时刻的全局事务列表快照，并通过日志同步组件自动实时同步，因此可以恢复出全局一致的数据快照。</text>
+        <text x="44" y="316" font-size="11.5" fill="#6e6e73">换句话说：不只看「数据文件内容」，还记下「当时哪些事务还活着」，恢复时才知道该停在哪一版。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>发号员自己也要有替班（主备），大机构还能多设几个发号窗口各管各的客户（集群+租户绑定）；跑腿次数太多就一次领一沓号（批量）。连备份都把「当时谁在办事」一起记下来。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    var tip=document.createElement('div');tip.className='pz-tip';tip.textContent='\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+    vp.appendChild(bar);vp.appendChild(tip);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+      tip.textContent=zoomMode?'\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u518d\u5355\u51fb\u9000\u51fa':'\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6a21\u5f0f\u5185\u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>

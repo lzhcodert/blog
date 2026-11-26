@@ -238,12 +238,13 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 
 <noscript>
   <ul class="post-list">
-    <li class="post-item"><span class="pl-dot" style="background:#af52de"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-goldendb-2.html">GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版）</a><span class="pl-em">2 图</span><span class="pl-cat">数据库</span></li>
-    <li class="post-item"><span class="pl-dot" style="background:#af52de"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-goldendb-3.html">GoldenDB 到底是个啥？把 CN、DN、GTM 讲成人话</a><span class="pl-em">1 图</span><span class="pl-cat">数据库</span></li>
-    <li class="post-item"><span class="pl-dot" style="background:#ff9500"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-mcp-client-server-4.html">MCP Client 与 Server 是什么关系？从零写一个自己的 Server</a><span class="pl-em">1 图</span><span class="pl-cat">技术调研</span></li>
-    <li class="post-item"><span class="pl-dot" style="background:#ff9500"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-mcp-server-5.html">MCP Server 是干什么的？用一只桌宠讲明白</a><span class="pl-em">1 图</span><span class="pl-cat">技术调研</span></li>
-    <li class="post-item"><span class="pl-dot" style="background:#ff2d55"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-6.html">四川银行信创迁移：133 套系统如何零差错切换</a><span class="pl-cat">行业观察</span></li>
-    <li class="post-item"><span class="pl-dot" style="background:#007aff"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-7.html">软件工程中的图：什么时候该画哪一种</a><span class="pl-em">1 图</span><span class="pl-cat">建模</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#af52de"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-goldendb-2.html">GoldenDB 如何协调分布式事务？一笔转账背后的发号、派活与补偿</a><span class="pl-em">1 图</span><span class="pl-cat">数据库</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#af52de"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-goldendb-3.html">GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版）</a><span class="pl-em">2 图</span><span class="pl-cat">数据库</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#af52de"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-goldendb-4.html">GoldenDB 到底是个啥？把 CN、DN、GTM 讲成人话</a><span class="pl-em">1 图</span><span class="pl-cat">数据库</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#ff9500"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-mcp-client-server-5.html">MCP Client 与 Server 是什么关系？从零写一个自己的 Server</a><span class="pl-em">1 图</span><span class="pl-cat">技术调研</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#ff9500"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-mcp-server-6.html">MCP Server 是干什么的？用一只桌宠讲明白</a><span class="pl-em">1 图</span><span class="pl-cat">技术调研</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#ff2d55"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-7.html">四川银行信创迁移：133 套系统如何零差错切换</a><span class="pl-cat">行业观察</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#007aff"></span><span class="pl-date">11.26</span><a class="pl-title" href="posts/2026-11-26-8.html">软件工程中的图：什么时候该画哪一种</a><span class="pl-em">1 图</span><span class="pl-cat">建模</span></li>
     <li class="post-item"><span class="pl-dot" style="background:#5ac8fa"></span><span class="pl-date">11.25</span><a class="pl-title" href="posts/2026-11-25-xx-crm-1.html">XX银行 CRM 系统架构：三条通道与一条数据主链</a><span class="pl-em">2 图</span><span class="pl-cat">架构</span></li>
   </ul>
 </noscript>
@@ -270,21 +271,24 @@ window.__CATS__ = [
 ];
 window.__POSTS__ = [
   { url:'posts/2026-11-26-goldendb-2.html', c:'c3ohdsm',
+    t:"GoldenDB 如何协调分布式事务？一笔转账背后的发号、派活与补偿", date:'2026-11-26', m:18, em:1,
+    ex:"跨分片转账最容易「钱扣了、没到账」。GoldenDB 靠 GTM 发全局工单号、CN 当协调者、DN 各改各的、DBAgent 按 binlog 反解补偿回滚，再用全局活跃事务快照保证读到的版本算数。" },
+  { url:'posts/2026-11-26-goldendb-3.html', c:'c3ohdsm',
     t:"GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版）", date:'2026-11-26', m:16, em:2,
     ex:"官方不是先让你加机器，而是先找慢 SQL，再看分片键和索引，然后让优化器下推、把好计划绑住，最后用读写分离、并行、批量协议和限流兜底。" },
-  { url:'posts/2026-11-26-goldendb-3.html', c:'c3ohdsm',
+  { url:'posts/2026-11-26-goldendb-4.html', c:'c3ohdsm',
     t:"GoldenDB 到底是个啥？把 CN、DN、GTM 讲成人话", date:'2026-11-26', m:17, em:1,
     ex:"一台数据库装不下，就找一群机器一起干。CN 像前台调度，DN 像仓库账本，GTM 像发号裁判；它和 MySQL 像的是「说法和单机功夫」，多出来的是「跨机器怎么不乱套」。" },
-  { url:'posts/2026-11-26-mcp-client-server-4.html', c:'c1dzlobv',
+  { url:'posts/2026-11-26-mcp-client-server-5.html', c:'c1dzlobv',
     t:"MCP Client 与 Server 是什么关系？从零写一个自己的 Server", date:'2026-11-26', m:12, em:1,
     ex:"一个 Host 为一个 Server 配一个 Client，两者靠 JSON-RPC 2.0 说话；再用官方 SDK 走一遍从建环境到接入客户端的完整流程。" },
-  { url:'posts/2026-11-26-mcp-server-5.html', c:'c1dzlobv',
+  { url:'posts/2026-11-26-mcp-server-6.html', c:'c1dzlobv',
     t:"MCP Server 是干什么的？用一只桌宠讲明白", date:'2026-11-26', m:12, em:1,
     ex:"AI 只会\"想\"，MCP Server 负责\"做\"。以 KuroCat 桌宠为例，讲清楚 MCP 的由来、连接方式、一次请求的完整流程，并给出在 WorkBuddy 中接入的实战步骤。" },
-  { url:'posts/2026-11-26-6.html', c:'c1jmg824',
+  { url:'posts/2026-11-26-7.html', c:'c1jmg824',
     t:"四川银行信创迁移：133 套系统如何零差错切换", date:'2026-11-26', m:13, em:0,
     ex:"从“两行合一”到全栈信创，四川银行用 52 小时完成 134 套系统一次性投产。拆解迁移七道工序、单轨切换、演练体系与停机策略，也标出公开资料没有说清的部分。" },
-  { url:'posts/2026-11-26-7.html', c:'c3zdls',
+  { url:'posts/2026-11-26-8.html', c:'c3zdls',
     t:"软件工程中的图：什么时候该画哪一种", date:'2026-11-26', m:4, em:1,
     ex:"架构图、时序图、流程图、类图、ER 图、状态机图、用例图——每种图回答一个不同的问题，选对图比画得漂亮更重要。" },
   { url:'posts/2026-11-25-xx-crm-1.html', c:'c40y0v',

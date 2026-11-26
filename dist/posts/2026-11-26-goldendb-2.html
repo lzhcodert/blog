@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版） · 札记</title>
+<title>GoldenDB 如何协调分布式事务？一笔转账背后的发号、派活与补偿 · 札记</title>
 <style>
 
 /* ============ 主题变量（支持浅色/深色） ============ */
@@ -318,62 +318,75 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <div class="detail-wrap">
 <article class="article">
   <div class="article-meta-top"><span class="dot" style="background:#af52de"></span>数据库</div>
-  <h1 class="article-title">GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版）</h1>
-  <div class="article-meta">2026-11-26 · 16 分钟阅读</div>
+  <h1 class="article-title">GoldenDB 如何协调分布式事务？一笔转账背后的发号、派活与补偿</h1>
+  <div class="article-meta">2026-11-26 · 18 分钟阅读</div>
   <div class="article-body">
-<p>上一篇讲了 GoldenDB 的 CN、DN、GTM 怎么分工。这次换个开发者视角：项目已经跑起来了，但接口慢、批跑慢、高峰期卡顿，官方一般怎么解决？</p>
-<p>先给结论：<strong>官方的套路是一个漏斗——先找慢 SQL，再看分片和索引，再让优化器少搬数据，最后用并行、分流和限流兜底。加机器通常是最后一步，不是第一步。</strong></p>
-<p>以下内容按金篆信科官方文档与《中兴通讯技术》金篆数据库专题整理；具体能力以你实际使用的版本为准。</p>
-<h2 id="sec-1">官方的排查顺序：先取证，再开药</h2>
-<ol><li><strong>开发 / 迁移前</strong>：用 CAC 做兼容性评估、分片键推荐；开发阶段用模拟数据压测，收集设计不合理的 SQL。</li><li><strong>上线前</strong>：用 DBReplay 从 GoldenDB / MySQL / Oracle 录制负载并回放，评估语句兼容性和执行效率。</li><li><strong>生产监测</strong>：用 Insight 看 QPS、TPS、慢 SQL、会话数、CPU、内存、磁盘、I/O 延迟；用内核 SQL 治理识别和拦截高危语句。</li><li><strong>定位根因</strong>：用 <code>EXPLAIN</code> 看执行计划，判断是没索引、分片不对，还是数据被跨节点乱搬。</li><li><strong>对症优化</strong>：改分片、加索引、SQL 改写、绑定执行计划、让算子下推。</li><li><strong>稳定性兜底</strong>：读写分离、自动并行、流式查询、批量协议、SQL 限流、TP/AP 隔离。</li></ol>
-<blockquote>大白话：别上来就说「数据库慢」。先问三件事：哪条 SQL 慢？它慢在哪一步？它是不是让一群机器做了无用功？答案清楚了，优化才有方向。</blockquote>
-<blockquote>看这套顺序觉得抽象？文末新增的<strong>排查思路问诊图</strong>把它画成了医生看病的流程：<strong>三问定位 → 四种诊断 → 对症下药 → 复查验证</strong>。先扫一眼图，再往下读会轻松很多。</blockquote>
-<h2 id="sec-2">第 1 步：先把慢 SQL 揪出来</h2>
-<p>官方在某大型国有银行的实践里，把 SQL 治理做进了<strong>数据库内核</strong>，不是只在应用代码里查字符串。它能按三类规则识别慢 SQL：</p>
-<ul><li><strong>按真实开销</strong>：DML（增删改）和 DQL（查询）允许的最大执行时间、单次返回的最大结果集行数、多表关联的最大关联行数、单次执行和单会话允许读的最大数据块数；</li><li><strong>按高危语法</strong>：SQL 黑名单、禁止不带索引的查询（全表扫描）、禁止笛卡尔积、禁止随意 DROP / TRUNCATE；</li><li><strong>按资源占用</strong>：用户最大会话数、单会话和单条 SQL 的最大 CPU 时间、SQL 最大代价。</li></ul>
-<p>而且规则能按用户分开设：联机交易是高并发、低时延的短请求，最大执行时间可以卡在毫秒级；批量处理是大规模查询和更新，时间可以放宽到分钟级。</p>
-<p>官方也提醒：生产上直接终止请求会影响业务成功率，更均衡的做法是<strong>采集慢 SQL 列表，同步给应用团队在后续版本整改</strong>。</p>
-<h2 id="sec-3">第 2 步：看执行计划，别凭感觉</h2>
-<p>官方支持查看数据查询、插入、更新、删除的执行计划，而且可以只看 CN（计算节点）的计划、只看 DN（数据节点）的计划，或者两边一起看。目的就是看清执行顺序和执行瓶颈。</p>
-<p>两个实用手段：</p>
-<ul><li><code>EXPLAIN</code>：看数据库准备怎么执行这条 SQL；</li><li><code>hint</code> / <code>outline</code>：给优化器提示，或把一条好计划在线绑定住。生产环境遇到紧急 SQL 性能问题，可以在数据库侧精准处理，<strong>无需应用改写 SQL、无需启停</strong>。</li></ul>
-<blockquote>大白话：执行计划就是导航路线。<code>EXPLAIN</code> 把路线摊开给你看；<code>hint</code> 是跟导航说「走这条路」；<code>outline</code> 是把这条路收藏起来，以后默认都走它。</blockquote>
-<h2 id="sec-4">第 3 步：分片键选错，后面全白搭</h2>
-<p>分布式数据库里，数据按<strong>分片键</strong>（也叫分发键）散到不同 DN。官方给了几种分片策略：</p>
-<ul><li><strong>哈希</strong>：把数据均匀打散，适合大量等值查询；</li><li><strong>范围</strong>：按日期、数值分段，比如按自然月存；</li><li><strong>列表</strong>：按地区、机构代码这类枚举值存；</li><li><strong>复制</strong>：不常改的小表复制到每个节点，减少跨节点关联；</li><li><strong>多级分片</strong>：多法人这类精细场景，支持多层规则。</li></ul>
-<p>效率问题的常见根源是：<strong>经常要关联的两张表，分片方式却不一样</strong>，于是 JOIN 只能在计算层做，数据来回搬。官方给的办法是：</p>
-<ul><li>把有关联关系的表<strong>采用相同分片策略</strong>，让关联在本地完成；</li><li>用<strong>数据重分布</strong>在线调整分片键，把分发策略调一致；官方说多表可并发重分布，对在线业务影响秒级；</li><li>用<strong>广播表</strong>把小表复制到每个分片，JOIN 时本地就有；</li><li>用<strong>全局索引</strong>给非分片字段一个「第二查找键」：先查索引表拿到分发键，再定位目标分片，避免 SQL 群发到所有 DN。</li></ul>
-<blockquote>大白话：分片键就是仓库地址。常一起查的表放同一个仓库；查不到地址时，先查索引表拿地址；常用的小手册每个仓库放一本。</blockquote>
-<p>官方还提供 CAC 工具，在迁移前就能做<strong>分片键推荐</strong>，别等上线后再拍脑袋改。</p>
-<h2 id="sec-5">第 4 步：让计算靠近数据——下推</h2>
-<p>官方优化器分两层：</p>
-<ul><li><strong>RBO（基于规则的优化）</strong>：把长期实践验证过的规则固化下来，比如 <code>rownum</code> 转 <code>limit</code>、<code>not exists</code> 转 <code>left join</code>、<code>avg</code> 改写成 <code>sum</code> 和 <code>count</code>、过滤条件下推、视图展开；</li><li><strong>CBO（基于代价的优化）</strong>：按 <code>COST</code>（代价估算）选连接顺序。复杂场景里，小表驱动大表能显著减少从大表拉取的数据量。</li></ul>
-<p>物理优化阶段，官方明确列出了这些下推规则：JOIN 算子按分片规则下推、过滤算子下推到 DN、<code>in/not in</code> 子查询转成 <code>in</code> 函数下推、聚合算子先在 DN 分组聚合再由 CN 归并。如果聚合分组列正好带分片键，连二次归并都可以省掉。</p>
-<blockquote>大白话：别把一车货全拉到前台再挑。让每个仓库先过滤、先称好，只把结果报给前台，网络就不堵了。COST 就是优化器给每条路算的「过路费」。</blockquote>
-<h2 id="sec-6">第 5 步：索引和 SQL 改写，交给内核推荐</h2>
-<p>官方文章说得很直接：缺少合适索引时，一条 SQL 会生成低效执行计划，变成慢 SQL，持续挤占 CPU、内存和 I/O，严重时能让服务僵死。</p>
-<p>传统外挂推荐工具的问题是：语法兼容性差、要下发大量统计 SQL、跟数据库自己的优化器「两张皮」。GoldenDB 的做法是把索引推荐做进内核：</p>
-<ul><li><strong>内核集成</strong>：直接复用数据库的解析器和优化器，复杂语法也能处理；</li><li><strong>直方图采样</strong>：小规模采样估算数据特征，不扫全表；官方给出的数字是<strong>亿级大表 10 秒内完成分析</strong>，对业务影响极小；</li><li><strong>优化器协同</strong>：模拟不同索引配置下的执行计划，按成本模型评估收益，保证推荐索引真能被采纳；</li><li><strong>简单易用</strong>：在 SQL 前加一个简单前缀语句，就能一键拿到推荐报告。</li></ul>
-<p>此外，官方还有 SQL 自动优化工具，能分析执行计划瓶颈，智能推荐<strong>索引创建、语句改写、执行路径调整</strong>三类建议。</p>
-<blockquote>一个提醒：白皮书提到 SKIP SCAN（索引跳跃扫描）要满足「前导列基数低、非前导列选择性高」，乱用反而有性能风险。工具给的是建议，不是免思考按钮。</blockquote>
-<h2 id="sec-7">第 6 步：分流、并行、批量、限流</h2>
-<p>当 SQL 和表结构都调过，官方还会用这些手段把高并发下的响应时间和稳定性兜住：</p>
-<ul><li><strong>读写分离</strong>：写操作发主节点，读操作按负载发备用节点；官方支持服务端口级、SQL 语句级、事务级、会话级粒度。实时性要求高的 SQL 走主节点，分析聚合类 SQL 走备节点，减少对主节点影响。</li><li><strong>并行与自动并行度</strong>：<code>Auto-DOP</code> 根据查询复杂度、数据分布和系统负载动态调整并行度；复杂查询拆成子任务分到不同节点并行执行，最后合并。</li><li><strong>流式查询</strong>：DN 到 CN、CN 到客户端都分批回响应，结果集不落盘；大结果集场景能降低等待时间和 CPU、内存占用。</li><li><strong>批量协议</strong>：官方证券方案里研发了 <code>batch Prepare</code> 新协议，适配大批量插入场景，性能提升 <strong>60% 以上</strong>；回放侧还用内存资源池、按事务分发减少系统调用。</li><li><strong>SQL 限流</strong>：不改重启就能限连接数、限最大结果集、拉黑不规范或超大请求的 SQL、绑定执行计划。</li><li><strong>TP/AP 隔离</strong>：复杂 AP 类 SQL 容易阻塞高优先级 TP 请求，造成「毛刺」。官方按 COST 识别计算密集型任务，交给独立异步线程组处理，让两类负载互不干扰。</li></ul>
-<h2 id="sec-8">术语小抄</h2>
-<table><thead><tr><th>缩写 / 术语</th><th>大白话</th><th>在本文里的作用</th></tr></thead><tbody><tr><td>SQL</td><td>跟数据库说话的语言</td><td>你写的查询、增删改语句</td></tr><tr><td>DML / DQL</td><td>增删改 / 查询</td><td>SQL 治理按这两类分别限时间</td></tr><tr><td>CN / DN</td><td>计算节点 / 数据节点</td><td>CN 派活和汇总，DN 真存真算</td></tr><tr><td>分片键 / 分发键</td><td>数据放在哪个仓库的地址</td><td>决定关联查询要不要跨节点搬数据</td></tr><tr><td>广播表</td><td>每个仓库都放一本的小手册</td><td>小表 JOIN 时不用跨节点找</td></tr><tr><td>全局索引</td><td>第二查找键</td><td>用非分片字段查数据时先查地址</td></tr><tr><td>下推</td><td>把计算搬到数据旁边做</td><td>减少网络传输和 CN 负担</td></tr><tr><td>全表扫描</td><td>没按目录，逐页翻完整本书</td><td>常见慢 SQL 症状</td></tr><tr><td>笛卡尔积</td><td>两表没写关联条件，行数相乘</td><td>高危 SQL，官方直接禁</td></tr><tr><td>RBO</td><td>按经验规则优化</td><td>rownum 转 limit、算子下推等</td></tr><tr><td>CBO</td><td>按代价估算优化</td><td>选连接顺序、小表驱动大表</td></tr><tr><td>COST</td><td>优化器算出来的过路费</td><td>判断 SQL 代价、识别重型任务</td></tr><tr><td>EXPLAIN</td><td>看执行路线图</td><td>找出 SQL 具体卡在哪一步</td></tr><tr><td>hint / outline</td><td>给导航提示 / 把路线钉住</td><td>不改应用也能调整或固定计划</td></tr><tr><td>Auto-DOP</td><td>自动决定派几个人并行干</td><td>复杂查询动态调并行度</td></tr><tr><td>TP / OLTP</td><td>一笔笔短平快的交易</td><td>高并发低时延，优先保障</td></tr><tr><td>AP / OLAP</td><td>复杂统计分析</td><td>耗时重，隔离到独立线程或节点</td></tr><tr><td>HTAP</td><td>一套系统同时做交易和分析</td><td>复杂查询走 AP 能力</td></tr><tr><td>QPS / TPS</td><td>每秒查询数 / 每秒事务数</td><td>监测负载和异常</td></tr><tr><td>CAC</td><td>迁移评估工具</td><td>迁移前推荐分片键、评估兼容性</td></tr><tr><td>DBReplay</td><td>负载回放工具</td><td>上线前用真实流量压测</td></tr><tr><td>Insight</td><td>运维管理平台</td><td>看慢 SQL、指标趋势、做限流</td></tr></tbody></table>
-<h2 id="sec-9">官方资料</h2>
-<ul><li><a href="https://www.zte.com.cn/content/zte-site/www-zte-com-cn/china/about/magazine/zte-technologies/2025/12/3/9.html" target="_blank" rel="noopener">金篆数据库 GoldenDB 分布式优化器关键技术</a>：RBO / CBO、算子下推、小表驱动大表、全局索引、异步计算、自动优化工具。</li><li><a href="https://www.zte.com.cn/content/zte-site/www-zte-com-cn/china/about/magazine/zte-technologies/2025/12/3/10.html" target="_blank" rel="noopener">GoldenDB 索引推荐技术：破解海量数据下的「慢 SQL」治理难题</a>：内核集成、直方图采样、亿级 10 秒、优化器协同。</li><li><a href="https://www.zte.com.cn/china/about/magazine/zte-technologies/2025/12/3/7.html" target="_blank" rel="noopener">基于数据库内核进行 SQL 治理的应用实践</a>：慢 SQL 识别、三类治理规则、联机交易与批量处理差异化配置。</li><li><a href="https://zte.com.cn/china/solutions_latest/goldendb/securitiesScheme.html" target="_blank" rel="noopener">基于 GoldenDB 的证券核心系统数据库解决方案</a>：HTAP、batch Prepare、回放时延优化、流控与全链路追踪。</li><li><a href="https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/goldendb/%E9%87%91%E7%AF%86%E4%BF%A1%E7%A7%91GoldenDB%E6%95%B0%E6%8D%AE%E5%BA%93V6%20%E6%8A%80%E6%9C%AF%E7%99%BD%E7%9A%AE%E4%B9%A620260708.pdf" target="_blank" rel="noopener">GoldenDB 数据库 V6 技术白皮书</a>：分片、数据重分布、读写分离、执行计划、SQL 限流、并行与流式查询。</li></ul>
-<h2 id="sec-10">一句话记住</h2>
-<p>先在数据库里找出慢 SQL，再让数据少搬家、让计划走对路；实在扛不住，就分流、并行、批量、限流。加机器通常是最后一步，不是第一步。</p>
+<p>前面两篇讲了 GoldenDB 的架构和效率优化。这篇专攻一件事：<strong>当一笔交易要同时改好几个分片上的数据，GoldenDB 怎么保证不出错？</strong></p>
+<p>拿银行转账举例最直观：A 账户在 DN1，B 账户在 DN2，A 给 B 转 50 元。最怕的就是 A 扣成功了、B 加失败了——钱凭空消失。单机数据库靠本地事务轻松解决，跨机器就没那么简单了。</p>
+<h2 id="sec-1">一句话版本</h2>
+<p><strong>给每笔写交易发一个全局工单号（GTID），CN 派活让各 DN 分头改，改完统一提交；万一有人提交失败，就照着 binlog 把已经改成功的那侧原样改回来；读的时候再看一眼「哪些工单还没最终生效」，跳过它们。</strong></p>
+<p>官方把这套机制的目标叫<strong>强一致性</strong>：用户完成数据更新后，后续所有读操作都能且只能读到更新以后的值。</p>
+<h2 id="sec-2">单机事务为什么不够用</h2>
+<p>单机数据库里，事务（Transaction）就是「要么全做，要么全不做」。它靠三个性质撑住：ACID——原子性（A）、一致性（C）、隔离性（I）、持久性（D）。</p>
+<p>一笔交易跨了多个 DN 之后，麻烦变成三个：</p>
+<ol><li><strong>原子性难</strong>：A 那台成功了、B 那台失败了，谁来把已经成功的撤销？</li><li><strong>隔离性难</strong>：别的交易正在读，怎么知道眼前这行数据是「已经算数」的版本，还是别人改到一半的？</li><li><strong>故障恢复难</strong>：机器、进程、网络出问题后，怎么知道当时有多少事务还在半路上？</li></ol>
+<p>官方白皮书 4.1 开门见山：GoldenDB 作为事务型数据库，支持集群所有节点间事务的 ACID 特性，保证故障可恢复，以及恢复后满足 ACID 要求，并负责节点的并发控制。</p>
+<h2 id="sec-3">四位主角：发号的、派活的、干活的、纠错的</h2>
+<table><thead><tr><th>角色</th><th>官方定位</th><th>大白话</th></tr></thead><tbody><tr><td>GTM 全局事务管理器</td><td>生成 / 释放 GTID，维护活跃事务及当前活跃 GTID 快照，管 ID 生命周期</td><td>发号员兼登记员：给每笔写交易发唯一工单号，并记下谁还没办完</td></tr><tr><td>CN 计算节点</td><td>分布式事务协调者，基于改进的两阶段提交协调多个资源域内的本地事务</td><td>包工头：拆活、派活、盯进度、把状态报给 GTM</td></tr><tr><td>DN 数据节点</td><td>最终存储，执行本地事务，写 binlog</td><td>仓库管理员：真正在自己那片账本上改数</td></tr><tr><td>DBAgent</td><td>提交失败时解析 binlog 中是否含有异常事务的 GTID，构造反向回滚语句</td><td>事后纠错员：拿着监控录像把改错的货搬回原位</td></tr></tbody></table>
+<p>这里最容易被忽略的是 <strong>DBAgent</strong>。普通两阶段提交遇到「有的参与者已经提交了」会很棘手；GoldenDB 的厉害之处恰恰是「已提交事务也能自动回滚」，而这件事是 DBAgent 靠 binlog 反解做出来的。</p>
+<h2 id="sec-4">协调全流程：六步走</h2>
+<p>下面按官方白皮书 4.1.2 的控制链路拆开讲（文末第 2 张图把六步画在了一起）。</p>
+<h3 id="sec-5">第 1 步：向 GTM 申请 GTID</h3>
+<p>CN 在处理分布式写事务时，先向 GTM 申请一个<strong>全局唯一且递增的整数</strong>作为 GTID（Global Transaction ID，全局事务 ID）。官方还说：为了减少 CN 和 GTM 的交互次数，把「申请单个」优化成了<strong>批量申请</strong>，「释放单个」也优化成了<strong>批量释放</strong>。</p>
+<blockquote>大白话：不是每笔业务跑一趟发号窗口，而是一次领一沓 numbered 工单，用完一起还。</blockquote>
+<h3 id="sec-6">第 2 步：把 GTID 写进每条记录</h3>
+<p>GoldenDB 在<strong>所有表里增加一个 GTID 隐含列</strong>（隐藏字段，业务看不见）。更新数据时同步更新这一列，把它作为分布式环境下的「全局锁」。</p>
+<blockquote>大白话：每一笔货都贴上工单号。后面不管是谁来查、谁来纠错，看标签就知道它是哪笔交易留下的。</blockquote>
+<h3 id="sec-7">第 3 步：CN 下发本地事务</h3>
+<p>CN 生成分布式执行计划，按分片规则把子任务下发给对应 DN。各 DN 在自己这片数据上执行本地事务——A 在 DN1 扣钱，B 在 DN2 加钱。</p>
+<h3 id="sec-8">第 4 步：统一提交，状态实时记 GTM</h3>
+<p>官方原话：<strong>计算节点作为分布式事务协调者，基于改进的两阶段提交（2PC）方法，协调多个资源域内的本地事务，同时将全局事务状态实时记录在全局事务管理器中</strong>。所有 SQL 执行完之后，各 DN 统一 COMMIT。</p>
+<h3 id="sec-9">第 5 步：失败就补偿回滚</h3>
+<p>如果某个 DN 的 COMMIT 失败，其他节点上的 <strong>DBAgent 解析 binlog</strong>，找出带有这个异常事务 GTID 的改动，<strong>构造反向 SQL</strong> 下发给 DN 执行回滚。官方银行方案把这项能力直接写成「全局事务管理器和已提交事务自动回滚相结合」。</p>
+<blockquote>大白话：binlog 是「改动流水账」。反解就是读流水账发现「9527 号把 A 减了 50」，自动生成「把 A 加回 50」的反向操作。</blockquote>
+<h3 id="sec-10">第 6 步：让后续读看到正确版本</h3>
+<p>写事务收尾了，读事务还有一关：SELECT 发起时，CN 从 GTM 拿到一份<strong>全局活跃事务名单</strong> <code>active_gtm_gtid_list</code>，带到 DN 做可见性判断：</p>
+<ul><li>行上的 GTID <strong>不在</strong>名单里：改动已经全局可见，直接返回当前数据；</li><li>行上的 GTID <strong>在</strong>名单里：改它的人还没尘埃落定，就通过 undo 构造前像，继续往前找，直到找到全局可见的版本。</li></ul>
+<p>这就是分布式 MVCC。单机 MVCC 看的是本地活跃事务，GoldenDB 多带了一份全局名单——这正是「分布式」三个字贵的地方。</p>
+<h2 id="sec-11">改进的两阶段提交，到底改在哪</h2>
+<p>标准 2PC（白皮书 4.3.7 把它放在 XA 章节里讲）分两步：<strong>准备阶段</strong>，协调者问所有参与者准备好了没；<strong>提交阶段</strong>，全就绪就一起提交，任何一个失败就一起回滚。</p>
+<p>GoldenDB 的「改进」可以理解成加了三样东西：</p>
+<ol><li><strong>GTID 全局锁</strong>：每行记录带 GTID，不只判断谁改了，还判断这一版算不算数；</li><li><strong>状态实时写 GTM</strong>：协调者不只自己记进度，还把全局事务状态实时记到 GTM，便于统一判断与恢复；</li><li><strong>已提交事务自动回滚</strong>：普通 2PC 最怕「已经 COMMIT 了怎么撤」，GoldenDB 靠 binlog 反解构造反向 SQL，把已提交的改动也补偿回来。</li></ol>
+<p>另外，官方明确 XA 协议<strong>没有描述如何实现分布式事务的隔离性</strong>，隔离性是由每个资源管理器（RM）的本地事务隔离性来保证的。GoldenDB 自己的分布式事务则用 GTID + 全局快照把这一层补上了。</p>
+<h2 id="sec-12">官方转账例子：A 成功、B 失败</h2>
+<p>白皮书 4.1.2 给的例子和文章开头一样：A、B 原来各有 100 元，A 给 B 转 50 元，两人属于不同节点。</p>
+<ol><li>A 在本地执行更新成功：100 → 50，行上写入 GTID，COMMIT 成功，binlog 留下痕迹；</li><li>B 的加钱操作失败，进入<strong>单机事务异常回滚</strong>流程，B 保持 100；</li><li>A 虽然已经提交，但进入<strong>已提交事务回滚</strong>流程：各方 DBAgent 解析 binlog，发现带该 GTID 的改动，构造反向 SQL 下发；</li><li>A 被加回 50，回到 100。</li></ol>
+<p>结果：A = 100，B = 100。钱没有凭空消失。官方把这条路径总结为「通过已提交事务回滚，解决分布式一致性问题」（文末第 4 张图完整画了这条链路）。</p>
+<h2 id="sec-13">GTM 自己出问题怎么办</h2>
+<p>协调者依赖的 GTM 如果挂了，整套机制就会停摆。官方给了两层保障：</p>
+<ul><li><strong>主备架构</strong>：GTM 采用主备部署，主节点异常时自动切到备节点继续提供服务；</li><li><strong>集群 + 租户绑定</strong>：进一步扩展为 GTM 集群架构，多个 GTM 和多个租户（Tenant，即相互隔离的数据库实例）绑定，某个 GTM 切换时<strong>只影响它绑定的租户</strong>，其他租户照常跑。</li></ul>
+<p>备份恢复也考虑到了事务状态：官方 4.5.3 说，备份包含运行日志<strong>以及每个时刻的全局事务列表快照</strong>，因此可以恢复出一个全局一致性的数据快照。换句话说，不只记「数据长什么样」，还记「当时谁在办事」。</p>
+<h2 id="sec-14">隔离级别与 XA 接口</h2>
+<ul><li>官方支持<strong>读未提交、读已提交、可重复读、串行化</strong>四种隔离级别，推荐使用 <strong>Read Committed</strong>。还支持隐式启动事务、默认 <code>auto_committed=0</code>、设置 <code>savepoint</code> 做更细粒度的并发控制；</li><li>XA 方面，GoldenDB 提供的 JDBC 驱动支持标准 XA 接口，兼容 Oracle 的 XA 事务，支持 <code>XA START / END / PREPARE / COMMIT / ROLLBACK / RECOVER</code> 等指令；在 XA 场景中 GoldenDB 服务器充当<strong>资源管理器（RM）</strong>，客户端程序充当<strong>事务管理器（TM）</strong>，提交阶段用两阶段提交保证原子性。</li></ul>
+<p>要注意区分：GoldenDB 自带的分布式事务机制（GTM + GTID）和它对外提供的 XA 接口是两回事——前者是内部怎么协调，后者是外部应用怎么接入这套协调。</p>
+<h2 id="sec-15">术语小抄</h2>
+<table><thead><tr><th>缩写 / 术语</th><th>大白话</th><th>在本文里的作用</th></tr></thead><tbody><tr><td>事务 Transaction</td><td>要么全做、要么全不做的一组操作</td><td>转账必须整体成功或整体失败</td></tr><tr><td>ACID</td><td>原子性、一致性、隔离性、持久性</td><td>官方承诺集群所有节点间事务都满足</td></tr><tr><td>GTID</td><td>全局唯一且递增的事务号</td><td>贴在每行数据上的工单号</td></tr><tr><td>GTM</td><td>全局事务管理器</td><td>发号、释放、维护活跃事务与快照</td></tr><tr><td>CN</td><td>计算节点</td><td>事务协调者，派活并上报状态</td></tr><tr><td>DN</td><td>数据节点</td><td>执行本地事务、真正落盘</td></tr><tr><td>DBAgent</td><td>节点上的代理组件</td><td>解析 binlog 构造反向 SQL 做补偿</td></tr><tr><td>隐含列</td><td>表里看不见的字段</td><td>每行记录都带 GTID</td></tr><tr><td>2PC</td><td>两阶段提交：准备 + 提交</td><td>跨节点统一提交的协议</td></tr><tr><td>已提交事务回滚</td><td>已经 COMMIT 了也能撤回来</td><td>解决「有人成功有人失败」的死局</td></tr><tr><td>binlog</td><td>数据改动的流水账</td><td>反推出反向 SQL 的依据</td></tr><tr><td>反向 SQL</td><td>把改动抵消掉的 SQL</td><td>A 减了 50，就生成「A 加 50」</td></tr><tr><td>MVCC</td><td>多版本并发控制</td><td>读不加锁，读写不冲突</td></tr><tr><td>undo 前像</td><td>修改前的旧版本数据</td><td>活跃改动要跳过时沿它往前找</td></tr><tr><td>active_gtm_gtid_list</td><td>GTM 给出的活跃事务名单</td><td>判断这行数据现在算不算数</td></tr><tr><td>强一致</td><td>更新完成后，后续读只能读到新值</td><td>官方对一致性的承诺</td></tr><tr><td>Read Committed</td><td>读已提交隔离级别</td><td>官方推荐的默认用法</td></tr><tr><td>savepoint</td><td>事务里的中途存档点</td><td>可以只回滚到某个点</td></tr><tr><td>XA</td><td>分布式事务的标准接口</td><td>GoldenDB 兼容，可作为 RM 接入外部 TM</td></tr><tr><td>RM / TM</td><td>资源管理器 / 事务管理器</td><td>XA 模型里的被协调方与协调方</td></tr><tr><td>租户 Tenant</td><td>相互隔离的数据库实例</td><td>GTM 集群按租户绑定，故障隔离</td></tr><tr><td>auto_committed</td><td>是否自动提交</td><td>GoldenDB 默认 0，即不自动提交</td></tr></tbody></table>
+<h2 id="sec-16">官方资料（逐条对应出处）</h2>
+<ol><li><a href="https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/goldendb/%E9%87%91%E7%AF%86%E4%BF%A1%E7%A7%91GoldenDB%E6%95%B0%E6%8D%AE%E5%BA%93V6%20%E6%8A%80%E6%9C%AF%E7%99%BD%E7%9A%AE%E4%B9%A620260708.pdf" target="_blank" rel="noopener">金篆信科 GoldenDB 数据库 V6 技术白皮书</a></li></ol>
+<ul><li>术语表 1.2 / 1.3：GTM 职责、租户实例定义；</li><li>3.1 架构设计：四类核心模块、主备与集群部署；</li><li><strong>4.1 分布式事务控制（含 4.1.1 隔离级别、4.1.2 分布式事务控制）</strong>：ACID 承诺、强一致定义、GTID 隐含列、改进 2PC、DBAgent 反解 binlog 补偿、批量申请释放、GTM 主备与集群、转账例子；</li><li>4.3.2 MVCC：全局活跃事务列表下推、undo 前像可见性规则；</li><li>4.3.7 XA 事务：RM / TM 角色、标准 2PC 流程、隔离性由各 RM 保证；</li><li>4.5.3 数据恢复：日志 + 每时刻全局事务列表快照实现全局一致性备份。</li></ul>
+<ol><li><a href="https://www.zte.com.cn/china/solutions_latest/goldendb/bankscheme.html" target="_blank" rel="noopener">基于 GoldenDB 的银行核心系统数据库解决方案（中兴通讯官网）</a>：「方案亮点 — 强一致性」明确写出「采用全局事务管理器和已提交事务自动回滚相结合的技术」「使用全局事务 ID 解决分布式事务的并发控制，严格保证事务的 ACID 属性」「满足会计记账准则要求」。</li><li><a href="https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/mediares/golden_db/pdf/report2024010303.pdf" target="_blank" rel="noopener">GoldenDB 分布式事务型数据库金融应用指南</a>：整体架构与金融场景说明。</li><li>前两篇博客文章：《GoldenDB 到底是个啥？把 CN、DN、GTM 讲成人话》（角色与部署）、《GoldenDB 效率低怎么办？》（排查与优化）——本文在这些基础上聚焦事务协调本身。</li></ol>
+<blockquote>说明：本文只复述上述官方资料明确写出的机制；「大白话」和类比是帮助理解的表达，不代表官方措辞。</blockquote>
+<h2 id="sec-17">一句话记住</h2>
+<p>GTM 发号、CN 派活、DN 干活、DBAgent 纠错；已提交也能靠 binlog 反解回滚，读的时候拿全局活跃名单过滤版本——这就是 GoldenDB 把单机事务那套「要么全做要么全不做」搬到一群机器上的办法。</p>
   </div>
   <div class="article-embeds">
-    <h2 id="sec-embeds">GoldenDB 效率优化图解（八张图）</h2>
-<figure class="embed-figure"><figcaption><span>图 1 · 排查路线 / 慢SQL三宗罪 / 算子下推 / 分片重分布 / 执行计划与索引 / 兜底组合（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/goldendb-performance.html" data-modal-title="GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版） · 图 1 · 排查路线 / 慢SQL三宗罪 / 算子下推 / 分片重分布 / 执行计划与索引 / 兜底组合（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 排查路线 / 慢SQL三宗罪 / 算子下推 / 分片重分布 / 执行计划与索引 / 兜底组合（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+    <h2 id="sec-embeds">GoldenDB 分布式事务协调图解（六张图）</h2>
+<figure class="embed-figure"><figcaption><span>图 1 · 谁在协调 / 六步流程 / 改进2PC / 转账补偿 / 读可见性 / 高可用与批量（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/goldendb-transaction.html" data-modal-title="GoldenDB 如何协调分布式事务？一笔转账背后的发号、派活与补偿 · 图 1 · 谁在协调 / 六步流程 / 改进2PC / 转账补偿 / 读可见性 / 高可用与批量（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 谁在协调 / 六步流程 / 改进2PC / 转账补偿 / 读可见性 / 高可用与批量（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
-&lt;title&gt;GoldenDB 效率低怎么办 · 官方优化套路图解&lt;/title&gt;
+&lt;title&gt;GoldenDB 分布式事务协调图解 · 发号、派活、补偿、可见性&lt;/title&gt;
 &lt;style&gt;
   :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
   *{box-sizing:border-box}
@@ -408,299 +421,300 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 &lt;/head&gt;
 &lt;body&gt;
 &lt;div class=&quot;hero&quot;&gt;
-  &lt;h1&gt;GoldenDB 效率低？先看官方这套顺序&lt;/h1&gt;
-  &lt;p&gt;六张图讲清官方通用套路：开发期压测与分片键推荐、生产期慢 SQL 治理、执行计划定位、下推与重分布、内核索引推荐，以及读写分离、并行、流式、批量协议和限流兜底。&lt;/p&gt;
+  &lt;h1&gt;GoldenDB 分布式事务：发号、派活、补偿、可见性&lt;/h1&gt;
+  &lt;p&gt;六张图讲清官方机制：GTM 发 GTID、CN 当协调者、DN 执行本地事务、DBAgent 靠 binlog 反解补偿回滚，以及读操作用全局活跃事务快照判断可见性。&lt;/p&gt;
 &lt;/div&gt;
 &lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
 &lt;div class=&quot;nav&quot;&gt;
-  &lt;a href=&quot;#c1&quot;&gt;排查路线&lt;/a&gt;&lt;a href=&quot;#c2&quot;&gt;慢 SQL 三宗罪&lt;/a&gt;&lt;a href=&quot;#c3&quot;&gt;算子下推&lt;/a&gt;&lt;a href=&quot;#c4&quot;&gt;分片与重分布&lt;/a&gt;&lt;a href=&quot;#c5&quot;&gt;执行计划与索引&lt;/a&gt;&lt;a href=&quot;#c6&quot;&gt;兜底组合&lt;/a&gt;
+  &lt;a href=&quot;#x1&quot;&gt;谁在协调&lt;/a&gt;&lt;a href=&quot;#x2&quot;&gt;六步流程&lt;/a&gt;&lt;a href=&quot;#x3&quot;&gt;改进 2PC&lt;/a&gt;&lt;a href=&quot;#x4&quot;&gt;转账补偿&lt;/a&gt;&lt;a href=&quot;#x5&quot;&gt;读可见性&lt;/a&gt;&lt;a href=&quot;#x6&quot;&gt;高可用与批量&lt;/a&gt;
 &lt;/div&gt;
 
-&lt;!-- 1 路线 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c1&quot;&gt;
+&lt;!-- 1 谁在协调 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;x1&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;官方思路：不是先加机器，而是按顺序排雷 &lt;span class=&quot;tag&quot;&gt;路线&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;白皮书和《中兴通讯技术》金篆数据库专题里反复出现的顺序：开发/迁移前先评估与压测，生产中先揪出慢 SQL，再看计划、分片、索引，最后用并行、读写分离和限流把稳定性兜住。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;pz-host&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 300&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;m1&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#m1)&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M196,112 L208,112&quot;/&gt;&lt;path d=&quot;M414,112 L426,112&quot;/&gt;&lt;path d=&quot;M632,112 L644,112&quot;/&gt;&lt;path d=&quot;M850,112 L862,112&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;11.5&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;rect x=&quot;22&quot; y=&quot;62&quot; width=&quot;174&quot; height=&quot;100&quot; rx=&quot;11&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
-          &lt;text x=&quot;38&quot; y=&quot;88&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 开发 / 迁移前&lt;/text&gt;
-          &lt;text x=&quot;38&quot; y=&quot;114&quot; fill=&quot;#6e6e73&quot;&gt;CAC 评估兼容性&lt;/text&gt;
-          &lt;text x=&quot;38&quot; y=&quot;136&quot; fill=&quot;#6e6e73&quot;&gt;推荐分片键&lt;/text&gt;
-
-          &lt;rect x=&quot;208&quot; y=&quot;62&quot; width=&quot;206&quot; height=&quot;100&quot; rx=&quot;11&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-          &lt;text x=&quot;224&quot; y=&quot;88&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;② 上线前压测&lt;/text&gt;
-          &lt;text x=&quot;224&quot; y=&quot;114&quot; fill=&quot;#6e6e73&quot;&gt;DBReplay 回放真实负载&lt;/text&gt;
-          &lt;text x=&quot;224&quot; y=&quot;136&quot; fill=&quot;#6e6e73&quot;&gt;看兼容性和执行效率&lt;/text&gt;
-
-          &lt;rect x=&quot;426&quot; y=&quot;62&quot; width=&quot;206&quot; height=&quot;100&quot; rx=&quot;11&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
-          &lt;text x=&quot;442&quot; y=&quot;88&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;③ 生产中监测&lt;/text&gt;
-          &lt;text x=&quot;442&quot; y=&quot;114&quot; fill=&quot;#6e6e73&quot;&gt;Insight 看慢 SQL&lt;/text&gt;
-          &lt;text x=&quot;442&quot; y=&quot;136&quot; fill=&quot;#6e6e73&quot;&gt;内核 SQL 治理拦截&lt;/text&gt;
-
-          &lt;rect x=&quot;644&quot; y=&quot;62&quot; width=&quot;206&quot; height=&quot;100&quot; rx=&quot;11&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-          &lt;text x=&quot;660&quot; y=&quot;88&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;④ 定位根因&lt;/text&gt;
-          &lt;text x=&quot;660&quot; y=&quot;114&quot; fill=&quot;#6e6e73&quot;&gt;EXPLAIN 看执行计划&lt;/text&gt;
-          &lt;text x=&quot;660&quot; y=&quot;136&quot; fill=&quot;#6e6e73&quot;&gt;分片 / 索引 / 下推&lt;/text&gt;
-
-          &lt;rect x=&quot;862&quot; y=&quot;62&quot; width=&quot;156&quot; height=&quot;100&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
-          &lt;text x=&quot;878&quot; y=&quot;88&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;⑤ 优化兜底&lt;/text&gt;
-          &lt;text x=&quot;878&quot; y=&quot;114&quot; fill=&quot;#6e6e73&quot;&gt;改写 / 绑定计划&lt;/text&gt;
-          &lt;text x=&quot;878&quot; y=&quot;136&quot; fill=&quot;#6e6e73&quot;&gt;并行 / 分流 / 限流&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;rect x=&quot;22&quot; y=&quot;194&quot; width=&quot;996&quot; height=&quot;76&quot; rx=&quot;12&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-        &lt;text x=&quot;42&quot; y=&quot;220&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话：先把「哪条 SQL 慢、慢在哪一步」找出来，再决定改分片、加索引还是分流。&lt;/text&gt;
-        &lt;text x=&quot;42&quot; y=&quot;246&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;官方强调：生产上直接终止请求会影响成功率，更均衡的做法是采集慢 SQL，纳入后续版本迭代整改。&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;别一上来就说「数据库慢」。先像医生一样问诊：什么时候慢、哪条语句慢、扫描了多少数据、有没有跨节点搬货。证据齐了再开药。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 2 慢SQL --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c2&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;慢 SQL 常见的三宗罪 &lt;span class=&quot;tag&quot;&gt;定位&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;官方文章指出：缺索引会生成低效计划，慢 SQL 会挤占 CPU、内存和 I/O；分布式下还要额外看「数据是不是被跨节点搬运」和「执行计划是不是选错了」。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;三方分工：发号的、派活的、干活的 &lt;span class=&quot;tag&quot;&gt;角色&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;官方定义：GTM 负责生成 / 释放 GTID、维护活跃事务及其快照；CN 作为分布式事务协调者；DN 执行本地事务并落盘；DBAgent 在异常时解析 binlog 构造反向回滚语句。&lt;/p&gt;
   &lt;/div&gt;
   &lt;div class=&quot;pz-host&quot;&gt;
     &lt;svg viewBox=&quot;0 0 1040 320&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;x1m&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
       &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;rect x=&quot;24&quot; y=&quot;28&quot; width=&quot;316&quot; height=&quot;210&quot; rx=&quot;14&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;58&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;① 没有合适索引&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;86&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;症状：全表扫描&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;114&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;一条 SQL 把整张表翻一遍&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;138&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;CPU / 内存 / I/O 被持续占用&lt;/text&gt;
-        &lt;rect x=&quot;44&quot; y=&quot;166&quot; width=&quot;276&quot; height=&quot;50&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;56&quot; y=&quot;188&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;官方解法&lt;/text&gt;
-        &lt;text x=&quot;56&quot; y=&quot;206&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;内核索引推荐 + 新增索引&lt;/text&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;992&quot; height=&quot;48&quot; rx=&quot;11&quot; fill=&quot;#fff6e8&quot; stroke=&quot;#f2d9ae&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;48&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;一笔跨分片写事务：应用只发一条 SQL，后台要协调多个仓库同时改对&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;65&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;官方定位：强一致、对应用透明，应用业务逻辑不用改&lt;/text&gt;
 
-        &lt;rect x=&quot;362&quot; y=&quot;28&quot; width=&quot;316&quot; height=&quot;210&quot; rx=&quot;14&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
-        &lt;text x=&quot;382&quot; y=&quot;58&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;② 跨节点搬太多数据&lt;/text&gt;
-        &lt;text x=&quot;382&quot; y=&quot;86&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;症状：网络与 CN 忙&lt;/text&gt;
-        &lt;text x=&quot;382&quot; y=&quot;114&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;JOIN / 聚合没下推到 DN&lt;/text&gt;
-        &lt;text x=&quot;382&quot; y=&quot;138&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;大量无关行被拉到计算节点&lt;/text&gt;
-        &lt;rect x=&quot;382&quot; y=&quot;166&quot; width=&quot;276&quot; height=&quot;50&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c9dcff&quot;/&gt;
-        &lt;text x=&quot;394&quot; y=&quot;188&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;官方解法&lt;/text&gt;
-        &lt;text x=&quot;394&quot; y=&quot;206&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;算子下推 + 小表驱动大表&lt;/text&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;96&quot; width=&quot;188&quot; height=&quot;156&quot; rx=&quot;13&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;42&quot; y=&quot;122&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;应用&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;148&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;发起 UPDATE / 转账&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;174&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;通过 JDBC 等驱动&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;208&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;只看到「一张表」&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;232&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;不知道数据被切成几片&lt;/text&gt;
 
-        &lt;rect x=&quot;700&quot; y=&quot;28&quot; width=&quot;316&quot; height=&quot;210&quot; rx=&quot;14&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;720&quot; y=&quot;58&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;③ 执行计划选错&lt;/text&gt;
-        &lt;text x=&quot;720&quot; y=&quot;86&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;症状：同样 SQL 忽快忽慢&lt;/text&gt;
-        &lt;text x=&quot;720&quot; y=&quot;114&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;统计信息 / 代价估算不准&lt;/text&gt;
-        &lt;text x=&quot;720&quot; y=&quot;138&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;连接顺序、索引选择不合理&lt;/text&gt;
-        &lt;rect x=&quot;720&quot; y=&quot;166&quot; width=&quot;276&quot; height=&quot;50&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;732&quot; y=&quot;188&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;官方解法&lt;/text&gt;
-        &lt;text x=&quot;732&quot; y=&quot;206&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;EXPLAIN + hint / outline 绑定&lt;/text&gt;
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.7&quot; marker-end=&quot;url(#x1m)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M212,166 L240,166&quot;/&gt;&lt;/g&gt;
 
-        &lt;rect x=&quot;24&quot; y=&quot;262&quot; width=&quot;992&quot; height=&quot;38&quot; rx=&quot;10&quot; fill=&quot;#fff6e8&quot; stroke=&quot;#f2d9ae&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;287&quot; font-size=&quot;12.5&quot; fill=&quot;#8a5a00&quot;&gt;&lt;tspan font-weight=&quot;700&quot;&gt;内核 SQL 治理：&lt;/tspan&gt;限制最大执行时间、最大结果集、关联行数、读取数据块数；黑名单拦截无索引查询、笛卡尔积等高危 SQL。&lt;/text&gt;
+        &lt;rect x=&quot;242&quot; y=&quot;96&quot; width=&quot;266&quot; height=&quot;156&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;260&quot; y=&quot;122&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;CN 计算节点 = 总协调&lt;/text&gt;
+        &lt;text x=&quot;260&quot; y=&quot;148&quot; font-size=&quot;11.5&quot; fill=&quot;#1d1d1f&quot;&gt;生成分布式执行计划&lt;/text&gt;
+        &lt;text x=&quot;260&quot; y=&quot;172&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;协调多个资源域的本地事务&lt;/text&gt;
+        &lt;text x=&quot;260&quot; y=&quot;196&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;事务状态实时记到 GTM&lt;/text&gt;
+        &lt;text x=&quot;260&quot; y=&quot;228&quot; font-size=&quot;11&quot; fill=&quot;#0a58ca&quot;&gt;大白话：包工头&lt;/text&gt;
+
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.7&quot; marker-end=&quot;url(#x1m)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M508,132 L556,132&quot;/&gt;&lt;path d=&quot;M508,200 L556,200&quot;/&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;512&quot; y=&quot;124&quot; font-size=&quot;10.5&quot; fill=&quot;#007aff&quot;&gt;申请 / 释放 GTID&lt;/text&gt;
+        &lt;text x=&quot;512&quot; y=&quot;192&quot; font-size=&quot;10.5&quot; fill=&quot;#007aff&quot;&gt;下发本地事务&lt;/text&gt;
+
+        &lt;rect x=&quot;558&quot; y=&quot;96&quot; width=&quot;218&quot; height=&quot;156&quot; rx=&quot;13&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;576&quot; y=&quot;122&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;GTM = 发号 + 登记&lt;/text&gt;
+        &lt;text x=&quot;576&quot; y=&quot;148&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;分配全局唯一递增 GTID&lt;/text&gt;
+        &lt;text x=&quot;576&quot; y=&quot;170&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;维护活跃事务及快照&lt;/text&gt;
+        &lt;text x=&quot;576&quot; y=&quot;192&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;管 ID 生命周期&lt;/text&gt;
+        &lt;text x=&quot;576&quot; y=&quot;226&quot; font-size=&quot;11&quot; fill=&quot;#3a2a7a&quot;&gt;大白话：发号员 + 登记员&lt;/text&gt;
+
+        &lt;rect x=&quot;800&quot; y=&quot;96&quot; width=&quot;216&quot; height=&quot;156&quot; rx=&quot;13&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;818&quot; y=&quot;122&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;DN × N = 真干活&lt;/text&gt;
+        &lt;text x=&quot;818&quot; y=&quot;148&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;各管一片数据&lt;/text&gt;
+        &lt;text x=&quot;818&quot; y=&quot;170&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;执行本地事务、写 binlog&lt;/text&gt;
+        &lt;text x=&quot;818&quot; y=&quot;192&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;配套 DBAgent 纠错&lt;/text&gt;
+        &lt;text x=&quot;818&quot; y=&quot;226&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;大白话：仓库 + 账本&lt;/text&gt;
+
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#x1m)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M776,198 L800,198&quot;/&gt;&lt;/g&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;270&quot; width=&quot;992&quot; height=&quot;36&quot; rx=&quot;10&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;293&quot; font-size=&quot;11.5&quot; fill=&quot;#3a2a7a&quot;&gt;&lt;tspan font-weight=&quot;700&quot;&gt;官方用词：&lt;/tspan&gt;「全局事务管理器……协助计算节点进行分布式事务管理，主要包括生成、释放全局事务 ID（GTID）、维护活跃事务以及当前活跃 GTIDs 的快照」（白皮书术语表）。&lt;/text&gt;
       &lt;/g&gt;
     &lt;/svg&gt;
   &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;术语：&lt;/b&gt;全表扫描 = 没按目录找书，把整本书逐页翻；笛卡尔积 = 两张表没写关联条件，行数被乘成爆炸式增长；DML = 增删改，DQL = 查。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;GTM 发工单号，CN 派活并盯着进度，DN 在各自仓库改账，DBAgent 是事后拿着监控录像（binlog）纠错的人。谁都不多余。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 3 下推 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c3&quot;&gt;
+&lt;!-- 2 六步流程 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;x2&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;让计算靠近数据：下推与代价优化 &lt;span class=&quot;tag&quot;&gt;优化器&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;官方优化器分两层：逻辑优化用 RBO（基于规则的优化），物理优化既有 RBO 也有 CBO（基于代价的优化）。目标都是少搬数据、少做无用计算。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;协调全流程：从发号到给答案，一共六步 &lt;span class=&quot;tag&quot;&gt;流程&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;白皮书 4.1.2 给出的控制链路：申请 GTID → 写进每行记录 → CN 下发 → 各 DN 统一提交 → 失败补偿 → 后续读到正确结果。&lt;/p&gt;
   &lt;/div&gt;
   &lt;div class=&quot;pz-host&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 360&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;m3&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+    &lt;svg viewBox=&quot;0 0 1040 350&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;x2m&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
       &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;rect x=&quot;24&quot; y=&quot;28&quot; width=&quot;466&quot; height=&quot;248&quot; rx=&quot;14&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;56&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;没下推：数据全往 CN 搬&lt;/text&gt;
-        &lt;rect x=&quot;44&quot; y=&quot;76&quot; width=&quot;160&quot; height=&quot;46&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;60&quot; y=&quot;104&quot; font-size=&quot;12&quot; fill=&quot;#1d1d1f&quot;&gt;DN1 全部行&lt;/text&gt;
-        &lt;rect x=&quot;44&quot; y=&quot;132&quot; width=&quot;160&quot; height=&quot;46&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;60&quot; y=&quot;160&quot; font-size=&quot;12&quot; fill=&quot;#1d1d1f&quot;&gt;DN2 全部行&lt;/text&gt;
-        &lt;rect x=&quot;296&quot; y=&quot;100&quot; width=&quot;166&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;312&quot; y=&quot;126&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;CN 计算节点&lt;/text&gt;
-        &lt;text x=&quot;312&quot; y=&quot;150&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;过滤 / JOIN / 聚合&lt;/text&gt;
-        &lt;g stroke=&quot;#c62828&quot; stroke-width=&quot;3&quot; marker-end=&quot;url(#m3)&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M204,100 L296,126&quot;/&gt;&lt;path d=&quot;M204,155 L296,148&quot;/&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#x2m)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M188,112 L202,112&quot;/&gt;&lt;path d=&quot;M388,112 L402,112&quot;/&gt;&lt;path d=&quot;M588,112 L602,112&quot;/&gt;&lt;path d=&quot;M788,112 L802,112&quot;/&gt;
         &lt;/g&gt;
-        &lt;text x=&quot;44&quot; y=&quot;206&quot; font-size=&quot;11.5&quot; fill=&quot;#c62828&quot;&gt;结果：网络传输量大，CN 成瓶颈&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;234&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;很多行本来就不满足条件，却被拉上来再丢掉&lt;/text&gt;
+        &lt;rect x=&quot;22&quot; y=&quot;62&quot; width=&quot;166&quot; height=&quot;120&quot; rx=&quot;11&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;36&quot; y=&quot;88&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;① 申请 GTID&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;112&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;CN 向 GTM 要号&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;134&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;批量申请减少交互&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#3a2a7a&quot;&gt;如 9527&lt;/text&gt;
 
-        &lt;rect x=&quot;550&quot; y=&quot;28&quot; width=&quot;466&quot; height=&quot;248&quot; rx=&quot;14&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;570&quot; y=&quot;56&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;下推后：DN 先算，CN 只归并&lt;/text&gt;
-        &lt;rect x=&quot;570&quot; y=&quot;76&quot; width=&quot;180&quot; height=&quot;46&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;586&quot; y=&quot;104&quot; font-size=&quot;11.5&quot; fill=&quot;#1d1d1f&quot;&gt;DN1 先过滤 / 聚合&lt;/text&gt;
-        &lt;rect x=&quot;570&quot; y=&quot;132&quot; width=&quot;180&quot; height=&quot;46&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;586&quot; y=&quot;160&quot; font-size=&quot;11.5&quot; fill=&quot;#1d1d1f&quot;&gt;DN2 先过滤 / 聚合&lt;/text&gt;
-        &lt;rect x=&quot;822&quot; y=&quot;100&quot; width=&quot;166&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;838&quot; y=&quot;126&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;CN 计算节点&lt;/text&gt;
-        &lt;text x=&quot;838&quot; y=&quot;150&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;只做二次归并&lt;/text&gt;
-        &lt;g stroke=&quot;#1d7a45&quot; stroke-width=&quot;1.8&quot; marker-end=&quot;url(#m3)&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M750,100 L822,126&quot;/&gt;&lt;path d=&quot;M750,155 L822,148&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;570&quot; y=&quot;206&quot; font-size=&quot;11.5&quot; fill=&quot;#1d7a45&quot;&gt;结果：搬运的数据少，网络压力小&lt;/text&gt;
-        &lt;text x=&quot;570&quot; y=&quot;234&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;聚合分组列带分片键时，连二次归并都可省&lt;/text&gt;
+        &lt;rect x=&quot;202&quot; y=&quot;62&quot; width=&quot;186&quot; height=&quot;120&quot; rx=&quot;11&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;216&quot; y=&quot;88&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;② 写隐含列&lt;/text&gt;
+        &lt;text x=&quot;216&quot; y=&quot;112&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;每行加 GTID 列&lt;/text&gt;
+        &lt;text x=&quot;216&quot; y=&quot;134&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;更新时同步更新&lt;/text&gt;
+        &lt;text x=&quot;216&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;当「全局锁」用&lt;/text&gt;
 
-        &lt;rect x=&quot;24&quot; y=&quot;300&quot; width=&quot;992&quot; height=&quot;40&quot; rx=&quot;10&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;325&quot; font-size=&quot;11.5&quot; fill=&quot;#3a2a7a&quot;&gt;&lt;tspan font-weight=&quot;700&quot;&gt;RBO 规则：&lt;/tspan&gt;rownum→limit、not exists→left join、avg→sum/count、过滤与 JOIN 下推。&lt;tspan font-weight=&quot;700&quot;&gt;CBO：&lt;/tspan&gt;按 COST 选连接顺序，小表驱动大表减少拉取。&lt;/text&gt;
+        &lt;rect x=&quot;402&quot; y=&quot;62&quot; width=&quot;186&quot; height=&quot;120&quot; rx=&quot;11&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;416&quot; y=&quot;88&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;③ 下发子事务&lt;/text&gt;
+        &lt;text x=&quot;416&quot; y=&quot;112&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;CN 拆计划到 DN&lt;/text&gt;
+        &lt;text x=&quot;416&quot; y=&quot;134&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;各 DN 执行本地事务&lt;/text&gt;
+        &lt;text x=&quot;416&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;改自己的那片数据&lt;/text&gt;
+
+        &lt;rect x=&quot;602&quot; y=&quot;62&quot; width=&quot;186&quot; height=&quot;120&quot; rx=&quot;11&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;616&quot; y=&quot;88&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;④ 统一 COMMIT&lt;/text&gt;
+        &lt;text x=&quot;616&quot; y=&quot;112&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;所有 SQL 执行完&lt;/text&gt;
+        &lt;text x=&quot;616&quot; y=&quot;134&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;改进 2PC 协调&lt;/text&gt;
+        &lt;text x=&quot;616&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#8a5a00&quot;&gt;状态实时记 GTM&lt;/text&gt;
+
+        &lt;rect x=&quot;802&quot; y=&quot;62&quot; width=&quot;216&quot; height=&quot;120&quot; rx=&quot;11&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;816&quot; y=&quot;88&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;⑤ 失败就补偿&lt;/text&gt;
+        &lt;text x=&quot;816&quot; y=&quot;112&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;某 DN 提交失败&lt;/text&gt;
+        &lt;text x=&quot;816&quot; y=&quot;134&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;DBAgent 解析 binlog&lt;/text&gt;
+        &lt;text x=&quot;816&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#c62828&quot;&gt;构造反向 SQL 回滚&lt;/text&gt;
+
+        &lt;rect x=&quot;22&quot; y=&quot;206&quot; width=&quot;996&quot; height=&quot;124&quot; rx=&quot;13&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;42&quot; y=&quot;234&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;⑥ 给应用一个「就像单机一样」的答案&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;260&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;官方定义强一致性：用户完成数据更新后，后续所有读操作都能且只能读到更新以后的值。&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;284&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;读的时候 CN 从 GTM 拿「活跃事务名单」带到 DN：行上的 GTID 活跃就沿 undo 找前像，不活跃就返回当前值。&lt;/text&gt;
+        &lt;rect x=&quot;42&quot; y=&quot;298&quot; width=&quot;956&quot; height=&quot;20&quot; rx=&quot;6&quot; fill=&quot;#e9f8ef&quot;/&gt;
+        &lt;text x=&quot;52&quot; y=&quot;312&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;结果：原子性靠 2PC + 补偿，隔离性靠 GTID 与全局快照，故障可恢复靠日志 + 全局事务列表快照。&lt;/text&gt;
       &lt;/g&gt;
     &lt;/svg&gt;
   &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;别把一车货拉到前台再挑，直接在每个仓库先挑好、称好，只把结果报给前台。COST 就是优化器给每条路算的「过路费」。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;先领工单号，再把工单号写进每条货的标签，分头去改，最后统一交账；谁那边砸了，就按工单号把已经改过的原样改回来。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 4 分片重分布 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c4&quot;&gt;
+&lt;!-- 3 改进 2PC --&gt;
+&lt;div class=&quot;card&quot; id=&quot;x3&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;分片键选错，关联查询就累 &lt;span class=&quot;tag&quot;&gt;分片&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;官方建议把业务关系密切的多张表采用相同分片，避免跨节点请求；无法同分片时用全局索引做分片键转换；不常改的小表用复制策略（广播表）复制到每个分片。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;pz-host&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 340&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;m4&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;rect x=&quot;24&quot; y=&quot;28&quot; width=&quot;300&quot; height=&quot;232&quot; rx=&quot;14&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;56&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;关联表分片不一致&lt;/text&gt;
-        &lt;rect x=&quot;44&quot; y=&quot;78&quot; width=&quot;260&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;60&quot; y=&quot;105&quot; font-size=&quot;12&quot; fill=&quot;#1d1d1f&quot;&gt;订单表：按 order_id 分片&lt;/text&gt;
-        &lt;rect x=&quot;44&quot; y=&quot;132&quot; width=&quot;260&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;60&quot; y=&quot;159&quot; font-size=&quot;12&quot; fill=&quot;#1d1d1f&quot;&gt;客户表：按 cust_id 分片&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;202&quot; font-size=&quot;11.5&quot; fill=&quot;#c62828&quot;&gt;JOIN 要跨多个 DN 拉数据&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;226&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;网络开销大，CN 还要归并&lt;/text&gt;
-
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#m4)&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M324,144 L360,144&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;326&quot; y=&quot;134&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;官方调整&lt;/text&gt;
-
-        &lt;rect x=&quot;360&quot; y=&quot;28&quot; width=&quot;656&quot; height=&quot;232&quot; rx=&quot;14&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;380&quot; y=&quot;56&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;三种官方办法&lt;/text&gt;
-
-        &lt;rect x=&quot;380&quot; y=&quot;76&quot; width=&quot;196&quot; height=&quot;164&quot; rx=&quot;11&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;396&quot; y=&quot;102&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;① 数据重分布&lt;/text&gt;
-        &lt;text x=&quot;396&quot; y=&quot;128&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;在线调整分片键&lt;/text&gt;
-        &lt;text x=&quot;396&quot; y=&quot;150&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;关联表分发策略调一致&lt;/text&gt;
-        &lt;text x=&quot;396&quot; y=&quot;172&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;多表可并发重分布&lt;/text&gt;
-        &lt;text x=&quot;396&quot; y=&quot;200&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;→ 关联可在本地完成&lt;/text&gt;
-        &lt;text x=&quot;396&quot; y=&quot;222&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;官方：在线、对业务影响秒级&lt;/text&gt;
-
-        &lt;rect x=&quot;592&quot; y=&quot;76&quot; width=&quot;196&quot; height=&quot;164&quot; rx=&quot;11&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;608&quot; y=&quot;102&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;② 全局索引&lt;/text&gt;
-        &lt;text x=&quot;608&quot; y=&quot;128&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;给非分片字段一个「第二查找键」&lt;/text&gt;
-        &lt;text x=&quot;608&quot; y=&quot;150&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;先查索引表拿到分发键&lt;/text&gt;
-        &lt;text x=&quot;608&quot; y=&quot;172&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;再定位目标分片&lt;/text&gt;
-        &lt;text x=&quot;608&quot; y=&quot;200&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;→ 避免全节点群发&lt;/text&gt;
-        &lt;text x=&quot;608&quot; y=&quot;222&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;官方：提升 where 等值过滤效率&lt;/text&gt;
-
-        &lt;rect x=&quot;804&quot; y=&quot;76&quot; width=&quot;196&quot; height=&quot;164&quot; rx=&quot;11&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;820&quot; y=&quot;102&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;③ 广播表&lt;/text&gt;
-        &lt;text x=&quot;820&quot; y=&quot;128&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;不常改的小表&lt;/text&gt;
-        &lt;text x=&quot;820&quot; y=&quot;150&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;复制到每个分片节点&lt;/text&gt;
-        &lt;text x=&quot;820&quot; y=&quot;172&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;JOIN 时本地就有数据&lt;/text&gt;
-        &lt;text x=&quot;820&quot; y=&quot;200&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;→ 减少网络传输&lt;/text&gt;
-        &lt;text x=&quot;820&quot; y=&quot;222&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;官方：适合频繁关联的小表&lt;/text&gt;
-
-        &lt;rect x=&quot;24&quot; y=&quot;282&quot; width=&quot;992&quot; height=&quot;38&quot; rx=&quot;10&quot; fill=&quot;#fff6e8&quot; stroke=&quot;#f2d9ae&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;307&quot; font-size=&quot;11.5&quot; fill=&quot;#8a5a00&quot;&gt;&lt;tspan font-weight=&quot;700&quot;&gt;大白话：&lt;/tspan&gt;分片键就是「仓库地址」。常一起查的表放同一个仓库；查不到地址时，用全局索引先查地址；小手册每个仓库放一本。&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;注意：&lt;/b&gt;官方也提醒，SKIP SCAN 这类索引跳跃扫描要满足「前导列基数低、非前导列选择性高」，乱用反而有性能风险。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 5 执行计划与索引 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c5&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;看图开药：EXPLAIN → 索引推荐 → 绑定计划 &lt;span class=&quot;tag&quot;&gt;诊断&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;官方支持查看 CN 计划、DN 计划或两者同时输出；支持 hint 和 outline 在线绑定执行计划；索引推荐是内核原生能力，用直方图采样，亿级大表 10 秒内出报告。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;改进的两阶段提交：不是「一问一答」那么简单 &lt;span class=&quot;tag&quot;&gt;提交&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;官方说法是「基于改进的两阶段提交事务控制方法，协调多个资源域内的本地事务，同时将全局事务状态实时记录在全局事务管理器中」。标准 XA 的 2PC 在白皮书 4.3.7 里另有说明。&lt;/p&gt;
   &lt;/div&gt;
   &lt;div class=&quot;pz-host&quot;&gt;
     &lt;svg viewBox=&quot;0 0 1040 340&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;m5&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+      &lt;defs&gt;&lt;marker id=&quot;x3m&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
       &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#m5)&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M186,108 L198,108&quot;/&gt;&lt;path d=&quot;M414,108 L426,108&quot;/&gt;&lt;path d=&quot;M642,108 L654,108&quot;/&gt;&lt;path d=&quot;M870,108 L882,108&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;11.5&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;rect x=&quot;22&quot; y=&quot;58&quot; width=&quot;164&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
-          &lt;text x=&quot;38&quot; y=&quot;84&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① EXPLAIN&lt;/text&gt;
-          &lt;text x=&quot;38&quot; y=&quot;108&quot; fill=&quot;#6e6e73&quot;&gt;看 CN / DN 计划&lt;/text&gt;
-          &lt;text x=&quot;38&quot; y=&quot;130&quot; fill=&quot;#6e6e73&quot;&gt;找执行瓶颈&lt;/text&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;470&quot; height=&quot;250&quot; rx=&quot;14&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;52&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;标准 2PC（白皮书 4.3.7 的 XA 描述）&lt;/text&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;72&quot; width=&quot;430&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;60&quot; y=&quot;98&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;准备阶段&lt;/text&gt;
+        &lt;text x=&quot;60&quot; y=&quot;122&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;事务管理器问所有参与者：准备好了吗？&lt;/text&gt;
+        &lt;text x=&quot;60&quot; y=&quot;137&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;参与者回答「就绪 / 不就绪」&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#x3m)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M259,144 L259,166&quot;/&gt;&lt;/g&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;168&quot; width=&quot;430&quot; height=&quot;82&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;60&quot; y=&quot;194&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;提交阶段&lt;/text&gt;
+        &lt;text x=&quot;60&quot; y=&quot;216&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;全就绪 → 发提交；有人失败 → 全员回滚&lt;/text&gt;
+        &lt;text x=&quot;60&quot; y=&quot;238&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;XA 不描述隔离性，由每个 RM 的本地事务保证&lt;/text&gt;
 
-          &lt;rect x=&quot;198&quot; y=&quot;58&quot; width=&quot;216&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-          &lt;text x=&quot;214&quot; y=&quot;84&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;② 内核索引推荐&lt;/text&gt;
-          &lt;text x=&quot;214&quot; y=&quot;108&quot; fill=&quot;#6e6e73&quot;&gt;直方图采样，不扫全表&lt;/text&gt;
-          &lt;text x=&quot;214&quot; y=&quot;130&quot; fill=&quot;#6e6e73&quot;&gt;亿级大表 10 秒内分析&lt;/text&gt;
+        &lt;rect x=&quot;546&quot; y=&quot;24&quot; width=&quot;470&quot; height=&quot;250&quot; rx=&quot;14&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;566&quot; y=&quot;52&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;GoldenDB 的「改进」加了三样东西&lt;/text&gt;
+        &lt;rect x=&quot;566&quot; y=&quot;72&quot; width=&quot;430&quot; height=&quot;54&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;582&quot; y=&quot;94&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① GTID 全局锁&lt;/text&gt;
+        &lt;text x=&quot;582&quot; y=&quot;115&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;每行记录带 GTID，靠它判断「谁改的、能不能见」&lt;/text&gt;
+        &lt;rect x=&quot;566&quot; y=&quot;134&quot; width=&quot;430&quot; height=&quot;54&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;582&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;② 状态实时写 GTM&lt;/text&gt;
+        &lt;text x=&quot;582&quot; y=&quot;177&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;协调者把全局事务状态实时记到全局事务管理器&lt;/text&gt;
+        &lt;rect x=&quot;566&quot; y=&quot;196&quot; width=&quot;430&quot; height=&quot;58&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;582&quot; y=&quot;218&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;③ 已提交事务也能回滚&lt;/text&gt;
+        &lt;text x=&quot;582&quot; y=&quot;239&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;有的 DN 已经 COMMIT 了，靠 binlog 反解构造反向 SQL 补偿&lt;/text&gt;
 
-          &lt;rect x=&quot;426&quot; y=&quot;58&quot; width=&quot;216&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-          &lt;text x=&quot;442&quot; y=&quot;84&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;③ 优化器协同&lt;/text&gt;
-          &lt;text x=&quot;442&quot; y=&quot;108&quot; fill=&quot;#6e6e73&quot;&gt;模拟不同索引的执行计划&lt;/text&gt;
-          &lt;text x=&quot;442&quot; y=&quot;130&quot; fill=&quot;#6e6e73&quot;&gt;按 COST 评估收益&lt;/text&gt;
-
-          &lt;rect x=&quot;654&quot; y=&quot;58&quot; width=&quot;216&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
-          &lt;text x=&quot;670&quot; y=&quot;84&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;④ 改写 / 建索引&lt;/text&gt;
-          &lt;text x=&quot;670&quot; y=&quot;108&quot; fill=&quot;#6e6e73&quot;&gt;SQL 自动优化工具建议&lt;/text&gt;
-          &lt;text x=&quot;670&quot; y=&quot;130&quot; fill=&quot;#6e6e73&quot;&gt;索引创建、语句改写&lt;/text&gt;
-
-          &lt;rect x=&quot;882&quot; y=&quot;58&quot; width=&quot;134&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
-          &lt;text x=&quot;898&quot; y=&quot;84&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;⑤ 绑定计划&lt;/text&gt;
-          &lt;text x=&quot;898&quot; y=&quot;108&quot; fill=&quot;#6e6e73&quot;&gt;hint / outline&lt;/text&gt;
-          &lt;text x=&quot;898&quot; y=&quot;130&quot; fill=&quot;#6e6e73&quot;&gt;无需改应用&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;rect x=&quot;22&quot; y=&quot;188&quot; width=&quot;996&quot; height=&quot;62&quot; rx=&quot;12&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-        &lt;text x=&quot;42&quot; y=&quot;214&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;执行计划是什么？&lt;/text&gt;
-        &lt;text x=&quot;42&quot; y=&quot;238&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;数据库准备怎么执行这条 SQL 的「路线图」：先查哪张表、用哪个索引、在哪里过滤、怎么 JOIN、在哪里聚合。&lt;/text&gt;
-        &lt;rect x=&quot;22&quot; y=&quot;268&quot; width=&quot;996&quot; height=&quot;50&quot; rx=&quot;11&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;42&quot; y=&quot;294&quot; font-size=&quot;11.5&quot; fill=&quot;#3a2a7a&quot;&gt;&lt;tspan font-weight=&quot;700&quot;&gt;官方使用方式：&lt;/tspan&gt;只需在 SQL 前加简单前缀语句，即可一键获取详细推荐报告；生产紧急问题可在数据库侧绑定执行计划或限流，无需应用变更启停。&lt;/text&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;292&quot; width=&quot;992&quot; height=&quot;36&quot; rx=&quot;10&quot; fill=&quot;#fff6e8&quot; stroke=&quot;#f2d9ae&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;315&quot; font-size=&quot;11.5&quot; fill=&quot;#8a5a00&quot;&gt;&lt;tspan font-weight=&quot;700&quot;&gt;关键区别：&lt;/tspan&gt;普通 2PC 遇到「有人已提交」就很难收场；GoldenDB 靠 GTID + binlog 反解，把已提交的改动也能撤回来——这就是官方说的「已提交事务自动回滚」。&lt;/text&gt;
       &lt;/g&gt;
     &lt;/svg&gt;
   &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;术语：&lt;/b&gt;hint 是给优化器的小纸条，提示它走某条路；outline / SQL Profile 是把好计划「钉住」，以后都按这条路走；COST 是优化器算出来的代价估算。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;普通两阶段提交像「所有人举手表决再一起按下按钮」；GoldenDB 多了工单号和事后纠错机制——哪怕有人已经按下去了，也能照着监控录像把货搬回原位。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 6 兜底 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c6&quot;&gt;
+&lt;!-- 4 转账补偿 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;x4&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;兜底组合：分流、并行、批量、限流 &lt;span class=&quot;tag&quot;&gt;稳定性&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;当 SQL 和结构都调过，官方还会用读写分离、自动并行、流式查询、批量协议、SQL 限流和 TP/AP 异步隔离，把高并发下的响应时间与稳定性兜住。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;官方转账例子：A 成功了、B 失败了，钱去哪了？ &lt;span class=&quot;tag&quot;&gt;补偿&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;白皮书 4.1.2 原例：A、B 账户原来各有 100 元，A 给 B 转 50 元，两人属于不同节点。A 执行成功、B 执行失败时，B 走单机事务异常回滚，A 走「已提交事务回滚」。&lt;/p&gt;
   &lt;/div&gt;
   &lt;div class=&quot;pz-host&quot;&gt;
     &lt;svg viewBox=&quot;0 0 1040 380&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;x4m&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
       &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;rect x=&quot;24&quot; y=&quot;28&quot; width=&quot;486&quot; height=&quot;150&quot; rx=&quot;14&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;56&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;读写分离 · 写主读备&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;84&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;实时性高的 SQL → 主节点&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;108&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;分析聚合类 SQL → 备用节点&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;136&quot; font-size=&quot;11.5&quot; fill=&quot;#0a58ca&quot;&gt;服务端口 / SQL 语句 / 事务 / 会话四级粒度&lt;/text&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;992&quot; height=&quot;44&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;51&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;初始：A = 100 元（DN1）　B = 100 元（DN2）　CN 申请 GTID = 9527&lt;/text&gt;
 
-        &lt;rect x=&quot;530&quot; y=&quot;28&quot; width=&quot;486&quot; height=&quot;150&quot; rx=&quot;14&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;550&quot; y=&quot;56&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;并行与流式 · 别让结果集堵住&lt;/text&gt;
-        &lt;text x=&quot;550&quot; y=&quot;84&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;Auto-DOP 按复杂度、数据分布、负载动态调并行度&lt;/text&gt;
-        &lt;text x=&quot;550&quot; y=&quot;108&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;流式查询分批回响应，结果集不落盘&lt;/text&gt;
-        &lt;text x=&quot;550&quot; y=&quot;136&quot; font-size=&quot;11.5&quot; fill=&quot;#1d7a45&quot;&gt;大结果集场景降低等待与 CPU/内存占用&lt;/text&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;86&quot; width=&quot;472&quot; height=&quot;176&quot; rx=&quot;13&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;112&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;DN1：A 扣 50 ✓ 成功&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;140&quot; font-size=&quot;11.5&quot; fill=&quot;#1d1d1f&quot;&gt;A：100 → 50&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;164&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;行上写入 GTID 9527&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;188&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;本地事务 COMMIT，记录 binlog&lt;/text&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;206&quot; width=&quot;432&quot; height=&quot;38&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;230&quot; font-size=&quot;11.5&quot; fill=&quot;#1d7a45&quot;&gt;进入「已提交事务回滚」流程&lt;/text&gt;
 
-        &lt;rect x=&quot;24&quot; y=&quot;198&quot; width=&quot;486&quot; height=&quot;150&quot; rx=&quot;14&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;226&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;批量协议 · 大批量装载&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;254&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;batch Prepare 新协议，支持分布式全流程 Prepare&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;278&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;官方证券案例：批量插入性能提升 60% 以上&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;306&quot; font-size=&quot;11.5&quot; fill=&quot;#8a5a00&quot;&gt;回放侧：内存资源池 + 按事务分发减少系统调用&lt;/text&gt;
+        &lt;rect x=&quot;544&quot; y=&quot;86&quot; width=&quot;472&quot; height=&quot;176&quot; rx=&quot;13&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;564&quot; y=&quot;112&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;DN2：B 加 50 ✗ 失败&lt;/text&gt;
+        &lt;text x=&quot;564&quot; y=&quot;140&quot; font-size=&quot;11.5&quot; fill=&quot;#1d1d1f&quot;&gt;B：100（没变）&lt;/text&gt;
+        &lt;text x=&quot;564&quot; y=&quot;164&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;本地事务提交失败&lt;/text&gt;
+        &lt;text x=&quot;564&quot; y=&quot;188&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;进入单机事务异常回滚流程&lt;/text&gt;
+        &lt;rect x=&quot;564&quot; y=&quot;206&quot; width=&quot;432&quot; height=&quot;38&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;578&quot; y=&quot;230&quot; font-size=&quot;11.5&quot; fill=&quot;#c62828&quot;&gt;失败本身由 DN 自己收尾&lt;/text&gt;
 
-        &lt;rect x=&quot;530&quot; y=&quot;198&quot; width=&quot;486&quot; height=&quot;150&quot; rx=&quot;14&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;550&quot; y=&quot;226&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;限流与隔离 · 不让一颗老鼠屎坏汤&lt;/text&gt;
-        &lt;text x=&quot;550&quot; y=&quot;254&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;限连接数、限最大结果集、SQL 黑名单、绑定计划&lt;/text&gt;
-        &lt;text x=&quot;550&quot; y=&quot;278&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;按 COST 识别计算密集型任务，AP 走独立线程组&lt;/text&gt;
-        &lt;text x=&quot;550&quot; y=&quot;306&quot; font-size=&quot;11.5&quot; fill=&quot;#3a2a7a&quot;&gt;TP 与 AP 隔离，消除复杂查询造成的「毛刺」&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#x4m)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M520,174 L544,174&quot;/&gt;&lt;/g&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;280&quot; width=&quot;992&quot; height=&quot;48&quot; rx=&quot;11&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;300&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;补救：各节点的 DBAgent 解析 binlog，找出带 GTID 9527 的改动 → 构造反向 SQL → 下发给 DN 回滚&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;320&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;注意是「所有节点的 DBAgent」都参与判断，不是只靠出错的那个节点；这样已提交的一侧也能被撤回来。&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;342&quot; width=&quot;992&quot; height=&quot;30&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;362&quot; font-size=&quot;11.5&quot; fill=&quot;#1d7a45&quot;&gt;结果：A 回到 100，B 还是 100。钱没凭空消失 —— 这就是跨节点事务的原子性。&lt;/text&gt;
       &lt;/g&gt;
     &lt;/svg&gt;
   &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;术语：&lt;/b&gt;TP（OLTP）= 一笔笔短平快的交易；AP（OLAP）= 复杂统计分析；HTAP = 一套系统同时干这两件事。Auto-DOP 就是自动决定「这事派几个人并行干」。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;两个仓库搬货，总部发同一张运单号 9527。A 仓库搬成了、B 仓库砸了，就按运单号把 A 已经搬走的货原样搬回来。官方叫「通过已提交事务回滚，解决分布式一致性问题」。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 5 读可见性 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;x5&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;读的一致性：怎么知道哪版数据「算数」 &lt;span class=&quot;tag&quot;&gt;可见性&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;白皮书 4.3.2：把全局活跃事务列表带到 DB 层判断；行上的 GTID 不活跃就返回当前数据，活跃就通过 undo 构造全局前像继续找。官方还支持 Read Committed 等四种隔离级别，推荐 RC。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 340&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;x5m&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;992&quot; height=&quot;52&quot; rx=&quot;11&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;48&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;SELECT 发起时：CN 从 GTM 拿一份「当前活跃事务名单」&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;67&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;active_gtm_gtid_list = [ 9527 ]，并把它随查询带到 DN&lt;/text&gt;
+
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#x5m)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M344,150 L404,150&quot;/&gt;&lt;/g&gt;
+        &lt;text x=&quot;350&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#007aff&quot;&gt;带到 DN&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;96&quot; width=&quot;320&quot; height=&quot;150&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;122&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;CN 带着名单来&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;150&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;名单里是「还没最终生效」的改动&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;174&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;9527 正在写，读的时候要绕开它&lt;/text&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;194&quot; width=&quot;280&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;56&quot; y=&quot;216&quot; font-size=&quot;11&quot; font-family=&quot;monospace&quot; fill=&quot;#0a58ca&quot;&gt;active = [ 9527 ]&lt;/text&gt;
+
+        &lt;rect x=&quot;406&quot; y=&quot;96&quot; width=&quot;610&quot; height=&quot;150&quot; rx=&quot;13&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;426&quot; y=&quot;122&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;DN 逐行判断：这一版我能看见吗？&lt;/text&gt;
+        &lt;rect x=&quot;426&quot; y=&quot;138&quot; width=&quot;570&quot; height=&quot;42&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;442&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;GTID 9526 不在名单里 → 全局可见&lt;/text&gt;
+        &lt;text x=&quot;442&quot; y=&quot;174&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;直接返回当前数据，不用翻旧账&lt;/text&gt;
+        &lt;rect x=&quot;426&quot; y=&quot;190&quot; width=&quot;570&quot; height=&quot;42&quot; rx=&quot;9&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;442&quot; y=&quot;210&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;GTID 9527 在名单里 → 还没生效&lt;/text&gt;
+        &lt;text x=&quot;442&quot; y=&quot;226&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;通过 undo 构造前像，继续往前找到全局可见版本&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;266&quot; width=&quot;992&quot; height=&quot;62&quot; rx=&quot;11&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;290&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;大白话：读一本正在被人改的账簿&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;314&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;每改一次就留一张旧页备份（undo）。管理员说「9527 号修改还没盖章」，你就跳过它，看上一版已经盖章生效的账页。读不加锁，所以读写不冲突。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;术语：&lt;/b&gt;MVCC = 多版本并发控制；undo 前像 = 修改前的旧版本数据；active_gtm_gtid_list = GTM 给出的「活跃事务名单」。单机 MVCC 只看本地名单，GoldenDB 多带了一份全局名单。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 6 高可用与批量 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;x6&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;让协调本身别掉链子：主备、集群与批量 &lt;span class=&quot;tag&quot;&gt;可靠性&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;官方明确：GTM 采用主备架构，主异常自动切到备；进一步扩展为 GTM 集群，多个 GTM 与多个租户绑定，切换只影响对应租户。申请与释放 GTID 都做了批量优化。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 350&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;316&quot; height=&quot;196&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;52&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 主备自动切换&lt;/text&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;72&quot; width=&quot;276&quot; height=&quot;46&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;60&quot; y=&quot;100&quot; font-size=&quot;11.5&quot; fill=&quot;#1d1d1f&quot;&gt;GTM 主节点 · 正在发号&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M182,118 L182,142&quot;/&gt;&lt;/g&gt;
+        &lt;text x=&quot;192&quot; y=&quot;136&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;主异常&lt;/text&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;144&quot; width=&quot;276&quot; height=&quot;46&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;60&quot; y=&quot;172&quot; font-size=&quot;11.5&quot; fill=&quot;#1d7a45&quot;&gt;GTM 备节点 · 自动接管&lt;/text&gt;
+
+        &lt;rect x=&quot;362&quot; y=&quot;24&quot; width=&quot;316&quot; height=&quot;196&quot; rx=&quot;13&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;382&quot; y=&quot;52&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;② GTM 集群 + 租户绑定&lt;/text&gt;
+        &lt;rect x=&quot;382&quot; y=&quot;72&quot; width=&quot;130&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;394&quot; y=&quot;99&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;GTM-A&lt;/text&gt;
+        &lt;rect x=&quot;548&quot; y=&quot;72&quot; width=&quot;110&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;560&quot; y=&quot;99&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;GTM-B&lt;/text&gt;
+        &lt;text x=&quot;382&quot; y=&quot;142&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;各自绑定不同租户&lt;/text&gt;
+        &lt;text x=&quot;382&quot; y=&quot;166&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;一个 GTM 切换时&lt;/text&gt;
+        &lt;text x=&quot;382&quot; y=&quot;190&quot; font-size=&quot;11&quot; fill=&quot;#3a2a7a&quot;&gt;只影响它绑定的租户&lt;/text&gt;
+
+        &lt;rect x=&quot;700&quot; y=&quot;24&quot; width=&quot;316&quot; height=&quot;196&quot; rx=&quot;13&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;720&quot; y=&quot;52&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;③ 批量申请 / 释放&lt;/text&gt;
+        &lt;text x=&quot;720&quot; y=&quot;82&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;原来：一个事务申请一次&lt;/text&gt;
+        &lt;text x=&quot;720&quot; y=&quot;106&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;　　　结束再释放一次&lt;/text&gt;
+        &lt;text x=&quot;720&quot; y=&quot;138&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;优化后：一次申请一批 GTID&lt;/text&gt;
+        &lt;text x=&quot;720&quot; y=&quot;162&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;　　　　一次释放一批&lt;/text&gt;
+        &lt;text x=&quot;720&quot; y=&quot;192&quot; font-size=&quot;11&quot; fill=&quot;#8a5a00&quot;&gt;减少 CN ↔ GTM 交互次数&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;238&quot; width=&quot;992&quot; height=&quot;96&quot; rx=&quot;13&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;264&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;还有一层兜底：全局一致性备份与恢复&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;290&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;官方 4.5.3：备份了运行过程中的日志及每个时刻的全局事务列表快照，并通过日志同步组件自动实时同步，因此可以恢复出全局一致的数据快照。&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;316&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;换句话说：不只看「数据文件内容」，还记下「当时哪些事务还活着」，恢复时才知道该停在哪一版。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;发号员自己也要有替班（主备），大机构还能多设几个发号窗口各管各的客户（集群+租户绑定）；跑腿次数太多就一次领一沓号（批量）。连备份都把「当时谁在办事」一起记下来。&lt;/div&gt;
 &lt;/div&gt;
 
 &lt;script&gt;
@@ -785,269 +799,18 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 &lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;
-" sandbox="allow-scripts" loading="lazy" style="height:1080px"></iframe></figure>
-<figure class="embed-figure"><figcaption><span>图 2 · 排查思路问诊图：三问定位 → 四种诊断 → 对症开药（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="1" data-modal-src="../embed/goldendb-troubleshooting.html" data-modal-title="GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版） · 图 2 · 排查思路问诊图：三问定位 → 四种诊断 → 对症开药（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 2 · 排查思路问诊图：三问定位 → 四种诊断 → 对症开药（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
-&lt;html lang=&quot;zh-CN&quot;&gt;
-&lt;head&gt;
-&lt;meta charset=&quot;UTF-8&quot;&gt;
-&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
-&lt;title&gt;GoldenDB 排查思路问诊图 · 三问定位 → 对症下药 → 复查&lt;/title&gt;
-&lt;style&gt;
-  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 44px}
-  .hero{background:linear-gradient(135deg,#0a84ff,#5856d6 58%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
-  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
-  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.94}
-  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
-  .hint b{color:var(--blue);font-weight:600}
-  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
-  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
-  .nav a:hover{background:#efeff4}
-  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
-  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
-  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
-  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
-  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
-  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
-  .foot b{color:var(--ink)}
-  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;height:min(62vh,530px);min-height:330px;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
-  .pz-viewport&gt;svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
-  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
-  .pz-viewport.zooming&gt;svg{cursor:zoom-in}
-  .pz-viewport.zooming.dragging&gt;svg,.pz-viewport.dragging&gt;svg{cursor:grabbing}
-  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
-  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
-  .pz-toolbar button:hover{background:#f1f5f9}
-  .pz-tip{position:absolute;left:12px;bottom:10px;z-index:5;background:rgba(255,255,255,.9);color:#64748b;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;pointer-events:none}
-  @media(max-width:600px){.pz-viewport{height:56vh;min-height:300px}}
-&lt;/style&gt;
-&lt;/head&gt;
-&lt;body&gt;
-&lt;div class=&quot;hero&quot;&gt;
-  &lt;h1&gt;排查思路问诊图：别再说「数据库慢」&lt;/h1&gt;
-  &lt;p&gt;把官方排查套路翻译成医生看病的流程：先问三句话拿证据，再对号入座找病因，最后对症下药并复查。缩略图看不清时单击进入缩放，手机可双指捏合。&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
-&lt;div class=&quot;nav&quot;&gt;
-  &lt;a href=&quot;#t1&quot;&gt;三问定位&lt;/a&gt;&lt;a href=&quot;#t2&quot;&gt;对症开药&lt;/a&gt;
-&lt;/div&gt;
-
-&lt;!-- 1 三问定位 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;t1&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;先像医生一样问诊：三句话拿到证据 &lt;span class=&quot;tag&quot;&gt;分诊&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;症状只是「慢」，病因藏在细节里。先问清楚哪条 SQL 慢、慢在哪一步、有没有让一群机器做无用功，再谈优化。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;pz-host&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 320&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;q1&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;992&quot; height=&quot;56&quot; rx=&quot;12&quot; fill=&quot;#fff6e8&quot; stroke=&quot;#f2d9ae&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;49&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;病人来了：接口慢 / 批跑慢 / 高峰期卡顿&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;69&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;这些只是症状，不能直接开药；就像发烧不能只说「生病了」，要先量体温、验血。&lt;/text&gt;
-
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#q1)&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M196,108 L208,108&quot;/&gt;&lt;path d=&quot;M424,108 L436,108&quot;/&gt;&lt;path d=&quot;M652,108 L664,108&quot;/&gt;
-        &lt;/g&gt;
-
-        &lt;rect x=&quot;24&quot; y=&quot;94&quot; width=&quot;172&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
-        &lt;text x=&quot;40&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;问 ① 哪条慢？&lt;/text&gt;
-        &lt;text x=&quot;40&quot; y=&quot;146&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;Insight 慢 SQL 列表&lt;/text&gt;
-        &lt;text x=&quot;40&quot; y=&quot;168&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;内核 SQL 治理采集&lt;/text&gt;
-        &lt;text x=&quot;40&quot; y=&quot;194&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;证据：SQL 文本 + 耗时&lt;/text&gt;
-
-        &lt;rect x=&quot;208&quot; y=&quot;94&quot; width=&quot;216&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;224&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;问 ② 慢在哪一步？&lt;/text&gt;
-        &lt;text x=&quot;224&quot; y=&quot;146&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;EXPLAIN 看 CN / DN 计划&lt;/text&gt;
-        &lt;text x=&quot;224&quot; y=&quot;168&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;先查哪张表、用哪个索引&lt;/text&gt;
-        &lt;text x=&quot;224&quot; y=&quot;194&quot; font-size=&quot;10.5&quot; fill=&quot;#3a2a7a&quot;&gt;证据：执行路线图&lt;/text&gt;
-
-        &lt;rect x=&quot;436&quot; y=&quot;94&quot; width=&quot;216&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;452&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;问 ③ 有没有白搬货？&lt;/text&gt;
-        &lt;text x=&quot;452&quot; y=&quot;146&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;全表扫描？跨 DN 关联？&lt;/text&gt;
-        &lt;text x=&quot;452&quot; y=&quot;168&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;过滤 / 聚合没下推？&lt;/text&gt;
-        &lt;text x=&quot;452&quot; y=&quot;194&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;证据：数据搬运量&lt;/text&gt;
-
-        &lt;rect x=&quot;664&quot; y=&quot;94&quot; width=&quot;352&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-        &lt;text x=&quot;680&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;大白话：三个问题就是三张检查单&lt;/text&gt;
-        &lt;text x=&quot;680&quot; y=&quot;146&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;慢 SQL 列表 = 挂号单，锁定「谁」；&lt;/text&gt;
-        &lt;text x=&quot;680&quot; y=&quot;168&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;执行计划 = 检查报告，锁定「哪一步」；&lt;/text&gt;
-        &lt;text x=&quot;680&quot; y=&quot;194&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;下推与分片 = 病因分析，锁定「为什么」。&lt;/text&gt;
-
-        &lt;rect x=&quot;24&quot; y=&quot;238&quot; width=&quot;992&quot; height=&quot;62&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;264&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;问诊纪律：采集慢 SQL 列表，交给应用团队后续版本整改。&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;288&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;官方提醒：生产上直接终止请求会影响业务成功率；先取证，再开药，别把「止血」当「治病」。&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;先说清楚「谁慢、慢在哪步、是不是在白干活」，答案清楚了，后面四种诊断才有意义；否则就是凭感觉乱加机器。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 2 对症开药 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;t2&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;对号入座：四种病因，四张药方 &lt;span class=&quot;tag&quot;&gt;开药&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;问诊结束后，把证据对应到四类常见病因。官方的解法各有明确分工，不是互相替代：索引治「翻表」，分片治「搬货」，计划治「选错路」，兜底治「高并发」。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;pz-host&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 400&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;992&quot; height=&quot;40&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;49&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;诊断 → 药方对照表：先看症状属于哪一列，再看对应手段&lt;/text&gt;
-
-        &lt;rect x=&quot;24&quot; y=&quot;82&quot; width=&quot;236&quot; height=&quot;230&quot; rx=&quot;13&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;rect x=&quot;36&quot; y=&quot;94&quot; width=&quot;66&quot; height=&quot;24&quot; rx=&quot;7&quot; fill=&quot;#ff3b30&quot;/&gt;
-        &lt;text x=&quot;49&quot; y=&quot;111&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;病因 A&lt;/text&gt;
-        &lt;text x=&quot;36&quot; y=&quot;141&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;没合适索引&lt;/text&gt;
-        &lt;text x=&quot;36&quot; y=&quot;167&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;症状：全表扫描&lt;/text&gt;
-        &lt;text x=&quot;36&quot; y=&quot;189&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;翻完整张表找几行&lt;/text&gt;
-        &lt;text x=&quot;36&quot; y=&quot;211&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;CPU / 内存 / I/O 被占&lt;/text&gt;
-        &lt;line x1=&quot;36&quot; y1=&quot;226&quot; x2=&quot;248&quot; y2=&quot;226&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-        &lt;text x=&quot;36&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;药方&lt;/text&gt;
-        &lt;text x=&quot;36&quot; y=&quot;268&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;内核索引推荐 + 建索引&lt;/text&gt;
-        &lt;text x=&quot;36&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;亿级大表 10 秒出报告&lt;/text&gt;
-
-        &lt;rect x=&quot;276&quot; y=&quot;82&quot; width=&quot;236&quot; height=&quot;230&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
-        &lt;rect x=&quot;288&quot; y=&quot;94&quot; width=&quot;66&quot; height=&quot;24&quot; rx=&quot;7&quot; fill=&quot;#007aff&quot;/&gt;
-        &lt;text x=&quot;301&quot; y=&quot;111&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;病因 B&lt;/text&gt;
-        &lt;text x=&quot;288&quot; y=&quot;141&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;分片不合理&lt;/text&gt;
-        &lt;text x=&quot;288&quot; y=&quot;167&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;症状：跨节点搬货&lt;/text&gt;
-        &lt;text x=&quot;288&quot; y=&quot;189&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;JOIN / 聚合没下推&lt;/text&gt;
-        &lt;text x=&quot;288&quot; y=&quot;211&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;SQL 群发到所有 DN&lt;/text&gt;
-        &lt;line x1=&quot;288&quot; y1=&quot;226&quot; x2=&quot;500&quot; y2=&quot;226&quot; stroke=&quot;#c9dcff&quot;/&gt;
-        &lt;text x=&quot;288&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;药方&lt;/text&gt;
-        &lt;text x=&quot;288&quot; y=&quot;268&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;同分片 / 数据重分布&lt;/text&gt;
-        &lt;text x=&quot;288&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;广播表 / 全局索引&lt;/text&gt;
-
-        &lt;rect x=&quot;528&quot; y=&quot;82&quot; width=&quot;236&quot; height=&quot;230&quot; rx=&quot;13&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;rect x=&quot;540&quot; y=&quot;94&quot; width=&quot;66&quot; height=&quot;24&quot; rx=&quot;7&quot; fill=&quot;#5856d6&quot;/&gt;
-        &lt;text x=&quot;553&quot; y=&quot;111&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;病因 C&lt;/text&gt;
-        &lt;text x=&quot;540&quot; y=&quot;141&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;执行计划选错&lt;/text&gt;
-        &lt;text x=&quot;540&quot; y=&quot;167&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;症状：忽快忽慢&lt;/text&gt;
-        &lt;text x=&quot;540&quot; y=&quot;189&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;COST 估算不准&lt;/text&gt;
-        &lt;text x=&quot;540&quot; y=&quot;211&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;连接顺序不合理&lt;/text&gt;
-        &lt;line x1=&quot;540&quot; y1=&quot;226&quot; x2=&quot;752&quot; y2=&quot;226&quot; stroke=&quot;#d2c8ff&quot;/&gt;
-        &lt;text x=&quot;540&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;药方&lt;/text&gt;
-        &lt;text x=&quot;540&quot; y=&quot;268&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;hint / outline 绑定&lt;/text&gt;
-        &lt;text x=&quot;540&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;SQL 改写，不改应用也能修&lt;/text&gt;
-
-        &lt;rect x=&quot;780&quot; y=&quot;82&quot; width=&quot;236&quot; height=&quot;230&quot; rx=&quot;13&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
-        &lt;rect x=&quot;792&quot; y=&quot;94&quot; width=&quot;66&quot; height=&quot;24&quot; rx=&quot;7&quot; fill=&quot;#ff9500&quot;/&gt;
-        &lt;text x=&quot;805&quot; y=&quot;111&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;病因 D&lt;/text&gt;
-        &lt;text x=&quot;792&quot; y=&quot;141&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;高并发资源争抢&lt;/text&gt;
-        &lt;text x=&quot;792&quot; y=&quot;167&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;症状：高峰卡顿 / 毛刺&lt;/text&gt;
-        &lt;text x=&quot;792&quot; y=&quot;189&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;复杂 AP 阻塞短平快 TP&lt;/text&gt;
-        &lt;text x=&quot;792&quot; y=&quot;211&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;大结果集堵住内存&lt;/text&gt;
-        &lt;line x1=&quot;792&quot; y1=&quot;226&quot; x2=&quot;1004&quot; y2=&quot;226&quot; stroke=&quot;#f7ddb6&quot;/&gt;
-        &lt;text x=&quot;792&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;药方&lt;/text&gt;
-        &lt;text x=&quot;792&quot; y=&quot;268&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;读写分离 / 并行 / 流式&lt;/text&gt;
-        &lt;text x=&quot;792&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;批量协议 / 限流 / TP·AP 隔离&lt;/text&gt;
-
-        &lt;rect x=&quot;24&quot; y=&quot;330&quot; width=&quot;992&quot; height=&quot;50&quot; rx=&quot;11&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-        &lt;text x=&quot;44&quot; y=&quot;352&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;最后是复查：DBReplay 回放真实流量 / 压测对比。&lt;/text&gt;
-        &lt;text x=&quot;44&quot; y=&quot;372&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;确认慢 SQL 消失、响应时间回落，再算优化完成；加机器通常是所有路都走过之后的最后一步。&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;A 治「没目录就翻书」，B 治「仓库之间来回搬货」，C 治「导航带错路」，D 治「高峰期大家抢一条道」。四种病可以同时存在，按证据逐条排除，不要一上来就换更大的服务器。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;script&gt;
-(function(){
-  var svgs=Array.prototype.slice.call(document.querySelectorAll(&#39;svg[viewBox]&#39;));
-  svgs.forEach(function(svg){
-    if(svg.parentElement&amp;&amp;svg.parentElement.classList.contains(&#39;pz-viewport&#39;))return;
-    var vp=document.createElement(&#39;div&#39;);vp.className=&#39;pz-viewport&#39;;
-    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
-    var bar=document.createElement(&#39;div&#39;);bar.className=&#39;pz-toolbar&#39;;
-    var bOut=document.createElement(&#39;button&#39;);bOut.textContent=&#39;\u2212&#39;;bOut.title=&#39;\u7f29\u5c0f&#39;;
-    var bIn=document.createElement(&#39;button&#39;);bIn.textContent=&#39;+&#39;;bIn.title=&#39;\u653e\u5927&#39;;
-    var bReset=document.createElement(&#39;button&#39;);bReset.textContent=&#39;\u21bb&#39;;bReset.title=&#39;\u590d\u4f4d&#39;;
-    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
-    var tip=document.createElement(&#39;div&#39;);tip.className=&#39;pz-tip&#39;;tip.textContent=&#39;\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d&#39;;
-    vp.appendChild(bar);vp.appendChild(tip);
-    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
-    var pointers={},pinch=null,zoomMode=false,moved=false,lastType=&#39;mouse&#39;,downX=0,downY=0;
-    var tf=String.fromCharCode(109,97,116,114,105,120,40);
-    function apply(){svg.style.transform=tf+scale+&#39;,0,0,&#39;+scale+&#39;,&#39;+tx+&#39;,&#39;+ty+&#39;)&#39;;}
-    function zoom(f,cx,cy){
-      var r=vp.getBoundingClientRect();
-      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
-      var px=cx-r.left-tx,py=cy-r.top-ty;
-      var n=Math.min(4,Math.max(0.5,scale*f));
-      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
-    }
-    function ids(){return Object.keys(pointers);}
-    function pair(){var k=ids();return k.length&gt;=2?[pointers[k[0]],pointers[k[1]]]:null;}
-    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
-    bIn.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();zoom(1.2);});
-    bOut.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();zoom(1/1.2);});
-    bReset.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
-    svg.addEventListener(&#39;wheel&#39;,function(e){
-      if(!zoomMode)return;
-      e.preventDefault();zoom(e.deltaY&lt;0?1.12:1/1.12,e.clientX,e.clientY);
-    },{passive:false});
-    svg.addEventListener(&#39;pointerdown&#39;,function(e){
-      if(e.pointerType===&#39;mouse&#39;&amp;&amp;e.button!==0)return;
-      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
-      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
-      try{svg.setPointerCapture(e.pointerId);}catch(x){}
-      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add(&#39;dragging&#39;);}
-      else if(ids().length===2){
-        var p=pair();dragging=false;vp.classList.remove(&#39;dragging&#39;);
-        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
-      }
-    });
-    svg.addEventListener(&#39;pointermove&#39;,function(e){
-      if(!pointers[e.pointerId])return;
-      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
-      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)&gt;4)moved=true;
-      if(ids().length===2&amp;&amp;pinch){
-        var p=pair(),d=dist2(p[0],p[1]);
-        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
-        if(pinch.d&gt;0&amp;&amp;d&gt;0)zoom(d/pinch.d,pinch.x,pinch.y);
-        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
-        pinch={d:d,x:mx,y:my};
-      }else if(ids().length===1&amp;&amp;dragging){
-        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
-        lastX=e.clientX;lastY=e.clientY;apply();
-      }
-    });
-    function end(e){
-      if(!pointers[e.pointerId])return;
-      delete pointers[e.pointerId];
-      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
-      var k=ids();
-      if(k.length&lt;2)pinch=null;
-      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add(&#39;dragging&#39;);}
-      else if(k.length===0){dragging=false;vp.classList.remove(&#39;dragging&#39;);}
-    }
-    svg.addEventListener(&#39;pointerup&#39;,end);svg.addEventListener(&#39;pointercancel&#39;,end);
-    svg.addEventListener(&#39;click&#39;,function(){
-      if(lastType!==&#39;mouse&#39;||moved)return;
-      zoomMode=!zoomMode;vp.classList.toggle(&#39;zooming&#39;,zoomMode);
-      tip.textContent=zoomMode?&#39;\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u518d\u5355\u51fb\u9000\u51fa&#39;:&#39;\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6a21\u5f0f\u5185\u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d&#39;;
-    });
-    svg.addEventListener(&#39;dblclick&#39;,function(){scale=1;tx=0;ty=0;apply();});
-  });
-})();
-&lt;/script&gt;
-&lt;/body&gt;
-&lt;/html&gt;
-" sandbox="allow-scripts" loading="lazy" style="height:1080px"></iframe></figure>
+" sandbox="allow-scripts" loading="lazy" style="height:1150px"></iframe></figure>
   </div>
 </article>
-<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">官方的排查顺序：先取证，再开药</a></div><div class="toc-group"><a href="#sec-2" class="">第 1 步：先把慢 SQL 揪出来</a></div><div class="toc-group"><a href="#sec-3" class="">第 2 步：看执行计划，别凭感觉</a></div><div class="toc-group"><a href="#sec-4" class="">第 3 步：分片键选错，后面全白搭</a></div><div class="toc-group"><a href="#sec-5" class="">第 4 步：让计算靠近数据——下推</a></div><div class="toc-group"><a href="#sec-6" class="">第 5 步：索引和 SQL 改写，交给内核推荐</a></div><div class="toc-group"><a href="#sec-7" class="">第 6 步：分流、并行、批量、限流</a></div><div class="toc-group"><a href="#sec-8" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-9" class="">官方资料</a></div><div class="toc-group"><a href="#sec-10" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 效率优化图解（八张图）</a></div></nav>
+<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">一句话版本</a></div><div class="toc-group"><a href="#sec-2" class="">单机事务为什么不够用</a></div><div class="toc-group"><a href="#sec-3" class="">四位主角：发号的、派活的、干活的、纠错的</a></div><div class="toc-group"><a href="#sec-4" class="">协调全流程：六步走</a><a href="#sec-5" class="lv3">第 1 步：向 GTM 申请 GTID</a><a href="#sec-6" class="lv3">第 2 步：把 GTID 写进每条记录</a><a href="#sec-7" class="lv3">第 3 步：CN 下发本地事务</a><a href="#sec-8" class="lv3">第 4 步：统一提交，状态实时记 GTM</a><a href="#sec-9" class="lv3">第 5 步：失败就补偿回滚</a><a href="#sec-10" class="lv3">第 6 步：让后续读看到正确版本</a></div><div class="toc-group"><a href="#sec-11" class="">改进的两阶段提交，到底改在哪</a></div><div class="toc-group"><a href="#sec-12" class="">官方转账例子：A 成功、B 失败</a></div><div class="toc-group"><a href="#sec-13" class="">GTM 自己出问题怎么办</a></div><div class="toc-group"><a href="#sec-14" class="">隔离级别与 XA 接口</a></div><div class="toc-group"><a href="#sec-15" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-16" class="">官方资料（逐条对应出处）</a></div><div class="toc-group"><a href="#sec-17" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 分布式事务协调图解（六张图）</a></div></nav>
 </div>
 </main>
 <button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button>
 <div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
   <div class="toc-backdrop" data-toc-close></div>
   <div class="toc-panel">
-    <div class="toc-panel-head"><span>本页目录 · 11 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
-    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">官方的排查顺序：先取证，再开药</a></div><div class="toc-group"><a href="#sec-2" class="">第 1 步：先把慢 SQL 揪出来</a></div><div class="toc-group"><a href="#sec-3" class="">第 2 步：看执行计划，别凭感觉</a></div><div class="toc-group"><a href="#sec-4" class="">第 3 步：分片键选错，后面全白搭</a></div><div class="toc-group"><a href="#sec-5" class="">第 4 步：让计算靠近数据——下推</a></div><div class="toc-group"><a href="#sec-6" class="">第 5 步：索引和 SQL 改写，交给内核推荐</a></div><div class="toc-group"><a href="#sec-7" class="">第 6 步：分流、并行、批量、限流</a></div><div class="toc-group"><a href="#sec-8" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-9" class="">官方资料</a></div><div class="toc-group"><a href="#sec-10" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 效率优化图解（八张图）</a></div></nav>
+    <div class="toc-panel-head"><span>本页目录 · 18 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">一句话版本</a></div><div class="toc-group"><a href="#sec-2" class="">单机事务为什么不够用</a></div><div class="toc-group"><a href="#sec-3" class="">四位主角：发号的、派活的、干活的、纠错的</a></div><div class="toc-group"><a href="#sec-4" class="">协调全流程：六步走</a><a href="#sec-5" class="lv3">第 1 步：向 GTM 申请 GTID</a><a href="#sec-6" class="lv3">第 2 步：把 GTID 写进每条记录</a><a href="#sec-7" class="lv3">第 3 步：CN 下发本地事务</a><a href="#sec-8" class="lv3">第 4 步：统一提交，状态实时记 GTM</a><a href="#sec-9" class="lv3">第 5 步：失败就补偿回滚</a><a href="#sec-10" class="lv3">第 6 步：让后续读看到正确版本</a></div><div class="toc-group"><a href="#sec-11" class="">改进的两阶段提交，到底改在哪</a></div><div class="toc-group"><a href="#sec-12" class="">官方转账例子：A 成功、B 失败</a></div><div class="toc-group"><a href="#sec-13" class="">GTM 自己出问题怎么办</a></div><div class="toc-group"><a href="#sec-14" class="">隔离级别与 XA 接口</a></div><div class="toc-group"><a href="#sec-15" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-16" class="">官方资料（逐条对应出处）</a></div><div class="toc-group"><a href="#sec-17" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 分布式事务协调图解（六张图）</a></div></nav>
   </div>
 </div>
 
