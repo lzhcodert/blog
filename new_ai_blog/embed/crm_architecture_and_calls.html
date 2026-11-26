@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html data-page-node-id="HlNURr4bi5kpYMXK4FjOOS" lang="zh-CN">
+<head data-page-node-id="1A0RnziCXjiDhj3B8souil">
+<meta data-page-node-id="xyi3WBRMSUk2Fj7htb47wI" charset="UTF-8">
+<meta data-page-node-id="m9JlL0boy3UBftgHNvsRpC" content="width=device-width, initial-scale=1.0" name="viewport">
+<title data-page-node-id="mJ8tG9L2xqrd1HnEO5gZdM" data-pnid-children="nQoolVSAr7f7KtEp6RHuDz">CRM 系统架构图与上下游调用图</title>
+<style data-page-node-id="c0N85B63cNa3Z1yNpoHvMw" data-pnid-children="i3D0sqjFpQ1TBWkioQnWXL">
+  :root{
+    --blue:#2563eb;--blue-bg:#eff6ff;--blue-dk:#1e3a8a;
+    --teal:#0d9488;--teal-bg:#ecfeff;--teal-dk:#134e4a;
+    --orange:#ea580c;--orange-bg:#fff7ed;--orange-dk:#9a3412;
+    --purple:#7c3aed;--purple-bg:#f5f3ff;--purple-dk:#5b21b6;
+    --ink:#1f2937;--muted:#64748b;--line:#e2e8f0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:var(--ink);line-height:1.6;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  .hero{background:linear-gradient(135deg,#312e81,#6d28d9 60%,#a21caf);color:#fff;padding:32px 24px 26px;text-align:center}
+  .hero h1{margin:0 0 6px;font-size:25px}
+  .hero p{margin:0;opacity:.85;font-size:13.5px}
+  .wrap{max-width:1160px;margin:0 auto;padding:22px 20px 46px}
+  .card{background:#fff;border-radius:14px;box-shadow:0 4px 20px rgba(15,23,42,.06);padding:20px 24px;margin-bottom:18px}
+  .card h2{font-size:16px;margin:0 0 4px;padding-left:10px;border-left:4px solid var(--purple)}
+  .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 12px 14px}
+  .figure{overflow-x:auto}
+  .figure svg{display:block;width:100%;min-width:920px;height:auto}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:12px;color:#475569}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .dash{width:18px;height:0;border-top:2px dashed var(--teal);display:inline-block}
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:4px}
+  .s-item{border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;background:#f8fafc}
+  .s-item b{display:block;font-size:13px;margin-bottom:4px}
+  .s-item.b{border-left:4px solid var(--blue)} .s-item.t{border-left:4px solid var(--teal)}
+  .s-item.o{border-left:4px solid var(--orange)} .s-item.p{border-left:4px solid var(--purple)}
+  .foot{text-align:center;color:#94a3b8;font-size:12px;padding:6px 0 0}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{background:#f8fafc;color:#334155;font-weight:600}
+  tbody tr:hover{background:#f8fafc}
+  .flow-steps{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px}
+  .step{flex:1 1 200px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:9px;padding:10px 12px;font-size:12px;position:relative}
+  .step b{display:block;color:#0f766e;font-size:12.5px;margin-bottom:3px}
+  .step:not(:last-child)::after{content:"›";position:absolute;right:-9px;top:50%;transform:translateY(-50%);font-size:20px;color:#94a3b8;z-index:2}
+  @media print{body{background:#fff}.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}.card{box-shadow:none;border:1px solid var(--line);break-inside:avoid}}
+</style>
+</head>
+<body data-page-node-id="lxOzr9rHYH4jmg9Nod1X5k">
+
+<div data-page-node-id="5PNhqgOxrPmiIzqDKiaMTt" class="hero">
+  <h1 data-page-node-id="v5zV0nbOYvbCnRC67Gvcsv"><!--pnid:zLbiyf4wstYraGOHPdDGHi-->浦发银行 CRM 系统架构图与上下游调用图</h1>
+  <p data-page-node-id="zrCR9B543nxiEXzi1UH4oa"><!--pnid:tkD5x4DdhwKxk88GJ1bIBQ-->基于两份对话内容整理 · 分层架构 / 调用关系 / 同步异步 / 触发机制</p>
+</div>
+
+<div data-page-node-id="9VjSR6o4AV3tTaTGvnj1C1" class="wrap">
+
+  <!--pnid:mAmToaJmAUTuRPGLl9Xr5F--><!-- ============ 架构图 ============ -->
+  <div data-page-node-id="EyrNJxUF3TOpLMy039huPL" class="card">
+    <h2 data-page-node-id="Phe6bdon08fXvftOsLvSij"><!--pnid:S6ksUHqAbTEMG3eIRhwmdW-->一、分层架构图</h2>
+    <p data-page-node-id="g28IFWHyoM61XfV154UvEV" class="sub"><!--pnid:wNJDdxz8GKBQv4Kz87N7DO-->展示系统由哪些层次与组件构成，以及各层之间的支撑关系</p>
+    <div data-page-node-id="nATzg7d7T4DSzpTRPBj54r" class="figure">
+      <svg data-page-node-id="Q42AGU2mwHZlJJdOhEtBEU" aria-label="CRM系统分层架构图" role="img" viewBox="0 0 1080 690" xmlns="http://www.w3.org/2000/svg">
+        <defs data-page-node-id="j4HGqPUfo4IBQBvY6j6Hjl">
+          <marker data-page-node-id="vcxJLcKAFHn22ekcHm0A8y" id="aBlue" markerHeight="9" markerUnits="strokeWidth" markerWidth="9" orient="auto-start-reverse" refX="8" refY="3"><path data-page-node-id="h4i0tmIlDS7FJAyWVpgsUS" d="M0,0 L0,6 L8,3 z" fill="#2563eb"/></marker>
+          <marker data-page-node-id="lTBhjvlnp4O9y9JtgFooYn" id="aTeal" markerHeight="9" markerUnits="strokeWidth" markerWidth="9" orient="auto-start-reverse" refX="8" refY="3"><path data-page-node-id="hqtt6XMtmJi0fHB5yUSNrN" d="M0,0 L0,6 L8,3 z" fill="#0d9488"/></marker>
+          <marker data-page-node-id="WttewWg9uVKdmnfSEOY0c1" id="aOrange" markerHeight="9" markerUnits="strokeWidth" markerWidth="9" orient="auto-start-reverse" refX="8" refY="3"><path data-page-node-id="jtsghjTI6H3iaUsUYJmINs" d="M0,0 L0,6 L8,3 z" fill="#ea580c"/></marker>
+          <marker data-page-node-id="Txp5Rk80NzpVtx41Z2oaOH" id="aPurple" markerHeight="9" markerUnits="strokeWidth" markerWidth="9" orient="auto-start-reverse" refX="8" refY="3"><path data-page-node-id="VTmenskhzvlPf7BxzQoBQt" d="M0,0 L0,6 L8,3 z" fill="#7c3aed"/></marker>
+        </defs>
+
+        <!--pnid:EyKrzQENnaMzq1P5ln0PY4--><!-- 层背景 -->
+        <rect data-page-node-id="WEsSshvTwUVvL290yTAW0d" fill="#f8fafc" height="100" rx="10" stroke="#e2e8f0" width="750" x="150" y="60"/>
+        <rect data-page-node-id="dNrVLmsTyZs6ekQBgDs8BI" fill="#f8fafc" height="100" rx="10" stroke="#e2e8f0" width="750" x="150" y="180"/>
+        <rect data-page-node-id="cU6cO9aH3XL6WSSjcRFR5Q" fill="#f8fafc" height="100" rx="10" stroke="#e2e8f0" width="750" x="150" y="300"/>
+        <rect data-page-node-id="wydzZ2fulAJchJgMZnYvsJ" fill="#f8fafc" height="100" rx="10" stroke="#e2e8f0" width="750" x="150" y="420"/>
+        <rect data-page-node-id="XV7hQYpsSpj0WR6K0KczDu" fill="#f8fafc" height="110" rx="10" stroke="#e2e8f0" width="750" x="150" y="540"/>
+        <text data-page-node-id="tYWuDFPOVwHsmRManIwute" fill="#1e3a8a" font-size="12.5" font-weight="700" x="10" y="112"><!--pnid:S69uz1DquoikFTtzAJu1PG-->业务应用层</text>
+        <text data-page-node-id="AF1VMaD9OSMY8hu9aj20Lu" fill="#1e3a8a" font-size="12.5" font-weight="700" x="10" y="232"><!--pnid:DWNKCIv99AbUu52Qa1zWmc-->服务集成层</text>
+        <text data-page-node-id="web1f9NuHqXg4GkFxDlHmG" fill="#134e4a" font-size="12.5" font-weight="700" x="10" y="352"><!--pnid:8Yaq1adFyzwMFRtCToW8ov-->数据交换层</text>
+        <text data-page-node-id="KsXuOGkKhgdBv45uKtpj2i" fill="#134e4a" font-size="12.5" font-weight="700" x="10" y="472"><!--pnid:vR5JRxtAme0vcDIx4guYXK-->数据加工层</text>
+        <text data-page-node-id="iZ5pm22MRw6qQvupXJh3Vm" fill="#9a3412" font-size="12.5" font-weight="700" x="10" y="592"><!--pnid:DieE64UjXeJGPOxLHVtE00-->基础设施层</text>
+
+        <!--pnid:ImJcaBAtkkkfSfIxfw5XuP--><!-- 层1 -->
+        <rect data-page-node-id="DLiTH1s5X84nYFIcT4Ny2D" fill="#eff6ff" height="76" rx="9" stroke="#bfdbfe" stroke-width="1.5" width="350" x="170" y="72"/>
+        <text data-page-node-id="jNsyYNsladLEtHs0XMMhtR" fill="#1e3a8a" font-size="13.5" font-weight="700" x="186" y="95"><!--pnid:NgjUqpf14o82RTVL4oyb4n-->CRM 系统（核心业务系统）</text>
+        <rect data-page-node-id="XTKG6t1xMNsw0qFE4pK5co" fill="#fff" height="28" rx="5" stroke="#bfdbfe" width="72" x="186" y="106"/>
+        <text data-page-node-id="O4hdFHBnlJuoE3FhDcmTFX" fill="#1e3a8a" font-size="10" text-anchor="middle" x="222" y="124"><!--pnid:1heksNe6MT6nvzXWp7E64u-->全景画像</text>
+        <rect data-page-node-id="VcRmBswigMGxVyqmIparJr" fill="#fff" height="28" rx="5" stroke="#bfdbfe" width="72" x="264" y="106"/>
+        <text data-page-node-id="doX8YJWvMyA7uDx8blaIQe" fill="#1e3a8a" font-size="10" text-anchor="middle" x="300" y="124"><!--pnid:BEUDeu8XfYt1j8jALuf621-->营销管理</text>
+        <rect data-page-node-id="FTEArzSsgQyhsMyrApNLxE" fill="#fff" height="28" rx="5" stroke="#bfdbfe" width="72" x="342" y="106"/>
+        <text data-page-node-id="o0oAlQlu6JYq3CXOvvpQq9" fill="#1e3a8a" font-size="10" text-anchor="middle" x="378" y="124"><!--pnid:ATG3PYCBy40unaqHGUf9UQ-->客户信息</text>
+        <rect data-page-node-id="XI2ehNk9q5JG8wATTMeEkW" fill="#fff" height="28" rx="5" stroke="#bfdbfe" width="84" x="420" y="106"/>
+        <text data-page-node-id="4VU7wEGdl3iC3AI4Yo1065" fill="#1e3a8a" font-size="10" text-anchor="middle" x="462" y="124"><!--pnid:K8HP1dG7KVAGadU5iZVCNK-->座席辅助</text>
+        <rect data-page-node-id="rTbcfFTWHgWvjV8Q8HJK9K" fill="#fff" height="76" rx="9" stroke="#bfdbfe" stroke-width="1.5" width="320" x="560" y="72"/>
+        <text data-page-node-id="i0waNavlxMltxTiFOikZJI" fill="#1e3a8a" font-size="13" font-weight="700" x="576" y="95"><!--pnid:Tll81Fbu8ixlMJqQ5SDNFm-->目标系统 / 微服务群（外部）</text>
+        <text data-page-node-id="n0PEaQXAcieNltdZX3WWJR" fill="#64748b" font-size="10.5" x="576" y="117"><!--pnid:hlNbUbBXO5WsLEwJjrydt2-->客户信息 · 账户余额 · 全景画像服务 · 营销服务</text>
+        <text data-page-node-id="maMuE8RExnOiqTccqdxr3F" fill="#94a3b8" font-size="10" x="576" y="135"><!--pnid:XqRtvLLDR9oknO2grEXyZA-->去中心化 ESB 网关可内嵌于各应用</text>
+
+        <!--pnid:rfuPK1IyHTbkEzWhW307uJ--><!-- 层2 -->
+        <rect data-page-node-id="f6GiYNmoOv43ZJJGrvc1rh" fill="#eff6ff" height="76" rx="9" stroke="#bfdbfe" stroke-width="1.5" width="350" x="170" y="192"/>
+        <text data-page-node-id="F0wlKEzEyKwug8hsB3zlwG" fill="#1e3a8a" font-size="13.5" font-weight="700" x="186" y="215"><!--pnid:E3CcjfFTR9o3QhsokJNy5O-->企业级微服务平台 ESF / ESB</text>
+        <text data-page-node-id="tZGhimMgTaXAx3BqU32IVH" fill="#64748b" font-size="10.5" x="186" y="237"><!--pnid:pgkaXCIcaA5LnBDV2DOnB4-->分布式微服务网关 · SOA 与微服务能力融合</text>
+        <text data-page-node-id="8RtA2YSSRS3Uy8178vjGO9" fill="#94a3b8" font-size="10" x="186" y="255"><!--pnid:pKQcFtmQktSGA3Dab0y3yD-->统一服务入口，隔离业务应用与后端系统</text>
+        <rect data-page-node-id="uavObAjTU8UW8SRDBW681R" fill="#fff" height="76" rx="9" stroke="#bfdbfe" stroke-width="1.5" width="320" x="560" y="192"/>
+        <text data-page-node-id="HTjIQOBj9zGSEEE3Xw0fjo" fill="#1e3a8a" font-size="12.5" font-weight="700" x="576" y="215"><!--pnid:Fm1h91RHCk2oGl1fuIYqqe-->网关核心能力</text>
+        <text data-page-node-id="PtibMZQxwOIx0yeqDnh2yj" fill="#64748b" font-size="10.5" x="576" y="237"><!--pnid:8pv3mjOLeGGdegv8VcvPDN-->路由转发 · 协议/报文转换</text>
+        <text data-page-node-id="UesguB2q90SSe8xs8UD5n7" fill="#64748b" font-size="10.5" x="576" y="255"><!--pnid:lHmfN40oHGhoRjRl45Y9vD-->权限校验 · 流量控制 · 服务治理</text>
+
+        <!--pnid:v5zU7nvQny9o3r1x0a70mT--><!-- 层3 -->
+        <rect data-page-node-id="KYrdthSY6xKETG5WIdadnL" fill="#ecfeff" height="76" rx="9" stroke="#99f6e4" stroke-width="1.5" width="350" x="170" y="312"/>
+        <text data-page-node-id="9PHQhFPI1NwB69ft5bls3S" fill="#134e4a" font-size="13.5" font-weight="700" x="186" y="335"><!--pnid:c3uQfVMOalRkUvBl2ifopu-->数据交换平台（DataStage）</text>
+        <text data-page-node-id="CQeFNQgrS40GzbixqOVBSB" fill="#64748b" font-size="10.5" x="186" y="357"><!--pnid:1kk2NWT5nKZdWZvAIKYxX6-->ETL 批量数据抽取 · 转换 · 加载</text>
+        <text data-page-node-id="qsZ3I8ZQYSxnjens8tI4jz" fill="#94a3b8" font-size="10" x="186" y="375"><!--pnid:AxMZHYe3GJNhESy16dM93a-->系统间数据"摆渡"的既定通道</text>
+        <rect data-page-node-id="DClrg8OZDfjG6E9f3Hhjvs" fill="#fff" height="76" rx="9" stroke="#99f6e4" stroke-width="1.5" width="320" x="560" y="312"/>
+        <text data-page-node-id="IZr2LdICf8hOZIo4jHHBLW" fill="#134e4a" font-size="12.5" font-weight="700" x="576" y="335"><!--pnid:26iKZakjZGEdeK3gZ26hW1-->双向摆渡</text>
+        <text data-page-node-id="gyCy10XaZOZuMolZaqTlip" fill="#64748b" font-size="10.5" x="576" y="357"><!--pnid:oGJjT9rimHcO4URp8mImhs-->↑ 上报入湖：CRM 客户/交互数据</text>
+        <text data-page-node-id="nEQSHK8Abs6mh3DkNQu3JG" fill="#64748b" font-size="10.5" x="576" y="375"><!--pnid:AEAGgIP5FlqaFqajKh6Z0d-->↓ 回供落库：集市加工结果 → CRM</text>
+
+        <!--pnid:HkNuJILE0qUD8JHZVfr7Z6--><!-- 层4 -->
+        <rect data-page-node-id="IiMoREg2PUi3NRGX71LUSh" fill="#ecfeff" height="76" rx="9" stroke="#99f6e4" stroke-width="1.5" width="330" x="170" y="432"/>
+        <text data-page-node-id="oiZMMiR1K6ejUnvBxaOCgH" fill="#134e4a" font-size="13" font-weight="700" x="186" y="455"><!--pnid:ctcm1RqcHyNa8E27CqLZ9c-->数据仓库 / 数据湖（ODS→DWD→DWS）</text>
+        <text data-page-node-id="ouoWHeBAEnMRixjyXZs7DT" fill="#64748b" font-size="10" x="186" y="477"><!--pnid:fPXMXIUcCPcuakk6uAwh9Z-->源系统原始数据经 ETL 汇聚 · 统一口径</text>
+        <text data-page-node-id="skpshjc7VS8kzkmIXhIkaP" fill="#94a3b8" font-size="9.5" x="186" y="495"><!--pnid:Ro2VGV6VeRkORzLayO2wUt-->异构数据整合，缓解直接查询压力</text>
+        <path data-page-node-id="IvvabWkwiono0IIngeTLfm" d="M500 470 L556 470" fill="none" marker-end="url(#aTeal)" stroke="#0d9488" stroke-width="2"/>
+        <rect data-page-node-id="BZnaK1D1VC1EkYgNc17IKd" fill="#ecfeff" height="76" rx="9" stroke="#99f6e4" stroke-width="1.5" width="320" x="560" y="432"/>
+        <text data-page-node-id="Hej1dcX9tbgw0fkmeLI4gf" fill="#134e4a" font-size="13" font-weight="700" x="576" y="455"><!--pnid:4AcFyrVEnozfAdGG7DsSHo-->数据集市（营销 / 主题）</text>
+        <text data-page-node-id="LZfbKHinVR2zuJCATRUS04" fill="#64748b" font-size="10" x="576" y="477"><!--pnid:njHA3Ee2CmiS7CUQWh9vO2-->从 DWS 取数 → 业务宽表 / 标签 / 模型</text>
+        <text data-page-node-id="LEtNilupp6kxSIWhe1IkA1" fill="#94a3b8" font-size="9.5" x="576" y="495"><!--pnid:Bncut2MJIPrIMxhLXHUBZb-->通用数据转 CRM 专用 · "即取即用"</text>
+
+        <!--pnid:NCnMuyTBBOCpn7GLnL4mmu--><!-- 层5 -->
+        <rect data-page-node-id="xXt9Uf7No6x2yMNRhTtshC" fill="#fff7ed" height="86" rx="9" stroke="#fed7aa" stroke-width="1.5" width="220" x="170" y="552"/>
+        <text data-page-node-id="ZaYiYGAATVyhag9Iz4OT0Q" fill="#9a3412" font-size="12.5" font-weight="700" x="186" y="580"><!--pnid:KaWQkvTDq2XTKXRzKvDJ0m-->信创 OBS 对象存储</text>
+        <text data-page-node-id="4bl6w8MZ4YM0XeUyFPhXy2" fill="#64748b" font-size="10.5" x="186" y="602"><!--pnid:JjSt9xpLKU9lUfzliUw8Il-->海量非结构化数据底座</text>
+        <text data-page-node-id="TI98sMl6Z70qzeW3OcIfSw" fill="#94a3b8" font-size="10" x="186" y="620"><!--pnid:cvDbxTcQtqfZYas2HAP89I-->录音 · 语音转写 · 报告</text>
+        <rect data-page-node-id="Nn6vAVeHRGlHcxd1Y2r7Ad" fill="#f5f3ff" height="86" rx="9" stroke="#ddd6fe" stroke-width="1.5" width="220" x="420" y="552"/>
+        <text data-page-node-id="sifPX0omkyXB4VJTLm82dj" fill="#5b21b6" font-size="12.5" font-weight="700" x="436" y="580"><!--pnid:lqwCS1aH6zoWD2wvp8dWwF-->消息平台</text>
+        <text data-page-node-id="jQvWEhBNYXoiXdY2ujGkRJ" fill="#64748b" font-size="10.5" x="436" y="602"><!--pnid:EDfEK0Jmy8k6KhDnK5MKHy-->MQ / Kafka / RocketMQ</text>
+        <text data-page-node-id="gfZiytPBXfVzWY4d5nVgSF" fill="#94a3b8" font-size="10" x="436" y="620"><!--pnid:dpT0xeHYQ3J271xBTBgZon-->准实时触发与消息推送</text>
+        <rect data-page-node-id="CMHDrUyPKhGT5Zu956Jz42" fill="#f5f3ff" height="86" rx="9" stroke="#ddd6fe" stroke-width="1.5" width="210" x="670" y="552"/>
+        <text data-page-node-id="w4zYMlV8zjn92lAVz8aHyb" fill="#5b21b6" font-size="12.5" font-weight="700" x="686" y="580"><!--pnid:3nIf286gsOK3qlNwRLBZ5E-->企业级调度平台</text>
+        <text data-page-node-id="JdGo4tnOvDJVAfSgiwcsOO" fill="#64748b" font-size="10.5" x="686" y="602"><!--pnid:tqP47VcVve5KbKPNDOIWmf-->TASKCTL / iMOIA.SMS</text>
+        <text data-page-node-id="cKlNcMXWBbau2VwIgouCLs" fill="#94a3b8" font-size="10" x="686" y="620"><!--pnid:1F49Va8qToe28KPWFDkgxQ-->依赖调度 · 重试 · 告警</text>
+
+        <!--pnid:OvGmrcJNuzyYyStyxXdXuf--><!-- 层间主箭头 -->
+        <path data-page-node-id="xbH7jYZvl1FqJSxIy9z11b" d="M345 148 L345 180" fill="none" marker-end="url(#aBlue)" marker-start="url(#aBlue)" stroke="#2563eb" stroke-width="2"/>
+        <text data-page-node-id="Bpmc54z98FUYS7uWwWBWUY" fill="#1d4ed8" font-size="10" x="357" y="170"><!--pnid:gj2AZ3Ba4OIxPWvixHr3zo-->同步服务调用</text>
+        <path data-page-node-id="Z2EZAV4cPGA6ykSsj1I34M" d="M345 388 L345 420" fill="none" marker-end="url(#aTeal)" marker-start="url(#aTeal)" stroke="#0d9488" stroke-width="2"/>
+        <text data-page-node-id="4acP7M3uIlOWxsZku2jU3R" fill="#0f766e" font-size="10" x="357" y="410"><!--pnid:7H77MFN4t2cxP6p3yE3M14-->ETL / 供数</text>
+
+        <!--pnid:StSPZCkGsxicqXjKJTg2x5--><!-- 跨层关系 -->
+        <path data-page-node-id="LnmDoKuuUNRgrG0ZHH87DB" d="M158 148 L158 330 C158 340, 166 340, 168 340" fill="none" marker-end="url(#aTeal)" stroke="#0d9488" stroke-dasharray="5 4" stroke-width="1.8"/>
+        <text data-page-node-id="1a7fi21fcvlrhORCqfFsGY" fill="#0f766e" font-size="10" transform="rotate(90,145,200)" x="145" y="200"><!--pnid:85WCNVJ4YO7banHSCSXUyE-->批量上报 / 回供</text>
+        <path data-page-node-id="iQOBlvGrbjYb5J27ltbWpO" d="M915 595 L915 330 L918 330" fill="none" marker-end="url(#aPurple)" stroke="#7c3aed" stroke-dasharray="5 4" stroke-width="1.8"/>
+        <text data-page-node-id="AfPHLlWUlq5CEmCudsoanD" fill="#5b21b6" font-size="10" transform="rotate(90,912,455)" x="912" y="455"><!--pnid:tSAtiUTMQn8KckXhoD4YGh-->调度 / 消息触发</text>
+        <path data-page-node-id="ubinZniKL1A2A4RYSZGblu" d="M130 148 L130 590 L168 590" fill="none" marker-end="url(#aOrange)" stroke="#ea580c" stroke-dasharray="5 4" stroke-width="1.8"/>
+        <text data-page-node-id="o5uuCLrT2RuQJO7vidqWVI" fill="#c2410c" font-size="10" transform="rotate(90,145,440)" x="145" y="440"><!--pnid:96649P1VGwsnVTeUrl5mdU-->文件 API 存取</text>
+      </svg>
+    </div>
+    <div data-page-node-id="46SqsLudHu9bQTznXlkLnz" class="legend">
+      <span data-page-node-id="udTpduzERtgR20tRmA75pO"><i data-page-node-id="Yd52mbHMpzHRy9XiH8xtwF" class="dot" style="background:#2563eb"></i><!--pnid:NPT29tznuh5VGgAxAIYoqJ-->实时服务调用（ESF/ESB）</span>
+      <span data-page-node-id="VwCsdCnCxEcp6bXrr35pFa"><i data-page-node-id="wSrfNkv8oPlQIiJngwbE0l" class="dot" style="background:#0d9488"></i><!--pnid:IuzVpu1DxS4FUZHyYYchSI-->批量数据流转（数据交换平台）</span>
+      <span data-page-node-id="clCxOFjNvPB0cnXxGjlOBe"><i data-page-node-id="xmH0apzPcGg4lrgtfxaXmh" class="dot" style="background:#ea580c"></i><!--pnid:DasvwJo820HSo3XPrPvAV3-->文件 API（信创 OBS）</span>
+      <span data-page-node-id="euFa0XPnR4Iu43swKR9rqc"><i data-page-node-id="0sIpjfSqZUFOCZsHC7V2bJ" class="dot" style="background:#7c3aed"></i><!--pnid:yTR1sT25Bq1gXiSsuoti1h-->调度 / 消息触发</span>
+    </div>
+  </div>
+
+  <!--pnid:C1DyBNzVLJyv8mGTvt5mE1--><!-- ============ 上下游调用图 ============ -->
+  <div data-page-node-id="1gsQlQHpZCfYybwki2UCwh" class="card">
+    <h2 data-page-node-id="svE43wHOVbMRQr7WE7vAMX"><!--pnid:dsPlZf32jvmtI7OIFXagRF-->二、上下游调用图</h2>
+    <p data-page-node-id="kkMf8OEjB2gertW2yOKuNW" class="sub"><!--pnid:j4ZcuWkYmIIYbkNLCKdDrk-->展示参与方之间的调用方向、同步/异步属性，以及数据集市回供的触发链路</p>
+    <div data-page-node-id="i9QrsumRgkQQmFYS3paBGH" class="figure">
+      <svg data-page-node-id="6YbZswEKNRbhEz6RudVkiS" aria-label="CRM系统上下游调用关系图" role="img" viewBox="0 0 1080 740" xmlns="http://www.w3.org/2000/svg">
+        <defs data-page-node-id="jhObaIKXweuSPUU29kqHXh">
+          <marker data-page-node-id="vZumXMcrpGDkQCYVMUFmSH" id="bBlue" markerHeight="9" markerUnits="strokeWidth" markerWidth="9" orient="auto-start-reverse" refX="8" refY="3"><path data-page-node-id="JVu8ViJIWaKomBq9nUEKxX" d="M0,0 L0,6 L8,3 z" fill="#2563eb"/></marker>
+          <marker data-page-node-id="fphcBMY4tI9Yd0z3PVYt2T" id="bTeal" markerHeight="9" markerUnits="strokeWidth" markerWidth="9" orient="auto-start-reverse" refX="8" refY="3"><path data-page-node-id="yqDco9oQRuvwHnTAvFkJcs" d="M0,0 L0,6 L8,3 z" fill="#0d9488"/></marker>
+          <marker data-page-node-id="RzHeRSanOFrKv6bSTsq7GX" id="bOrange" markerHeight="9" markerUnits="strokeWidth" markerWidth="9" orient="auto-start-reverse" refX="8" refY="3"><path data-page-node-id="rZv5CeWxQkDITzykO1GtOT" d="M0,0 L0,6 L8,3 z" fill="#ea580c"/></marker>
+          <marker data-page-node-id="ZG7eUYqUmGE8oNYDqx8odJ" id="bPurple" markerHeight="9" markerUnits="strokeWidth" markerWidth="9" orient="auto-start-reverse" refX="8" refY="3"><path data-page-node-id="kd5uCyrxzOkGWAvCWwKvNS" d="M0,0 L0,6 L8,3 z" fill="#7c3aed"/></marker>
+        </defs>
+
+        <!--pnid:ylAPEGfKf90Qrwv5jnOuPP--><!-- 分区背景 -->
+        <rect data-page-node-id="zCcbuZD2Rpo8cJSXKmt7vL" fill="#eff6ff" height="150" rx="10" stroke="#bfdbfe" width="770" x="285" y="45"/>
+        <text data-page-node-id="RxRxJhHGiJvW2JVt9RUCo5" fill="#1d4ed8" font-size="11" font-weight="700" x="299" y="65"><!--pnid:dXzNY6RW710r249SgH1e80-->A. 实时服务调用（同步）</text>
+        <rect data-page-node-id="yQCXGCj4ObHvNk3f2fDYbq" fill="#ecfeff" height="250" rx="10" stroke="#a5f3fc" width="770" x="285" y="210"/>
+        <text data-page-node-id="JV60dXTYwdRe5aqrfGJDuV" fill="#0f766e" font-size="11" font-weight="700" x="299" y="230"><!--pnid:h683h6AuwaUUASfPMLoM53-->B. 批量数据流转（异步 · 双向摆渡）</text>
+        <rect data-page-node-id="l7qLHRFSI2cptkaKRLC6YL" fill="#f5f3ff" height="115" rx="10" stroke="#ddd6fe" width="770" x="285" y="475"/>
+        <text data-page-node-id="XPzd666Z4jn1ANrOZUwPw3" fill="#5b21b6" font-size="11" font-weight="700" x="299" y="495"><!--pnid:bqd2GAJQwy7RGhH4nJtbKf-->C. 调度 / 消息触发（数交作业启动）</text>
+        <rect data-page-node-id="ZDFpaOCR3UW4IBP5QxS5QF" fill="#fff7ed" height="115" rx="10" stroke="#fed7aa" width="770" x="285" y="605"/>
+        <rect data-page-node-id="KHqDVWYoyM1lCCtfzHnF3D" fill="#fff7ed" height="17" rx="4" width="235" x="293" y="613"/>
+      <text data-page-node-id="gxCHr24torfHW9FbYFanfW" fill="#c2410c" font-size="11" font-weight="700" x="299" y="625"><!--pnid:SRyZz6oUK5ghWHpguSkccq-->D. 文件 API 存取（非结构化数据）</text>
+
+        <!--pnid:s4apS6VjiINNxvdc7T5b03--><!-- 中心 CRM -->
+        <rect data-page-node-id="v0Qa5j4fss1bd4I2LEJIvX" fill="url(#crmG)" height="115" rx="12" width="185" x="25" y="270"/>
+        <defs data-page-node-id="U5jrQCT2vn04RFWBqUOIsP"><linearGradient data-page-node-id="P0c2mENuJznAGQMDSM7pGI" id="crmG" x1="0" x2="1" y1="0" y2="1"><stop data-page-node-id="NlYepRSGTTQmlCY3JVKq4N" offset="0" stop-color="#4338ca"/><stop data-page-node-id="GJN8DBKTUx2DS9Qcms7abT" offset="1" stop-color="#6d28d9"/></linearGradient></defs>
+        <text data-page-node-id="P0Y5qV5hxMorLplR7XKUMs" fill="#fff" font-size="17" font-weight="700" text-anchor="middle" x="117" y="318"><!--pnid:XF6zLHhl1obJEfKVLHHCcD-->CRM 系统</text>
+        <text data-page-node-id="LzVi6Q37YhhxVfQViu5YLI" fill="#e0e7ff" font-size="10.5" text-anchor="middle" x="117" y="340"><!--pnid:2yLiVXGin1Ofv1gQVQgXkL-->调用发起方 / 数据接收方</text>
+        <text data-page-node-id="LZHCvpPaHu6KcvYI4IIkEM" fill="#c7d2fe" font-size="10" text-anchor="middle" x="117" y="362"><!--pnid:7sBlruhlGKuV3xzGpAiiVb-->浦发银行</text>
+
+        <!--pnid:3ds5Qs1jZyW8P6VFBaqKyC--><!-- A 区节点 -->
+        <rect data-page-node-id="rkNMgCF94yZ2fnZJ8YUqxs" fill="#fff" height="78" rx="9" stroke="#bfdbfe" stroke-width="1.5" width="205" x="340" y="82"/>
+        <text data-page-node-id="cJiRsREzcSEbEDpIAqEPMS" fill="#1e3a8a" font-size="12.5" font-weight="700" x="356" y="110"><!--pnid:dqS05wY7GajKkTUrl4rfUz-->企业级微服务平台</text>
+        <text data-page-node-id="vjUUPFPpRCCBlul2cgfeV6" fill="#64748b" font-size="10.5" x="356" y="130"><!--pnid:1dlhnFsLN1T6K6WRibp4Qx-->ESF / ESB 分布式网关</text>
+        <text data-page-node-id="am68en06ZRF04yt1EKuLQN" fill="#94a3b8" font-size="10" x="356" y="148"><!--pnid:bE0sSxVZohV3yWoODeNGVH-->路由·转换·鉴权·流控</text>
+        <rect data-page-node-id="5YrD67xaM1L939i57kqOyC" fill="#fff" height="78" rx="9" stroke="#bfdbfe" stroke-width="1.5" width="370" x="660" y="82"/>
+        <text data-page-node-id="vTIoywPs2CuaLB3ImiwNTG" fill="#1e3a8a" font-size="12.5" font-weight="700" x="676" y="110"><!--pnid:vr0s5VQYpzpzEAIolC4CtU-->目标系统 / 微服务群</text>
+        <text data-page-node-id="woapZfRKeZtdOTIdnl5bFB" fill="#64748b" font-size="10.5" x="676" y="132"><!--pnid:c9yKA8RAKTzETlbhzQnS2E-->客户信息 · 账户余额 · 全景画像 · 营销服务</text>
+        <text data-page-node-id="99h0xcM4V7jPZGbGCtayUs" fill="#94a3b8" font-size="10" x="676" y="150"><!--pnid:CgpAZN8S2uAwYU61hKLRPW-->准实时例外（API / RocketMQ）也经此通道</text>
+
+        <!--pnid:5oUKF8aUUOKUucqsMzc1sZ--><!-- B 区节点 -->
+        <rect data-page-node-id="4kehF2yHhTKjePJj1tGjAc" fill="#fff" height="90" rx="9" stroke="#99f6e4" stroke-width="1.5" width="205" x="340" y="258"/>
+        <text data-page-node-id="KukxekMys73OHU5xBerqS0" fill="#134e4a" font-size="12.5" font-weight="700" x="356" y="286"><!--pnid:A95B7I75igjJccQ68NsUP5-->数据交换平台</text>
+        <text data-page-node-id="aUD31OivbqajUYlScl5rbO" fill="#64748b" font-size="10.5" x="356" y="306"><!--pnid:6FqH2mvp0NkbbE085drnWM-->DataStage · ETL 批量摆渡</text>
+        <text data-page-node-id="KV6SW1iR61C2ziF5qqo0ur" fill="#94a3b8" font-size="10" x="356" y="326"><!--pnid:NLlopXAWMYt2wG45Jm1ip8-->文件推送 → 解析落库</text>
+        <rect data-page-node-id="fnGlG3ns2OoQo79yKJfLlN" fill="#fff" height="70" rx="9" stroke="#99f6e4" stroke-width="1.5" width="370" x="660" y="242"/>
+        <text data-page-node-id="oC1PzhHBSQmaD5oFb25V5c" fill="#134e4a" font-size="12" font-weight="700" x="676" y="266"><!--pnid:txXbgygOGsKRvyqswnO0uG-->数据仓库 / 数据湖（ODS→DWD→DWS）</text>
+        <text data-page-node-id="U0E8GQZmHMtKT3XAYNFxNH" fill="#64748b" font-size="10" x="676" y="288"><!--pnid:GgSB8EUCi42Ukybgs398aA-->源系统/CRM 原始数据经 ETL 汇聚 · 统一口径</text>
+        <rect data-page-node-id="zHcV8OZmqXfAisb4eS133v" fill="#fff" height="70" rx="9" stroke="#99f6e4" stroke-width="1.5" width="370" x="660" y="342"/>
+        <text data-page-node-id="MjGz0MN1uL42NHOkr0TPhX" fill="#134e4a" font-size="12" font-weight="700" x="676" y="366"><!--pnid:ZrMt5XWmKmOIGhjogUE2a3-->数据集市（营销 / 主题）· 从 DWS 取数</text>
+        <text data-page-node-id="oeLdzneA4aDDHx9Q3pqpGz" fill="#64748b" font-size="10" x="676" y="388"><!--pnid:UVA4OQRWrwnPZidhgU48O2-->加工成宽表/标签/模型 → 客户视图·营销名单·业绩看板</text>
+
+        <!--pnid:2EoPW3O0flEA5UL76yGURQ--><!-- C 区节点 -->
+        <rect data-page-node-id="bhgZHsMXkFk8S83UZ3HPCb" fill="#fff" height="74" rx="9" stroke="#ddd6fe" stroke-width="1.5" width="205" x="340" y="498"/>
+        <text data-page-node-id="XcR7YmkOyDe6Hy2y8aKcj4" fill="#5b21b6" font-size="12.5" font-weight="700" x="356" y="524"><!--pnid:5C4GD72BuQeb1XGJ0Hbpjx-->消息平台</text>
+        <text data-page-node-id="8WO2lS5ARACGs62DochEPs" fill="#64748b" font-size="10.5" x="356" y="544"><!--pnid:QCdspZyGOmLFr7I1VXTk0Y-->MQ / Kafka · 消费消息触发</text>
+        <text data-page-node-id="0KC3pDPC3qCWUkUouzrOHF" fill="#94a3b8" font-size="10" x="356" y="561"><!--pnid:pPPw7LvfJMbzmJhAmWaEGY-->适合准实时场景</text>
+        <rect data-page-node-id="HFNboOWhsBByZjmaE8r1n5" fill="#fff" height="74" rx="9" stroke="#ddd6fe" stroke-width="1.5" width="205" x="620" y="498"/>
+        <text data-page-node-id="RpEJyLljr4J0aQHIXLhrTp" fill="#5b21b6" font-size="12.5" font-weight="700" x="636" y="524"><!--pnid:OKtiOwGZBj9m12b9gRddlc-->企业级调度平台</text>
+        <text data-page-node-id="8zG5xKdCn5sCCBCGyG5lvW" fill="#64748b" font-size="10.5" x="636" y="544"><!--pnid:1Ur7Wu4uexl4924oHdmoIs-->TASKCTL / iMOIA.SMS</text>
+        <text data-page-node-id="jg9HmfdXGR0hcIeNOJIulq" fill="#94a3b8" font-size="10" x="636" y="561"><!--pnid:ZuDCQqK7D6l64dsCUy13AN-->依赖触发 · 重试 · 告警</text>
+
+        <!--pnid:mVBm1jHBED5MWfHJcmdyzw--><!-- D 区节点 -->
+        <rect data-page-node-id="pESFJo9QwTsrkixjYizNLN" fill="#fff" height="74" rx="9" stroke="#fed7aa" stroke-width="1.5" width="205" x="340" y="628"/>
+        <text data-page-node-id="PfFH6CtkAmBjl4McQ6tetG" fill="#9a3412" font-size="12.5" font-weight="700" x="356" y="654"><!--pnid:2voVZ5ICU7i3yumPUQDcV8-->信创 OBS 对象存储</text>
+        <text data-page-node-id="DFvkYPhVsDVzB6bk9239Ig" fill="#64748b" font-size="10.5" x="356" y="674"><!--pnid:1iGg8mCcfgFtH4pakDUQDl-->录音 / 转写 / 报告</text>
+        <text data-page-node-id="5M3VjIDdyo0qZXPWcvwWdJ" fill="#94a3b8" font-size="10" x="356" y="691"><!--pnid:y0Yar922n6DV73dJiVR8u3-->海量非结构化数据底座</text>
+        <rect data-page-node-id="XpkZUJs8akJKkURQA2mouB" fill="#fff" height="74" rx="9" stroke="#fed7aa" stroke-width="1.5" width="370" x="660" y="628"/>
+        <text data-page-node-id="gy4BTjaLQwX5sEAhn5YUO8" fill="#9a3412" font-size="12.5" font-weight="700" x="676" y="654"><!--pnid:GZtWZqxe9KQBIWLnLbqv4s-->CRM 数据库（引用地址）</text>
+        <text data-page-node-id="kXN6LyLGrGCfCJnOEwjLBe" fill="#64748b" font-size="10.5" x="676" y="674"><!--pnid:wh6M03RdNkDClRUlYYbZva-->仅保存文件 URL，不落地文件本体</text>
+        <text data-page-node-id="ahDiwbgSMra6Sk4pc9IdlZ" fill="#94a3b8" font-size="10" x="676" y="691"><!--pnid:vHTb5DdHuyVCzgqabTIxxr-->结构化数据仍留在 CRM 库内</text>
+
+        <!--pnid:ejyCLRlVwLHRISieeDq5FS--><!-- A 区调用线 -->
+        <path data-page-node-id="5fyyG8eHlPSKCwv6Af1ZF5" d="M210 305 C270 305, 270 121, 338 121" fill="none" marker-end="url(#bBlue)" stroke="#2563eb" stroke-width="2"/>
+        <text data-page-node-id="uwQ1Ze1cZnCOMCuYsUGEsL" fill="#1d4ed8" font-size="10" x="242" y="205"><!--pnid:ycHcFxmFRYDhbV2E2zTPdP-->①同步服务请求</text>
+        <path data-page-node-id="gc2mdrcMsjiZkLnu7Nd1gn" d="M545 121 L658 121" fill="none" marker-end="url(#bBlue)" marker-start="url(#bBlue)" stroke="#2563eb" stroke-width="2"/>
+        <text data-page-node-id="htuTY0hE6n8WS6eQbdWtJI" fill="#1d4ed8" font-size="10" text-anchor="middle" x="602" y="113"><!--pnid:7Z4HmArHNQ4j7g9w7J6xQS-->路由转发 / 秒级响应</text>
+
+        <!--pnid:jassjGXJgLKCcMzAXN5ofA--><!-- B 区调用线 -->
+        <path data-page-node-id="mnlHODBei0kETdfYZ7dDM4" d="M210 318 C270 318, 280 300, 338 300" fill="none" marker-end="url(#bTeal)" stroke="#0d9488" stroke-width="2"/>
+        <text data-page-node-id="DANDI67j8KT2Y5bqFdG6AK" fill="#0f766e" font-size="10" x="244" y="292"><!--pnid:Yei0AQnaSiP58ADaaubsL3-->②上报客户数据</text>
+        <path data-page-node-id="L2i2uiYqCYtiQWa35cpq5p" d="M545 285 L658 277" fill="none" marker-end="url(#bTeal)" stroke="#0d9488" stroke-width="2"/>
+        <text data-page-node-id="YwpLqFsEuzqD4zCHGJyDMG" fill="#0f766e" font-size="10" x="598" y="270"><!--pnid:mZxqaWrbnbPwUsK7j482eC-->汇聚入湖</text>
+        <path data-page-node-id="B92CKeEKUMleaySP61mWcf" d="M845 312 L845 340" fill="none" marker-end="url(#bTeal)" stroke="#0d9488" stroke-width="2"/>
+        <text data-page-node-id="eonxqUxwhqFAD5vCP0i3xQ" fill="#0f766e" font-size="10" x="855" y="332"><!--pnid:gc7lMadjKf9gTs4Kf0uCB6-->ETL 加工</text>
+        <path data-page-node-id="44a6N5V3LD18SDz5mkgx13" d="M658 377 L545 325" fill="none" marker-end="url(#bTeal)" stroke="#0d9488" stroke-dasharray="6 4" stroke-width="2"/>
+        <rect data-page-node-id="x9caoNVlre9mV1qHqxTKUd" fill="#ecfeff" height="16" rx="4" width="62" x="580" y="355"/>
+      <text data-page-node-id="CNaWhrOzHHCH6nls3KLOy5" fill="#0f766e" font-size="10" x="586" y="367"><!--pnid:Vw1nE5IekrnPxNetZVQ14E-->③异步回供</text>
+        <path data-page-node-id="zPyABDrwRf9MuYOLSrrTjX" d="M338 332 C280 332, 270 344, 212 344" fill="none" marker-end="url(#bTeal)" stroke="#0d9488" stroke-dasharray="6 4" stroke-width="2"/>
+        <text data-page-node-id="xY7834Oxgl1oc0Lar5oaMH" fill="#0f766e" font-size="10" x="244" y="362"><!--pnid:7kLNdgkkFIezOJu7g3NTZ1-->解析落库</text>
+
+        <!--pnid:58irolRHw9iIhRypkRrkvM--><!-- C 区触发线 -->
+        <path data-page-node-id="anKsZ5cOs4jWJVaLUjlvRg" d="M760 412 C760 470, 520 470, 470 496" fill="none" marker-end="url(#bPurple)" stroke="#7c3aed" stroke-dasharray="5 4" stroke-width="1.6"/>
+        <rect data-page-node-id="auTYMV9zlAZqUHlwuaZ5Kd" fill="#f5f3ff" height="16" rx="4" width="112" x="694" y="454"/>
+      <text data-page-node-id="rFEjBlbfy7X0vAOcTbEUdR" fill="#5b21b6" font-size="10" x="700" y="466"><!--pnid:MEwQ4j70MjfqPGi15gh9WK-->完成消息 / 触发器文件</text>
+        <path data-page-node-id="6q2dVYnRHt0J5dC8CyrY7i" d="M442 498 L442 350" fill="none" marker-end="url(#bPurple)" stroke="#7c3aed" stroke-dasharray="5 4" stroke-width="1.6"/>
+        <text data-page-node-id="g47KTiSG5qVWQ012P9Nk5I" fill="#5b21b6" font-size="10" x="450" y="430"><!--pnid:tXTh6eF10H5ohRkRiEf3mR-->消费消息触发作业</text>
+        <path data-page-node-id="Qp0Kku4x4uUzLoSxgPkE6y" d="M722 498 C722 450, 620 440, 548 320" fill="none" marker-end="url(#bPurple)" stroke="#7c3aed" stroke-dasharray="5 4" stroke-width="1.6"/>
+        <rect data-page-node-id="JPplK3kxpwOPsEcL8AX4fB" fill="#f5f3ff" height="16" rx="4" width="112" x="694" y="428"/>
+      <text data-page-node-id="rexCKyc1YfGrmcHhGWXAYY" fill="#5b21b6" font-size="10" x="700" y="440"><!--pnid:Qx3Jq9LQsb8Xr3c7QeNgAN-->依赖触发 / 重试告警</text>
+
+        <!--pnid:iqUgL80lIQsBijkVHc5KKk--><!-- D 区调用线 -->
+        <path data-page-node-id="aMWCIQzg7IZEbVhtAnirl2" d="M210 348 C270 348, 270 662, 338 662" fill="none" marker-end="url(#bOrange)" stroke="#ea580c" stroke-width="2"/>
+        <text data-page-node-id="rDZVTa0AbYOpiVJGNAJGnf" fill="#c2410c" font-size="10" x="244" y="540"><!--pnid:LJyAOmFRp8VbxwtRMUMgSN-->④API 上传文件</text>
+        <path data-page-node-id="YBgsAywNH4DqqvOukaIoI2" d="M545 665 L658 665" fill="none" marker-end="url(#bOrange)" marker-start="url(#bOrange)" stroke="#ea580c" stroke-width="2"/>
+        <text data-page-node-id="u2GXkyAxm1y8UguPLDJRII" fill="#c2410c" font-size="10" text-anchor="end" x="650" y="657"><!--pnid:X7lfEwzhOcgn7PviiZ3bMB-->存文件 / 回写 URL</text>
+      </svg>
+    </div>
+    <div data-page-node-id="k8sxBw08BZRW79BiYg7W4W" class="legend">
+      <span data-page-node-id="n8Txvo61xirB26rl6FE0WL"><i data-page-node-id="WzJTp9gDYFjgje5MB3EYuq" class="dot" style="background:#2563eb"></i><!--pnid:60xQSn4YEcuR9yuPOqwZwo-->同步调用（实线双向）</span>
+      <span data-page-node-id="5nSpBYUW4W10EHskGNzKtU"><i data-page-node-id="0W7MoHVKczBRHEyiiWWpja" class="dot" style="background:#0d9488"></i><!--pnid:EGSUJokHXXTCHQpQsSnyXP-->异步批量（实线=上报入湖，虚线=回供落库）</span>
+      <span data-page-node-id="iKrFJTJ4wEV9xrsg4TrYj6"><i data-page-node-id="Z8BjjoOr8NLwEJ19D6qjQC" class="dot" style="background:#7c3aed"></i><!--pnid:8JnZAB1v2NwZL6FfqcJuk4-->触发信号（虚线）</span>
+      <span data-page-node-id="zcXeBgObDOgTw0DdSkyIAb"><i data-page-node-id="vuzNF0p2IKFepGZN9aBN5S" class="dot" style="background:#ea580c"></i><!--pnid:iI2vuXdcapyPKbIw0SdEEb-->文件 API 存取</span>
+    </div>
+  </div>
+
+  <!--pnid:CXsXyUmLlyfyhOUNU2C5BA--><!-- ============ 数据加工与消费链路 ============ -->
+  <div data-page-node-id="hLNQzqpBjmihzKhxpc55Om" class="card">
+    <h2 data-page-node-id="oAaxNxLVViVVXXpmNWxOI0"><!--pnid:H5ui4QdYPj6YT3s6QGBb7w-->三、数据加工与消费链路（单向主链：源系统/数仓 → 数据集市 → CRM）</h2>
+    <p data-page-node-id="kF7RkgtQjNgJHCyYKMrUFn" class="sub"><!--pnid:7uXC9YLyuZae45X7VlCKwA-->"加工与消费"模式：数据集市把通用数据加工成 CRM 专用的"即取即用"数据，CRM 只负责消费。这是上方双向摆渡图中"回供落库"一支的内部展开。</p>
+    <div data-page-node-id="1gQH5nEwV8NS1qTs3aNGTB" class="flow-steps">
+      <div data-page-node-id="QLbN0S1uahDsOj2Giu4oR9" class="step"><b data-page-node-id="bXv5AzcUwwneYqVFG3a2bm"><!--pnid:3j6PqzZw9MqYa3oJFSfwJb-->① 数据汇聚</b><!--pnid:5VslTG1JGSt6332YhtqSEe-->CRM 等源系统原始数据经 ETL 进入数仓 <b data-page-node-id="6bIJkBSiu3nfx8QQr4pOSu"><!--pnid:gEHF3MqK4iEQUV2vLZJxez-->ODS 层</b><!--pnid:jwZHyVlqLykDw8WJDYeSHo-->，再逐层加工成统一口径的 <b data-page-node-id="pc2iDTwu8fR0QPey2TGhNt"><!--pnid:fydqWrjDmpsS9SViAuTfB0-->DWD / DWS 层</b><!--pnid:IAMUOQMhT8KxUM9ypBpSXp-->。</div>
+      <div data-page-node-id="HCYTVYX7ybIeQCm1w0oOrZ" class="step"><b data-page-node-id="OaCV3l8xVYJ3CyFq5bKeXZ"><!--pnid:WiOh3FRROM5v5WHem9400n-->② 集市加工（核心环节）</b><!--pnid:s6IkrNvYiQg8lUV8RO3Vp3-->从数仓汇总层 <b data-page-node-id="SJ82xC2K10gPrXb0rcWzdj"><!--pnid:2X2Y1evG0I5ufFxqUHDvgp-->DWS</b><!--pnid:9xUrE51Ln2Ploip9xduNFF--> 取数，按 CRM 分析需求加工成<b data-page-node-id="LMCQhf61515N04L4cR5TBe"><!--pnid:0hUhcunzTyx9JFx6jetJ3i-->业务宽表 / 标签 / 模型</b><!--pnid:BbzsmkMvPj9mTEvX2RtRwZ-->，存入数据集市——通用数据转化为 CRM 专用数据的关键。</div>
+      <div data-page-node-id="OuMHfaNEAis1YQo0Qx4hQu" class="step"><b data-page-node-id="phzLAWVUK83NaYyGYjUTOF"><!--pnid:mSo3sIGafFqnKExzyaHn52-->③ CRM 消费</b><!--pnid:ZvSNxXLSdsx4PKGSXIgUcc-->CRM 读取集市加工结果，驱动<b data-page-node-id="dBxcvO571D5wC5Tzz1IlCb"><!--pnid:dcm8Y5wu1YC3DMZcjJ4ncc-->客户视图、精准营销名单、业绩看板</b><!--pnid:t3k0Fvqk1xefb1KdLpVkeu-->；大额动账提醒等高时效场景可准实时推送。</div>
+    </div>
+    <div data-page-node-id="joo1dML04IZaEqPxajy2Ek" class="scene" style="margin-top:4px"><!--pnid:livWgnAfkphLL9SmS07Ys5-->
+      CRM 负责<b data-page-node-id="XRBZEzNMcp0asDePOCM7DJ"><!--pnid:TmoQiriQGs0kJXwCa3XPxn-->业务操作与策略执行</b><!--pnid:mUm03GSdbZSQOM5028aAoJ-->，数据集市专门为这些操作与决策准备好<b data-page-node-id="9Y4Y1mfqVTfmFpGkkskHff"><!--pnid:WNyYN2rMkKbifbP0QOXq0t-->"即取即用"的加工数据</b><!--pnid:Eg7dwfe7CTrj7NCu5or0D7-->，二者共同构成银行客户经营体系中<b data-page-node-id="E4igNRoTpcbUqnVCSeW1Se"><!--pnid:QFiTd5V1JDUFPW56GDG7ms-->"操作"与"分析"的闭环</b><!--pnid:BTUGuZfnCTCGumcbxYAPA5-->。
+    </div>
+  </div>
+
+  <!--pnid:zUXhlpEUyD8dWdUfXflKSE--><!-- ============ 术语表 ============ -->
+  <div data-page-node-id="ppHcLrTHToGvomXuwgFweu" class="card">
+    <h2 data-page-node-id="eq6qMg4MtOu7nZnyFJSmrK"><!--pnid:QjEs0ZL51ssuit8joALWJC-->四、缩写与术语对照表</h2>
+    <table data-page-node-id="KHQxcPgoMKHGxvoXA3YEpy">
+      <thead data-page-node-id="5w5JL1dO9dAZpmNEyilhON"><tr data-page-node-id="2twLyxd793zCdxmK27YFga"><th data-page-node-id="gRfGKdYhHwTn8WWK0yjWz1" style="width:14%"><!--pnid:g1XNOMe9unswtORgWxHZEa-->缩写</th><th data-page-node-id="IFasqiTLqg6bycyiAtLeDP" style="width:26%"><!--pnid:5LkCDOxb8i6xCZGc9yOF6a-->中文全称</th><th data-page-node-id="ufGYAZwoodI3JJSkeoV8Gt"><!--pnid:F1yjfSB6OcseUKAFOkkOAg-->作用 / 说明</th></tr></thead>
+      <tbody data-page-node-id="jgSc5P8jpY6o8AdSoUTXsp">
+        <tr data-page-node-id="vgY4wuzMRDebsh4K7qKCxt"><td data-page-node-id="UpyI2JLbFpzisf4ABmw1rL"><b data-page-node-id="R0Zp5CvgKUjTtnuyAUraYE"><!--pnid:5n4No7Df8g1IkJFJkRJGge-->ODS</b></td><td data-page-node-id="8S48jZdehqcxy4J0XeFoQb"><!--pnid:HokqpuuvK6USJi65OrmWYo-->操作数据存储层（Operational Data Store）</td><td data-page-node-id="KqV2Ybko8wZ0xz0SZqFkuw"><!--pnid:M4HCRdL8ua2Nbyr4nfBTGG-->数仓最靠近源系统的一层，存放经 ETL 抽取的原始数据快照，粒度最接近业务系统，供后续清洗加工。</td></tr>
+        <tr data-page-node-id="RLyBJP1LtKj6Lzqt05Lfrz"><td data-page-node-id="Heil1NkrAyLpBSVpBMQC6A"><b data-page-node-id="u5fWARbdcaz9VYj0eAbtbx"><!--pnid:CiyoTqijGY7isAEXwGkxD3-->DWD</b></td><td data-page-node-id="OpENVKO3T2lhfyV4jFOnvr"><!--pnid:PiYBNzv33xcovwWx9sLmo5-->明细数据层（Data Warehouse Detail）</td><td data-page-node-id="VA9suYxqJNwLbezrPEdCmT"><!--pnid:GXl6AQQEF8s0l9MdQLWpgX-->对 ODS 数据清洗、去重、规范化后形成的明细事实数据，统一口径，是进一步汇总的基础。</td></tr>
+        <tr data-page-node-id="jB4ASt8pU1PDNqeDbv8P4T"><td data-page-node-id="Qk1NI54u8TaH5N5Qzb3zkg"><b data-page-node-id="XRzzlpwlMbDx6aZEm61vow"><!--pnid:kGimjdXi9e59wnmWgBv2JV-->DWS</b></td><td data-page-node-id="ISJpTQMAzylK70P9o9xT5b"><!--pnid:pxtFI7jApWy0EHVB7wmYw3-->汇总数据层（Data Warehouse Summary / Service）</td><td data-page-node-id="kvtkSmatz5ANFNqilH31hN"><!--pnid:wK991QAGJJB2YOzmJTZmy5-->按主题对 DWD 做轻度汇总形成的汇总宽表，面向分析查询；数据集市从这里取数加工。</td></tr>
+        <tr data-page-node-id="H62EqB423XWjLikB8myG1t"><td data-page-node-id="RF2dceg2FzZfwoN1E77RQp"><b data-page-node-id="RwGIRbt7BlTfVBjSSF6FQd"><!--pnid:LOippzkCeLELSN7nIqM8BR-->数据集市</b></td><td data-page-node-id="ZvY4mYpfNDEwGfT5ncEc3u"><!--pnid:Ezr4pGFuckngx5t8HeREtB-->Data Mart</td><td data-page-node-id="k3wFKE98fLioZk3CaWyYxa"><!--pnid:c89uzS3MY0BkHzqPGaKgo8-->面向特定业务（如营销）的小型数据仓库，从 DWS 取数加工成宽表/标签/模型，供 CRM 等应用"即取即用"。</td></tr>
+        <tr data-page-node-id="nCyYZpwIcuda8VlbM51Are"><td data-page-node-id="1J6JtdpTfBx98PPdpJWM3Q"><b data-page-node-id="PgROFwmveSOUtcg7Jk7svY"><!--pnid:UDAOwdhi3iqaDkzJnbafze-->ETL</b></td><td data-page-node-id="KBKVUICa40jzgxczLvkadb"><!--pnid:elntG2tYaqnMygxq9vmTbD-->抽取-转换-加载（Extract-Transform-Load）</td><td data-page-node-id="vqAvWMXpQjDTf2KRS5dZWw"><!--pnid:szenJYRiaZ305CoLqy7z8E-->把源系统数据抽取出来、按规则转换清洗、再加载到目标库的过程，是数据汇聚的核心手段。</td></tr>
+        <tr data-page-node-id="YmT35YEtIFuKGYOPh30avq"><td data-page-node-id="1AjuN7Q6Cjfk0DhgbODWsx"><b data-page-node-id="HGxSax7Z5WJDk0SD9VV3NO"><!--pnid:NJ15uYkrTCLlKloaINeDIB-->CRM</b></td><td data-page-node-id="X3t7NbaYHdhxGXAWA8RAlD"><!--pnid:moLjAgDpD4ncnS9Ht8trWR-->客户关系管理（Customer Relationship Management）</td><td data-page-node-id="p6hM39jBZJENvqhLA57f5X"><!--pnid:xQ3KsM6l61wFzbi7VvmzSv-->银行客户经营的操作型系统，负责客户视图、精准营销、业绩看板等业务操作与策略执行。</td></tr>
+        <tr data-page-node-id="qMX59V23uVOxJLUVqXtDMD"><td data-page-node-id="FDh3Zaxnd2FSUUsAwHmXqr"><b data-page-node-id="ZBUtmwKdDcw0wydqYH4sGD"><!--pnid:5q75YJkAJeMj2hHCxwf0uH-->ESF / ESB</b></td><td data-page-node-id="F38Nu90vHY03WcjiPEmZ0U"><!--pnid:JIzxPPgbRCCIMzi6MmPUEK-->企业级微服务平台 / 企业服务总线（Enterprise Service Bus）</td><td data-page-node-id="NaYtk8gSW6Ki8EeTPo8VIm"><!--pnid:tqTPmrvHpXdhuMPBEudYLF-->统一的服务调用网关，负责路由转发、协议/报文转换、权限校验、流量控制。</td></tr>
+        <tr data-page-node-id="WrICjSaAdEN0onR8gz4HoS"><td data-page-node-id="YWdXtoJXfxYZKUtfZkvTXT"><b data-page-node-id="td6n654CErlY8HKrwEYpyB"><!--pnid:edBJgmktVa05zndtKwvD7O-->OBS</b></td><td data-page-node-id="zlEbrNqQxNsTDUyVsIeEmr"><!--pnid:FLUuQoO905gLV6FCqwsz95-->对象存储（Object Based Storage）</td><td data-page-node-id="H5Bd6NxJYRYyR49zmJBWrh"><!--pnid:7wcMa4xgV8zycWG99GCrtn-->信创对象存储，承载录音、语音转写、报告等非结构化数据，海量、低成本、可扩展。</td></tr>
+        <tr data-page-node-id="7rkojepN8137OSW27T6vrR"><td data-page-node-id="6gydl0eQIRcD101MnZOlX2"><b data-page-node-id="zhoryZHBc8aBJDifH9Z13N"><!--pnid:eCw676M3k2sBkCyoE4R3Vz-->MQ / Kafka</b></td><td data-page-node-id="NFHepUebhYit4uTsUxMbEm"><!--pnid:VCzKa3qLv1AizTdkkGu6Kv-->消息队列 / 分布式消息中间件</td><td data-page-node-id="NViFytPNXNUtPcUCfr9M7C"><!--pnid:ESBXgyVbYqzCS0L5dcsNRC-->用于系统间异步消息传递，可触发 DataStage 作业或实现准实时数据推送。</td></tr>
+        <tr data-page-node-id="IET7avP8E3q18xtqNzXfGj"><td data-page-node-id="KiArZkTVqciVNhJDSV9SVw"><b data-page-node-id="FcOnRJU2VsAapPKLHcYtW9"><!--pnid:B72SIHXqLw3FcclDUIv5Ml-->DataStage</b></td><td data-page-node-id="zRwWbUq3bs2lDEiPZFY5nU"><!--pnid:GYu66MXccGwNCFLcTVC1O5-->IBM 数据集成 ETL 工具</td><td data-page-node-id="3cS46WNDkgGl8Kpf3XOv3u"><!--pnid:xNA7gjCeTkuyJL4jncOlcs-->数据交换平台的核心 ETL 引擎，负责批量抽取、转换、加载与作业调度。</td></tr>
+        <tr data-page-node-id="koYYpCNC3YuNC1QaCQ72Lq"><td data-page-node-id="I0kOwX6bxPmNS5qtvWbFwC"><b data-page-node-id="QB3Wv7kMXagRb9PCRiZO0B"><!--pnid:ffkLpViW2dG14c9dpRzxTd-->T+1</b></td><td data-page-node-id="8ppRwHObu6qIa4CBahGKiX"><!--pnid:EDL0oK4J5VsyTb44goUEWU-->交易日次日</td><td data-page-node-id="zZ0afdx1ROfSLo5JE2hqR6"><!--pnid:bQrxMXXZARy4fBUBj0lM8c-->银行批处理常见口径，指当日交易数据在下一个交易日加工完成并可供使用。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!--pnid:YY7kM3BqU5Wg2xh4wmfspo--><!-- ============ 总结 ============ -->
+  <div data-page-node-id="gW49g0yJDFMLGWyCSx5WNj" class="card">
+    <h2 data-page-node-id="DpXcUzwqjeL63yBb46UqdM"><!--pnid:wUx7LYFSWKSmWQRKbVypVb-->核心结论速览</h2>
+    <div data-page-node-id="9kywUireSkBRvh2tmxVibO" class="summary">
+      <div data-page-node-id="gdpFkBcZblEhjvtjtfbS14" class="s-item b"><b data-page-node-id="M9cjqIMiO3yRKA2qcFsLEB"><!--pnid:Dfzn7DKo0vEtLaZfAcy3RW-->实时通道 · ESF/ESB</b><!--pnid:6kUSAB6ToKyGRvsLhmaguU-->CRM 经服务网关同步调用客户/账户微服务，完成路由、协议转换、鉴权与流控，秒级返回。准实时例外（API、RocketMQ）也走此通道。</div>
+      <div data-page-node-id="qsju1j8i74Nc3jJ3KG6THj" class="s-item t"><b data-page-node-id="f97uhXtfnBPlZ799MGMMOX"><!--pnid:kHk9UKPu6VTzG1zc1Ahahw-->批量通道 · 数据交换平台</b><!--pnid:CBcvQ57vkgBaK0JuhsHm8F-->异步批量为主，"双向摆渡"：上报客户数据入湖；再把集市 T+1 加工好的画像标签、营销名单异步回供 CRM 落库。遵循"交易与批处理分离"。</div>
+      <div data-page-node-id="dPE3Rp7x1hA13OxWaeNqLI" class="s-item p"><b data-page-node-id="pD3zVmOVvJZc2K5yi41tyD"><!--pnid:t8fAHW4Wu9Es8q9rkcM2KQ-->触发机制 · 三种方式</b><!--pnid:FvVMiBUBPdcbGswnU4sLu7-->集市加工完成后：文件就绪触发（最常用，Wait for File + 触发器文件）、消息触发（MQ/Kafka，准实时）、调度平台依赖触发（TASKCTL/iMOIA.SMS，企业级运维）。</div>
+      <div data-page-node-id="Wk1NViPARSHLGiINe4ut1E" class="s-item o"><b data-page-node-id="3CJtsFS9tqnzuQoHitUVVm"><!--pnid:d2uaNxmH7jhZ96onXzTCM5-->存储通道 · 信创 OBS</b><!--pnid:4Fh6tWdDwuzrT6fcmoFl9m-->录音、语音转写、报告等非结构化数据经 API 存入对象存储；CRM 数据库仅保留文件引用地址（URL），不落地文件本体。</div>
+    </div>
+  </div>
+
+  <div data-page-node-id="FgSZbY5tO0VxZZBpUhirQ8" class="foot"><!--pnid:CVZFuxQUmNC9FTU2eLHzZf-->根据两份分享对话内容整理生成 · 供架构交流参考</div>
+</div>
+
+
+  <!--pnid:gEmFsD629diLyVKzPqyxa6--><!-- ===== canvas pan/zoom ===== -->
+  <style data-page-node-id="iNyjvgGq2NvY7sh7JvkCAA" data-pnid-children="CXjff0TBo78wOIrdTx9oVE">
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;height:min(72vh,680px);min-height:420px;box-shadow:inset 0 1px 3px rgba(15,23,42,.05);}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none;}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05);}
+  .pz-viewport.zooming>svg{cursor:zoom-in;}
+  .pz-viewport.zooming.dragging>svg{cursor:grabbing;}
+  .pz-viewport.dragging>svg{cursor:grabbing;}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5;}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08);}
+  .pz-toolbar button:hover{background:#f1f5f9;}
+  .pz-tip{position:absolute;left:12px;bottom:10px;z-index:5;background:rgba(255,255,255,.9);color:#64748b;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;pointer-events:none;}
+  @media(max-width:600px){.pz-viewport{height:62vh;min-height:340px;}}
+  </style>
+  <script data-page-node-id="L06CVeatyaFXL8dvxY0yHJ" data-pnid-children="WcRiPcOP1XuvSZIlqGKyxE">
+  (function(){
+    var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+    svgs.forEach(function(svg){
+      if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+      var vp=document.createElement('div');vp.className='pz-viewport';
+      svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+      var bar=document.createElement('div');bar.className='pz-toolbar';
+      var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+      var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+      var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+      bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+      var tip=document.createElement('div');tip.className='pz-tip';tip.textContent='\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6a21\u5f0f\u5185\u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+      vp.appendChild(bar);vp.appendChild(tip);
+      var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+      var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+      var tf=String.fromCharCode(109,97,116,114,105,120,40);
+      function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+      function zoom(f,cx,cy){
+        var r=vp.getBoundingClientRect();
+        if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+        var px=cx-r.left-tx,py=cy-r.top-ty;
+        var n=Math.min(4,Math.max(0.5,scale*f));
+        tx=px-(px/scale)*n;ty=py-(py/scale)*n;scale=n;apply();
+      }
+      function ids(){return Object.keys(pointers);}
+      function pair(){
+        var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;
+      }
+      function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+      bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+      bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+      bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+      svg.addEventListener('wheel',function(e){
+        if(!zoomMode)return;
+        e.preventDefault();
+        zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+      },{passive:false});
+      svg.addEventListener('pointerdown',function(e){
+        if(e.pointerType==='mouse'&&e.button!==0)return;
+        lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+        pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+        try{svg.setPointerCapture(e.pointerId);}catch(x){}
+        if(ids().length===1){
+          dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');
+        }else if(ids().length===2){
+          var p=pair();dragging=false;vp.classList.remove('dragging');
+          pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+        }
+      });
+      svg.addEventListener('pointermove',function(e){
+        if(!pointers[e.pointerId])return;
+        pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+        if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+        if(ids().length===2&&pinch){
+          var p=pair(),d=dist2(p[0],p[1]);
+          var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+          if(pinch.d>0&&d>0)zoom(d/pinch.d,mx,my);
+          tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+          pinch={d:d,x:mx,y:my};
+        }else if(ids().length===1&&dragging){
+          tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+          lastX=e.clientX;lastY=e.clientY;apply();
+        }
+      });
+      function end(e){
+        if(!pointers[e.pointerId])return;
+        delete pointers[e.pointerId];
+        try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+        var k=ids();
+        if(k.length<2)pinch=null;
+        if(k.length===1){
+          dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');
+        }else if(k.length===0){
+          dragging=false;vp.classList.remove('dragging');
+        }
+      }
+      svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+      svg.addEventListener('click',function(){
+        if(lastType!=='mouse'||moved)return;
+        zoomMode=!zoomMode;
+        vp.classList.toggle('zooming',zoomMode);
+        tip.textContent=zoomMode?'\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u518d\u5355\u51fb\u9000\u51fa':'\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6a21\u5f0f\u5185\u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+      });
+      svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+    });
+  })();
+  </script>
+
+</body>
+</html>

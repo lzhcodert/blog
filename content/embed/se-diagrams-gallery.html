@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>软件工程常见图鉴 · 样例速览</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 40px}
+  .hero{background:linear-gradient(135deg,#5b5bd6,#7a5bd6 55%,#0a84ff);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(90,90,220,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.6;opacity:.92}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;margin-left:6px;font-weight:500}
+  .fig{overflow:hidden;background:#fcfcfd;touch-action:none;cursor:grab}
+  .fig:active{cursor:grabbing}
+  .fig svg{display:block;width:100%;height:auto;transform-origin:0 0;user-select:none}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.6}
+  .foot b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>软件工程常见图鉴</h1>
+  <p>七种最常画的图，各回答一个问题。示例为简化示意，重点看结构与表达意图，而非细节。滚轮缩放、拖拽平移、双击复位。</p>
+</div>
+<div class="hint"><span><b>滚轮</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span><span>博客弹窗里可放大查看细节</span></div>
+<div class="nav">
+  <a href="#g-arch">架构图</a><a href="#g-seq">时序图</a><a href="#g-flow">流程图</a><a href="#g-class">类图</a><a href="#g-er">ER 图</a><a href="#g-state">状态机图</a><a href="#g-usecase">用例图</a>
+</div>
+
+<!-- 1 架构图 -->
+<div class="card" id="g-arch">
+  <div class="card-head">
+    <h2><span class="num">1</span>架构图 <span class="tag">静态 · 是什么</span></h2>
+    <p>回答「系统由哪些块组成、边界在哪、谁依赖谁」。看的是稳定的结构，不关心执行顺序。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 352" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar1" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="13">
+        <g fill="#eef4ff" stroke="#c9dcff">
+          <rect x="20" y="16" width="1000" height="66" rx="12"/>
+          <rect x="20" y="100" width="1000" height="66" rx="12" fill="#f0edff" stroke="#d9d2ff"/>
+          <rect x="20" y="184" width="1000" height="66" rx="12" fill="#eaf8f0" stroke="#c8ecd5"/>
+          <rect x="20" y="268" width="1000" height="66" rx="12" fill="#fff5e8" stroke="#f7ddb6"/>
+        </g>
+        <g font-size="13" font-weight="700" fill="#3a3a3c">
+          <text x="38" y="55">表现层</text><text x="38" y="139">应用层</text><text x="38" y="223">领域层</text><text x="38" y="307">基础设施层</text>
+        </g>
+        <g text-anchor="middle" font-size="12.5" fill="#1d1d1f">
+          <g>
+            <rect x="170" y="30" width="180" height="38" rx="8" fill="#fff" stroke="#b8d2ff"/>
+            <rect x="380" y="30" width="180" height="38" rx="8" fill="#fff" stroke="#b8d2ff"/>
+            <rect x="590" y="30" width="180" height="38" rx="8" fill="#fff" stroke="#b8d2ff"/>
+            <text x="260" y="54">Web 工作台</text><text x="470" y="54">iOS App</text><text x="680" y="54">Android App</text>
+          </g>
+          <g>
+            <rect x="170" y="114" width="230" height="38" rx="8" fill="#fff" stroke="#d2c9ff"/>
+            <rect x="430" y="114" width="230" height="38" rx="8" fill="#fff" stroke="#d2c9ff"/>
+            <text x="285" y="138">API 网关 · 鉴权限流</text><text x="545" y="138">业务编排 · 用例聚合</text>
+          </g>
+          <g>
+            <rect x="170" y="198" width="170" height="38" rx="8" fill="#fff" stroke="#bfe6cd"/>
+            <rect x="370" y="198" width="170" height="38" rx="8" fill="#fff" stroke="#bfe6cd"/>
+            <rect x="570" y="198" width="170" height="38" rx="8" fill="#fff" stroke="#bfe6cd"/>
+            <text x="255" y="222">用户域</text><text x="455" y="222">订单域</text><text x="655" y="222">商品域</text>
+          </g>
+          <g>
+            <rect x="170" y="282" width="170" height="38" rx="8" fill="#fff" stroke="#f2d6a8"/>
+            <rect x="370" y="282" width="170" height="38" rx="8" fill="#fff" stroke="#f2d6a8"/>
+            <rect x="570" y="282" width="170" height="38" rx="8" fill="#fff" stroke="#f2d6a8"/>
+            <text x="255" y="306">MySQL</text><text x="455" y="306">Redis 缓存</text><text x="655" y="306">消息队列</text>
+          </g>
+        </g>
+        <g stroke="#8e8e93" stroke-width="1.3" marker-end="url(#ar1)" fill="none">
+          <path d="M900,286 L900,258"/><path d="M900,202 L900,174"/><path d="M900,118 L900,90"/>
+        </g>
+        <text x="916" y="150" font-size="11.5" fill="#8e8e93">上层调用下层</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>什么时候画：</b>新项目定边界、技术评审、给非技术同事讲系统全貌。<b>别塞：</b>接口细节、数据库字段。</div>
+</div>
+
+<!-- 2 时序图 -->
+<div class="card" id="g-seq">
+  <div class="card-head">
+    <h2><span class="num">2</span>时序图 <span class="tag">动态 · 怎么走</span></h2>
+    <p>回答「一次交互中，消息按什么时间顺序在对象之间传递」。纵轴是时间，横轴是参与者。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 392" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#007aff"/></marker>
+      <marker id="ar2b" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <g text-anchor="middle" font-size="12.5" fill="#1d1d1f">
+          <rect x="40" y="16" width="110" height="34" rx="9" fill="#eef4ff" stroke="#b8d2ff"/><text x="95" y="38">用户</text>
+          <rect x="240" y="16" width="110" height="34" rx="9" fill="#eef4ff" stroke="#b8d2ff"/><text x="295" y="38">前端</text>
+          <rect x="440" y="16" width="110" height="34" rx="9" fill="#f0edff" stroke="#d2c9ff"/><text x="495" y="38">API 网关</text>
+          <rect x="640" y="16" width="110" height="34" rx="9" fill="#eaf8f0" stroke="#bfe6cd"/><text x="695" y="38">订单服务</text>
+          <rect x="840" y="16" width="110" height="34" rx="9" fill="#fff5e8" stroke="#f2d6a8"/><text x="895" y="38">数据库</text>
+        </g>
+        <g stroke="#c7c7cc" stroke-width="1" stroke-dasharray="4 4">
+          <path d="M95,50 L95,372"/><path d="M295,50 L295,372"/><path d="M495,50 L495,372"/><path d="M695,50 L695,372"/><path d="M895,50 L895,372"/>
+        </g>
+        <rect x="688" y="150" width="14" height="92" rx="4" fill="#007aff" opacity=".14"/>
+        <g font-size="11.5" fill="#3a3a3c">
+          <text x="105" y="78">提交订单</text>
+          <text x="305" y="116">POST /orders</text>
+          <text x="505" y="154">鉴权后转发</text>
+          <text x="705" y="192">INSERT order</text>
+          <text x="760" y="230">写入成功</text>
+          <text x="515" y="268">201 Created</text>
+          <text x="315" y="306">下单成功</text>
+          <text x="115" y="344">显示结果</text>
+        </g>
+        <g stroke-width="1.4" fill="none" marker-end="url(#ar2)">
+          <path d="M95,70 L290,70"/><path d="M295,108 L490,108"/><path d="M495,146 L690,146"/>
+        </g>
+        <g stroke-width="1.4" fill="none" marker-end="url(#ar2b)">
+          <path d="M695,184 L890,184"/><path d="M895,222 L700,222"/><path d="M695,260 L500,260"/>
+          <path d="M495,298 L300,298"/><path d="M295,336 L100,336"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>什么时候画：</b>理清跨服务调用链、排查"谁先谁后"的时序 bug、设计接口交互。<b>要点：</b>实线是同步调用，虚线常表示返回。</div>
+</div>
+
+<!-- 3 流程图 -->
+<div class="card" id="g-flow">
+  <div class="card-head">
+    <h2><span class="num">3</span>流程图 <span class="tag">动态 · 怎么判</span></h2>
+    <p>回答「从开始到结束经过哪些步骤与判断」。菱形是判断，矩形是动作，最能表达分支逻辑。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 300" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="12.5" text-anchor="middle">
+        <rect x="30" y="118" width="96" height="44" rx="22" fill="#1d1d1f"/><text x="78" y="145" fill="#fff">开始</text>
+        <rect x="176" y="118" width="130" height="44" rx="9" fill="#eef4ff" stroke="#b8d2ff"/><text x="241" y="145" fill="#1d1d1f">提交订单</text>
+        <polygon points="410,100 480,140 410,180 340,140" fill="#fff5e8" stroke="#f2d6a8"/><text x="410" y="145" fill="#1d1d1f">库存充足？</text>
+        <rect x="540" y="52" width="140" height="44" rx="9" fill="#eaf8f0" stroke="#bfe6cd"/><text x="610" y="79" fill="#1d1d1f">创建订单</text>
+        <rect x="730" y="52" width="120" height="44" rx="9" fill="#eaf8f0" stroke="#bfe6cd"/><text x="790" y="79" fill="#1d1d1f">发起支付</text>
+        <rect x="540" y="190" width="140" height="44" rx="9" fill="#fff" stroke="#f2d6a8"/><text x="610" y="217" fill="#1d1d1f">提示缺货</text>
+        <rect x="920" y="52" width="94" height="44" rx="22" fill="#1d1d1f"/><text x="967" y="79" fill="#fff">结束</text>
+        <rect x="920" y="190" width="94" height="44" rx="22" fill="#1d1d1f"/><text x="967" y="217" fill="#fff">结束</text>
+        <g stroke="#8e8e93" stroke-width="1.3" fill="none" marker-end="url(#ar3)">
+          <path d="M126,140 L172,140"/><path d="M306,140 L336,140"/>
+          <path d="M480,128 L536,74"/><path d="M680,74 L726,74"/><path d="M850,74 L916,74"/>
+          <path d="M410,182 L410,214 L536,214"/><path d="M680,214 L916,214"/>
+        </g>
+        <text x="505" y="96" fill="#34c759" font-size="11" font-weight="700">是</text>
+        <text x="466" y="205" fill="#ff9500" font-size="11" font-weight="700">否</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>什么时候画：</b>梳理业务规则、算法步骤、异常分支。<b>和时序图的区别：</b>流程图看重"判断与分支"，时序图看重"谁在什么时候发给谁"。</div>
+</div>
+
+<!-- 4 类图 -->
+<div class="card" id="g-class">
+  <div class="card-head">
+    <h2><span class="num">4</span>类图 <span class="tag">静态 · 面向对象</span></h2>
+    <p>回答「有哪些类、各自的属性与方法、类之间如何关联与继承」。是面向对象设计的核心图。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 372" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar4" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#5856d6"/></marker>
+      <marker id="ar4h" markerWidth="12" markerHeight="12" refX="10" refY="4" orient="auto"><path d="M0,1 L10,4 L0,7 Z" fill="none" stroke="#5856d6" stroke-width="1.2"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <g font-size="13">
+          <rect x="60" y="30" width="230" height="132" rx="4" fill="#fff" stroke="#5856d6" stroke-width="1.4"/>
+          <rect x="60" y="30" width="230" height="32" fill="#efedff"/><text x="175" y="51" text-anchor="middle" font-weight="700" fill="#3a2fa0">User</text>
+          <text x="74" y="82" font-size="12" fill="#3a3a3c">+ id : Long</text><text x="74" y="102" font-size="12" fill="#3a3a3c">+ name : String</text>
+          <line x1="60" y1="114" x2="290" y2="114" stroke="#e5e5ea"/>
+          <text x="74" y="136" font-size="12" fill="#6e6e73">+ getOrders() : List</text><text x="74" y="154" font-size="12" fill="#6e6e73">+ changeName()</text>
+
+          <rect x="420" y="30" width="250" height="150" rx="4" fill="#fff" stroke="#5856d6" stroke-width="1.4"/>
+          <rect x="420" y="30" width="250" height="32" fill="#efedff"/><text x="545" y="51" text-anchor="middle" font-weight="700" fill="#3a2fa0">Order</text>
+          <text x="434" y="82" font-size="12" fill="#3a3a3c">+ id : Long</text><text x="434" y="102" font-size="12" fill="#3a3a3c">+ userId : Long</text><text x="434" y="122" font-size="12" fill="#3a3a3c">+ amount : BigDecimal</text>
+          <line x1="420" y1="134" x2="670" y2="134" stroke="#e5e5ea"/>
+          <text x="434" y="156" font-size="12" fill="#6e6e73">+ addItem(item)</text><text x="434" y="174" font-size="12" fill="#6e6e73">+ pay() : boolean</text>
+
+          <rect x="790" y="30" width="220" height="132" rx="4" fill="#fff" stroke="#5856d6" stroke-width="1.4"/>
+          <rect x="790" y="30" width="220" height="32" fill="#efedff"/><text x="900" y="51" text-anchor="middle" font-weight="700" fill="#3a2fa0">OrderItem</text>
+          <text x="804" y="82" font-size="12" fill="#3a3a3c">+ productId : Long</text><text x="804" y="102" font-size="12" fill="#3a3a3c">+ qty : int</text>
+          <line x1="790" y1="114" x2="1010" y2="114" stroke="#e5e5ea"/>
+          <text x="804" y="136" font-size="12" fill="#6e6e73">+ subtotal()</text>
+
+          <rect x="420" y="258" width="250" height="66" rx="4" fill="#fff" stroke="#8e8e93" stroke-width="1.4"/>
+          <rect x="420" y="258" width="250" height="28" fill="#f2f2f7"/><text x="545" y="277" text-anchor="middle" font-weight="700" fill="#3a3a3c">«abstract» BaseEntity</text>
+          <text x="434" y="310" font-size="12" fill="#6e6e73">+ createdAt / updatedAt</text>
+        </g>
+        <g stroke="#5856d6" stroke-width="1.3" fill="none">
+          <path d="M290,86 L416,86" marker-end="url(#ar4)"/><path d="M670,86 L786,86" marker-end="url(#ar4)"/>
+          <path d="M545,180 L545,254" marker-end="url(#ar4h)"/>
+        </g>
+        <g font-size="11.5" fill="#5856d6">
+          <text x="330" y="78">1</text><text x="360" y="78">*</text>
+          <text x="710" y="78">1</text><text x="740" y="78">*</text>
+          <text x="558" y="222">继承</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>什么时候画：</b>领域建模、代码结构设计、评审类职责是否清晰。<b>读图：</b>空心三角是继承，普通箭头是关联，数字表示多重性。</div>
+</div>
+
+<!-- 5 ER 图 -->
+<div class="card" id="g-er">
+  <div class="card-head">
+    <h2><span class="num">5</span>ER 图 <span class="tag">静态 · 数据模型</span></h2>
+    <p>回答「要存哪些实体、实体之间是什么关系」。数据库建模的基础，关注数据而不是行为。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 310" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar5" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" text-anchor="middle">
+        <rect x="70" y="106" width="170" height="78" rx="8" fill="#eef4ff" stroke="#007aff" stroke-width="1.4"/>
+        <text x="155" y="136" font-size="14" font-weight="700" fill="#1d1d1f">用户</text>
+        <text x="155" y="160" font-size="11.5" fill="#6e6e73">id · name · phone</text>
+
+        <polygon points="430,145 480,108 530,145 480,182" fill="#fff5e8" stroke="#ff9500" stroke-width="1.4"/>
+        <text x="480" y="150" font-size="13" fill="#b26b00">下单</text>
+
+        <rect x="590" y="106" width="170" height="78" rx="8" fill="#eaf8f0" stroke="#34c759" stroke-width="1.4"/>
+        <text x="675" y="136" font-size="14" font-weight="700" fill="#1d1d1f">订单</text>
+        <text x="675" y="160" font-size="11.5" fill="#6e6e73">id · amount · time</text>
+
+        <polygon points="810,145 850,108 890,145 850,182" fill="#fff5e8" stroke="#ff9500" stroke-width="1.4"/>
+        <text x="850" y="150" font-size="13" fill="#b26b00">包含</text>
+
+        <rect x="920" y="106" width="100" height="78" rx="8" fill="#f0edff" stroke="#5856d6" stroke-width="1.4"/>
+        <text x="970" y="140" font-size="13" font-weight="700" fill="#1d1d1f">商品</text>
+        <text x="970" y="160" font-size="11" fill="#6e6e73">id · price</text>
+
+        <g stroke="#8e8e93" stroke-width="1.3" fill="none">
+          <path d="M240,145 L426,145"/><path d="M534,145 L586,145"/><path d="M760,145 L806,145"/><path d="M894,145 L916,145"/>
+        </g>
+        <g font-size="12" font-weight="700" fill="#007aff">
+          <text x="300" y="136">1</text><text x="378" y="136">N</text>
+          <text x="710" y="136">N</text><text x="900" y="200">M</text>
+        </g>
+        <text x="520" y="262" font-size="12.5" fill="#6e6e73">矩形＝实体　菱形＝关系　连线两端标注基数（1 : N / N : M）</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>什么时候画：</b>设计数据库表结构、梳理业务实体关系。<b>和类图的区别：</b>ER 图描述"数据怎么存、怎么关联"，不描述方法行为。</div>
+</div>
+
+<!-- 6 状态机图 -->
+<div class="card" id="g-state">
+  <div class="card-head">
+    <h2><span class="num">6</span>状态机图 <span class="tag">动态 · 状态变化</span></h2>
+    <p>回答「一个对象能处于哪些状态、什么事件触发状态跳转」。特别适合订单、审批这类有明确生命周期的对象。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 286" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar6" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#007aff"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <circle cx="30" cy="62" r="8" fill="#1d1d1f"/>
+        <g font-size="13" text-anchor="middle" fill="#1d1d1f">
+          <rect x="70" y="38" width="140" height="48" rx="12" fill="#fff5e8" stroke="#ff9500" stroke-width="1.4"/><text x="140" y="67">待支付</text>
+          <rect x="300" y="38" width="140" height="48" rx="12" fill="#eef4ff" stroke="#007aff" stroke-width="1.4"/><text x="370" y="67">已支付</text>
+          <rect x="530" y="38" width="140" height="48" rx="12" fill="#f0edff" stroke="#5856d6" stroke-width="1.4"/><text x="600" y="67">已发货</text>
+          <rect x="760" y="38" width="140" height="48" rx="12" fill="#eaf8f0" stroke="#34c759" stroke-width="1.4"/><text x="830" y="67">已完成</text>
+          <rect x="300" y="180" width="140" height="48" rx="12" fill="#f2f2f7" stroke="#8e8e93" stroke-width="1.4"/><text x="370" y="209">已取消</text>
+          <rect x="530" y="180" width="140" height="48" rx="12" fill="#f2f2f7" stroke="#8e8e93" stroke-width="1.4"/><text x="600" y="209">已退款</text>
+        </g>
+        <g stroke="#007aff" stroke-width="1.4" fill="none" marker-end="url(#ar6)">
+          <path d="M38,62 L66,62"/><path d="M210,62 L296,62"/><path d="M440,62 L526,62"/><path d="M670,62 L756,62"/>
+        </g>
+        <g stroke="#8e8e93" stroke-width="1.3" fill="none" stroke-dasharray="4 3" marker-end="url(#ar6)">
+          <path d="M140,86 L140,176"/><path d="M370,86 L370,176"/>
+        </g>
+        <g font-size="11" fill="#6e6e73" text-anchor="middle">
+          <text x="253" y="54">支付成功</text><text x="483" y="54">发货</text><text x="713" y="54">确认收货</text>
+          <text x="150" y="136">超时/取消</text><text x="382" y="136">申请退款</text>
+        </g>
+        <circle cx="930" cy="62" r="9" fill="none" stroke="#1d1d1f" stroke-width="2"/>
+        <path d="M900,62 L917,62" stroke="#1d1d1f" stroke-width="1.4" marker-end="url(#ar6)"/>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>什么时候画：</b>订单、工单、审批流等状态驱动的功能；防止出现"不可能的状态"。<b>要点：</b>实心圆是起点，双圈是终点。</div>
+</div>
+
+<!-- 7 用例图 -->
+<div class="card" id="g-usecase">
+  <div class="card-head">
+    <h2><span class="num">7</span>用例图 <span class="tag">静态 · 功能边界</span></h2>
+    <p>回答「谁在用系统、系统对外提供哪些功能」。用于划定系统边界和角色权限，不涉及实现顺序。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 356" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar7" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" text-anchor="middle">
+        <rect x="230" y="30" width="580" height="296" rx="18" fill="#fbfbfe" stroke="#c7c7cc" stroke-width="1.4" stroke-dasharray="6 4"/>
+        <text x="520" y="58" font-size="13" font-weight="700" fill="#6e6e73">电商系统（系统边界）</text>
+        <g fill="#eef4ff" stroke="#007aff" stroke-width="1.3" font-size="12.5" fill-opacity="1">
+          <ellipse cx="370" cy="120" rx="82" ry="30" fill="#eef4ff" stroke="#007aff"/>
+          <ellipse cx="370" cy="230" rx="82" ry="30" fill="#eef4ff" stroke="#007aff"/>
+          <ellipse cx="570" cy="120" rx="82" ry="30" fill="#eaf8f0" stroke="#34c759"/>
+          <ellipse cx="570" cy="230" rx="82" ry="30" fill="#eaf8f0" stroke="#34c759"/>
+          <ellipse cx="770" cy="175" rx="82" ry="30" fill="#f0edff" stroke="#5856d6"/>
+        </g>
+        <g font-size="12.5" fill="#1d1d1f">
+          <text x="370" y="125">登录</text><text x="370" y="235">浏览商品</text>
+          <text x="570" y="125">下单</text><text x="570" y="235">支付</text><text x="770" y="180">查看订单</text>
+        </g>
+        <g transform="translate(110,160)" stroke="#1d1d1f" stroke-width="1.6" fill="none">
+          <circle cx="0" cy="-26" r="10"/><path d="M0,-16 L0,6 M-12,-8 L12,-8 M0,6 L-10,26 M0,6 L10,26"/>
+        </g>
+        <text x="110" y="216" font-size="12.5" fill="#1d1d1f">用户</text>
+        <g transform="translate(930,160)" stroke="#1d1d1f" stroke-width="1.6" fill="none">
+          <circle cx="0" cy="-26" r="10"/><path d="M0,-16 L0,6 M-12,-8 L12,-8 M0,6 L-10,26 M0,6 L10,26"/>
+        </g>
+        <text x="930" y="216" font-size="12.5" fill="#1d1d1f">管理员</text>
+        <g stroke="#8e8e93" stroke-width="1.2" fill="none" marker-end="url(#ar7)">
+          <path d="M138,168 L286,120"/><path d="M138,176 L286,230"/>
+          <path d="M902,168 L854,175"/>
+        </g>
+        <path d="M452,120 L488,120" stroke="#8e8e93" stroke-width="1.2" stroke-dasharray="3 2" fill="none"/>
+        <text x="520" y="316" font-size="12" fill="#6e6e73">小人＝参与者　椭圆＝用例　虚线框＝系统边界</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>什么时候画：</b>需求初期梳理功能范围、识别不同角色能做什么。<b>注意：</b>用例只说"做什么"，不说"怎么做"。</div>
+</div>
+
+<script>
+(function(){
+  document.querySelectorAll('.fig').forEach(function(fig){
+    var svg=fig.querySelector('svg'); if(!svg)return;
+    var scale=1,tx=0,ty=0;
+    function apply(){svg.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')';}
+    fig.addEventListener('wheel',function(e){
+      e.preventDefault();
+      var r=fig.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+      var f=e.deltaY<0?1.12:1/1.12,ns=Math.min(5,Math.max(.6,scale*f));
+      tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;apply();
+    },{passive:false});
+    var drag=false,sx=0,sy=0,ox=0,oy=0;
+    fig.addEventListener('pointerdown',function(e){drag=true;sx=e.clientX;sy=e.clientY;ox=tx;oy=ty;try{fig.setPointerCapture(e.pointerId)}catch(err){}});
+    fig.addEventListener('pointermove',function(e){if(!drag)return;tx=ox+(e.clientX-sx);ty=oy+(e.clientY-sy);apply();});
+    fig.addEventListener('pointerup',function(){drag=false;});
+    fig.addEventListener('pointercancel',function(){drag=false;});
+    fig.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>

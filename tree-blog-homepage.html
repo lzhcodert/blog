@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>一棵树 · 博客主页</title>
+<meta name="description" content="文章树导航：每片叶子是一篇博客文章。">
+<style>
+/* ============ 主题变量（支持浅色/深色） ============ */
+:root{
+  --bg:#ffffff; --fg:#1c1c1e; --fg2:#6e6e73; --fg3:#a1a1a6;
+  --border:#e5e5ea; --card:#fafafa; --hover:#f2f2f7;
+  --accent:#007aff; --accent-soft:#eaf3ff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#141416; --fg:#f2f2f7; --fg2:#a1a1a6; --fg3:#6e6e73;
+    --border:#333337; --card:#1d1d20; --hover:#262629;
+    --accent:#0a84ff; --accent-soft:#1c2b40;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--fg);line-height:1.6;-webkit-font-smoothing:antialiased;
+  max-width:1120px;margin:0 auto;padding:32px 20px 64px;
+  transition:background .2s ease,color .2s ease;
+}
+a{color:inherit}
+
+/* ============ 头部 ============ */
+.site-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.site-title{font-size:24px;font-weight:650;letter-spacing:-.4px}
+.site-title span{font-weight:400;color:var(--fg3);font-size:14px;margin-left:8px;letter-spacing:0}
+.site-sub{font-size:13px;color:var(--fg3);margin-top:2px}
+.site-stats{display:flex;gap:14px;font-size:12px;color:var(--fg3);white-space:nowrap;align-items:center}
+.site-stats b{font-weight:600;color:var(--fg2);font-variant-numeric:tabular-nums}
+
+/* 搜索 */
+.search{position:relative;width:220px;flex:none}
+.search .si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--fg3);pointer-events:none}
+.search input{width:100%;height:34px;border:1px solid var(--border);background:var(--card);border-radius:9px;padding:0 30px 0 32px;font-size:13px;outline:none;color:var(--fg)}
+.search input::placeholder{color:var(--fg3)}
+.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,122,255,.12)}
+.search .clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:18px;height:18px;border:0;border-radius:50%;background:var(--fg3);color:var(--bg);font-size:12px;line-height:18px;text-align:center;cursor:pointer;padding:0}
+
+/* ============ 树舞台 ============ */
+.stage-scroll{position:relative;overflow-x:auto;border:1px solid var(--border);border-radius:16px;
+  background:radial-gradient(ellipse at 50% 118%,rgba(0,122,255,.07),transparent 68%);}
+.stage{position:relative;min-width:760px}
+#tree-svg{display:block;width:100%;height:auto}
+#tip{
+  position:absolute;opacity:0;pointer-events:none;z-index:3;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:9px 12px;font-size:12px;color:var(--fg2);width:236px;
+  box-shadow:0 8px 28px rgba(0,0,0,.12);transition:opacity .14s ease;
+}
+#tip .tt{font-weight:600;color:var(--fg);font-size:13px;line-height:1.4;margin-bottom:5px}
+#tip .tm{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg3);margin-bottom:5px}
+#tip .te{font-size:11.5px;color:var(--fg2);line-height:1.5}
+.swipe-hint{display:none;text-align:center;font-size:11px;color:var(--fg3);padding:6px 0 0}
+
+/* 图例筛选 */
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0;align-items:center}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  border:1px solid var(--border);border-radius:999px;padding:5px 13px;
+  background:transparent;color:var(--fg2);font-size:12.5px;font-family:inherit;
+  transition:color .15s ease,border-color .15s ease,background .15s ease;
+}
+.chip:hover{color:var(--fg);border-color:var(--fg3)}
+.chip.on{color:var(--fg);border-color:var(--fg);background:var(--hover)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.chip-all{margin-left:auto;border:0;background:none;color:var(--fg3);font-size:12px;padding:5px 2px}
+.chip-all:hover{color:var(--accent)}
+
+/* 树上元素 */
+.leaf,.lbl{cursor:pointer}
+.leaf-scale{transition:transform .18s cubic-bezier(.2,.8,.2,1);transform-box:fill-box;transform-origin:center}
+.leaf:hover .leaf-scale,.leaf.sel .leaf-scale{transform:scale(1.32)}
+.leaf .halo{fill:none;stroke-width:1.5;opacity:0;transition:opacity .2s ease}
+.leaf:hover .halo,.leaf.sel .halo{opacity:.6}
+.leaf:focus{outline:none}
+.leaf:focus-visible .halo{opacity:.95;stroke:var(--fg)}
+.lbl{transition:fill .15s ease,opacity .25s ease;font-size:11.5px;fill:var(--fg2);font-family:inherit}
+.lbl:hover,.lbl.sel{fill:var(--fg);font-weight:600}
+.dim{opacity:.08;pointer-events:none}
+.branch-main{stroke-linecap:round;opacity:.62}
+.branch-twig{stroke-linecap:round;opacity:.5}
+
+/* 选中文章卡片 */
+.post-card{
+  border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:13px;background:var(--card);
+  padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:18px;
+  min-height:104px;transition:border-color .2s ease;
+}
+.pc-main{min-width:0}
+.pc-meta{display:flex;gap:11px;align-items:center;font-size:11.5px;color:var(--fg3);margin-bottom:5px;flex-wrap:wrap}
+.pc-meta .tag{display:inline-flex;align-items:center;gap:5px}
+.pc-title{font-size:17px;font-weight:650;line-height:1.4;letter-spacing:-.2px}
+.pc-ex{font-size:13px;color:var(--fg2);margin-top:5px;line-height:1.55}
+.pc-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+.pc-embed{font-size:11px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:3px 8px}
+.pc-read{text-decoration:none;background:var(--fg);color:var(--bg);border-radius:9px;padding:8px 15px;font-size:13px;transition:opacity .15s ease;white-space:nowrap}
+.pc-read:hover{opacity:.82}
+.pc-empty{font-size:13px;color:var(--fg3)}
+
+/* 文章列表（按年月分组，SEO / 无脚本回退 / 移动端正文共用） */
+.list-head{margin-top:30px;font-size:13px;color:var(--fg3);display:flex;justify-content:space-between;align-items:baseline}
+.group{margin-top:14px}
+.month{font-size:12px;font-weight:600;color:var(--fg3);margin-bottom:5px;letter-spacing:.3px}
+.post-list{list-style:none;border-top:1px solid var(--border)}
+.post-item{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s ease}
+.post-item:hover{background:var(--hover)}
+.post-item.sel .pl-title{color:var(--accent);font-weight:600}
+.pl-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.pl-date{font-size:12px;color:var(--fg3);flex:none;font-variant-numeric:tabular-nums;width:42px}
+.pl-title{font-size:14px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;color:inherit}
+.pl-cat{font-size:11.5px;color:var(--fg3);flex:none}
+.pl-em{font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;line-height:15px;flex:none}
+.empty{padding:40px 20px;text-align:center;color:var(--fg3);font-size:13px}
+
+.foot{margin-top:34px;font-size:11px;color:var(--fg3);text-align:center}
+
+/* 窄屏：树保留为可横向滚动的紧凑视图 */
+@media (max-width:760px){
+  body{padding:22px 14px 48px}
+  .site-head{align-items:flex-start}
+  .search{width:100%}
+  .site-stats{width:100%;justify-content:flex-start}
+  .stage{min-width:700px}
+  .swipe-hint{display:block}
+  .post-card{padding:14px;gap:12px}
+  .pc-side{gap:6px}
+  .pl-cat{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="site-head">
+  <div>
+    <h1 class="site-title">一棵树<span>每片叶子是一篇文章</span></h1>
+    <p class="site-sub">悬停叶片看摘要 · 点选读全文 · 图例与搜索可筛选</p>
+  </div>
+  <div class="search">
+    <svg class="si" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.2 4.2" stroke-linecap="round"/></svg>
+    <input id="search" type="search" placeholder="搜索标题、分类或摘要" autocomplete="off" aria-label="搜索文章">
+    <button class="clear" id="clear" type="button" hidden aria-label="清空搜索">×</button>
+  </div>
+  <div class="site-stats" id="stats"></div>
+</header>
+
+<!-- 文章树 -->
+<div class="stage-scroll" id="stage-scroll">
+  <div class="stage">
+    <svg id="tree-svg" viewBox="0 0 1000 480" role="img" aria-label="博客文章树">
+      <defs>
+        <linearGradient id="trunkGrad" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stop-color="#8a8a90"/><stop offset="1" stop-color="#b3b3b9"/>
+        </linearGradient>
+        <filter id="leafShadow" x="-60%" y="-60%" width="220%" height="220%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-opacity=".18"/>
+        </filter>
+      </defs>
+    </svg>
+    <div id="tip"></div>
+  </div>
+</div>
+<div class="swipe-hint">← 左右滑动查看整棵树 →</div>
+
+<div class="legend" id="legend"></div>
+<article class="post-card" id="post-card" aria-live="polite"></article>
+
+<h2 class="list-head"><span>全部文章</span><span id="shown-count"></span></h2>
+<div id="groups"></div>
+<div class="empty" id="empty" hidden>没有匹配的文章。</div>
+
+<noscript>
+  <ul class="post-list">
+    <li class="post-item"><span class="pl-dot" style="background:#1d9e75"></span><span class="pl-date">11-25</span><a class="pl-title" href="file:///D:/blog/最新博客归档目录/new_ai_blog/2026-11-25-浦发银行CRM系统架构.md">浦发银行 CRM 系统架构：三条通道与一条数据主链</a><span class="pl-cat">技术</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#007aff"></span><span class="pl-date">11-18</span><a class="pl-title" href="file:///D:/blog/最新博客归档目录/new_ai_blog/2026-11-18-留白不是空白.md">留白不是空白：长文的呼吸感从哪里来</a><span class="pl-cat">设计</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#5ac8fa"></span><span class="pl-date">11-12</span><a class="pl-title" href="file:///D:/blog/最新博客归档目录/new_ai_blog/2026-11-12-iframe安全边界.md">用 iframe 承载交互内容的安全边界</a><span class="pl-cat">前端</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#ff9500"></span><span class="pl-date">11-05</span><a class="pl-title" href="file:///D:/blog/最新博客归档目录/new_ai_blog/2026-11-05-嵌入图表.md">把图表与演示稿直接放进文章</a><span class="pl-cat">工具</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#007aff"></span><span class="pl-date">10-24</span><a class="pl-title" href="file:///D:/blog/最新博客归档目录/new_ai_blog/2026-10-24-字体网格.md">字体、网格与安静的界面</a><span class="pl-cat">设计</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#af52de"></span><span class="pl-date">09-30</span><a class="pl-title" href="file:///D:/blog/最新博客归档目录/new_ai_blog/2026-09-30-深夜短句.md">深夜写下的短句</a><span class="pl-cat">随笔</span></li>
+  </ul>
+</noscript>
+
+<footer class="foot">一棵树 · 静态博客主页 · 纯 HTML / SVG / JS，构建时注入文章数据，无需后端</footer>
+
+<!-- ================================================================
+     数据注入区
+     构建时（Hugo / Hexo / VitePress ……）用模板循环替换下面两个数组。
+     文章字段：url 链接, t 标题, date 完整日期(YYYY-MM-DD), m 阅读分钟数,
+               c 分类id, ex 摘要, em 嵌入图数量(可选)
+     当前为 new_ai_blog 目录的真实文章数据。
+     ================================================================ -->
+<script>
+/* __DATA_START__ */
+var POST_BASE = 'file:///D:/blog/最新博客归档目录/new_ai_blog/';
+window.__CATS__ = [
+  { id:'tech', n:'技术', color:'#1d9e75' }
+];
+window.__POSTS__ = [
+  { url:POST_BASE+'2026-11-25-浦发银行CRM系统架构.md', c:'tech',
+    t:'浦发银行 CRM 系统架构：三条通道与一条数据主链', date:'2026-11-25', m:14, em:2,
+    ex:'从两份对话整理文档出发，梳理 CRM 与数仓、数据集市之间的调用关系、数据摆渡与触发机制。' },
+  { url:POST_BASE+'2026-11-18-留白不是空白.md', c:'design',
+    t:'留白不是空白：长文的呼吸感从哪里来', date:'2026-11-18', m:6,
+    ex:'从行高、段间距到图片节奏，拆解那些让长文读起来不累的细节。' },
+  { url:POST_BASE+'2026-11-12-iframe安全边界.md', c:'frontend',
+    t:'用 iframe 承载交互内容的安全边界', date:'2026-11-12', m:9,
+    ex:'一份关于 sandbox、srcdoc 与跨域通信的实用笔记。' },
+  { url:POST_BASE+'2026-11-05-嵌入图表.md', c:'tool',
+    t:'把图表与演示稿直接放进文章', date:'2026-11-05', m:5, em:1,
+    ex:'嵌入 HTML 的实际使用方式，以及它和博客主体样式的隔离。' },
+  { url:POST_BASE+'2026-10-24-字体网格.md', c:'design',
+    t:'字体、网格与安静的界面', date:'2026-10-24', m:6,
+    ex:'偏向 iOS 的排版规则，如何在博客里保持克制而清晰。' },
+  { url:POST_BASE+'2026-09-30-深夜短句.md', c:'essay',
+    t:'深夜写下的短句', date:'2026-09-30', m:3,
+    ex:'一些没有主题的碎片，留给偶然翻到这里的人。' }
+];
+/* __DATA_END__ */
+</script>
+
+<script>
+(function(){
+'use strict';
+var CATS = window.__CATS__, POSTS = window.__POSTS__;
+var NS = 'http://www.w3.org/2000/svg', RAD = Math.PI/180;
+
+POSTS.forEach(function(p){
+  p.d = p.date.slice(5);
+  p.ym = p.date.slice(0,4) + ' 年 ' + p.date.slice(5,7) + ' 月';
+  p._ok = true;
+});
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function catOf(id){ for (var i=0;i<CATS.length;i++) if (CATS[i].id===id) return CATS[i]; return CATS[0]; }
+function el(n,attrs){ var e=document.createElementNS(NS,n); for (var k in attrs) e.setAttribute(k,attrs[k]); return e; }
+function rand(s){ var x=Math.sin(s*9301+49297)*233280; return x-Math.floor(x); }
+function bezPt(p0,p1,p2,p3,t){
+  var u=1-t;
+  return {
+    x:u*u*u*p0.x+3*u*u*t*p1.x+3*u*t*t*p2.x+t*t*t*p3.x,
+    y:u*u*u*p0.y+3*u*u*t*p1.y+3*u*t*t*p2.y+t*t*t*p3.y
+  };
+}
+
+/* ---------- 头部统计 ---------- */
+/* 只有已有文章的分类才算活跃分类，空的基础分类不占位也不计数 */
+var activeCats=CATS.filter(function(c){ return POSTS.some(function(p){ return p.c===c.id; }); });
+var last = POSTS.reduce(function(a,b){ return a.date>b.date?a:b; });
+document.getElementById('stats').innerHTML =
+  '<span><b>'+POSTS.length+'</b> 篇文章</span>' +
+  '<span><b>'+activeCats.length+'</b> 个分类</span>' +
+  '<span>更新于 '+last.d+'</span>';
+
+/* ---------- 图层 ---------- */
+var svg=document.getElementById('tree-svg'), tip=document.getElementById('tip');
+/* 画布视口：由 fitCanvas() 按树的实际边界自动扩展，新增分类无需手改 viewBox */
+var VB={x:0,y:0,w:1000,h:480};
+var gGround=el('g',{}), gTrunk=el('g',{}), gBranch=el('g',{}), gLeaf=el('g',{}), gLabel=el('g',{});
+svg.appendChild(gGround); svg.appendChild(gTrunk); svg.appendChild(gBranch); svg.appendChild(gLeaf); svg.appendChild(gLabel);
+
+/* ---------- 地面与草丛 ---------- */
+gGround.appendChild(el('ellipse',{cx:501,cy:461,rx:112,ry:7,fill:'var(--fg3)',opacity:.12}));
+gGround.appendChild(el('line',{x1:398,y1:458,x2:604,y2:458,stroke:'var(--fg3)','stroke-width':1.5,'stroke-linecap':'round',opacity:.4}));
+[430,582,458].forEach(function(x){
+  gGround.appendChild(el('path',{
+    d:'M'+x+',458 Q'+(x-3)+',449 '+(x-6)+',443 M'+(x+2)+',458 Q'+(x+5)+',448 '+(x+8)+',442',
+    fill:'none',stroke:'var(--fg3)','stroke-width':1.5,'stroke-linecap':'round',opacity:.45
+  }));
+});
+
+/* ---------- 主树干：高度随分类（分支）数量动态升高 ----------
+   新增一个分类 → 主干向上延伸 BRANCH_GAP，并在新高度抽出一根新分支 */
+/* 只有已有文章的分类才占分支位，避免新增空分类让主干空长一截 */
+var CAT_N=activeCats.length;
+var BASE_Y=458, LOWEST_BRANCH_Y=392, BRANCH_GAP=30, TIP_EXTRA=34;
+var TRUNK_TOP_Y=LOWEST_BRANCH_Y-(CAT_N-1)*BRANCH_GAP-TIP_EXTRA;
+
+function trunkX(y){
+  var h=BASE_Y-y;
+  return 501 + h*0.012 + Math.sin(h/60)*1.5;
+}
+function trunkPath(topY){
+  var segs=16, left=[], right=[], ys=[];
+  for (var i=0;i<=segs;i++){
+    var y=BASE_Y-(BASE_Y-topY)*(i/segs), t=i/segs, hw=15-(15-2.5)*t;
+    ys.push(y); left.push((trunkX(y)-hw).toFixed(1)); right.push((trunkX(y)+hw).toFixed(1));
+  }
+  var d='M'+left[0]+','+BASE_Y;
+  for (var i=1;i<=segs;i++) d+=' L'+left[i]+','+ys[i].toFixed(1);
+  for (var i=segs;i>=0;i--) d+=' L'+right[i]+','+ys[i].toFixed(1);
+  return d+' Z';
+}
+gTrunk.appendChild(el('path',{d:trunkPath(TRUNK_TOP_Y),fill:'url(#trunkGrad)'}));
+
+/* 主干顶端的树梢小叶 */
+['#7fb069','#8bc34a','#9ccc65'].forEach(function(c,i){
+  decorLeaf(trunkX(TRUNK_TOP_Y)+(i-1)*5, TRUNK_TOP_Y+2, -90+(i-1)*28, c, 700+i);
+});
+
+/* ---------- 分支规格：沿主干自下而上依次抽出 ----------
+   低处分支更长更平展，高处更短更上扬，形成自然圆锥树冠 */
+function makeBoughSpecs(n){
+  var specs=[];
+  for (var i=0;i<n;i++){
+    /* 左右交替抽枝，越往上越收拢——自然的圆锥树冠，新增分类自动续接 */
+    var level=Math.floor(i/2), side=(i%2===0?-1:1);
+    var spread=Math.max(18,62-level*10);
+    specs.push({
+      y:LOWEST_BRANCH_Y-i*BRANCH_GAP,
+      ang:-90+side*spread,
+      len:Math.max(64,112-level*12)
+    });
+  }
+  return specs;
+}
+var BOUGHS=makeBoughSpecs(CAT_N);
+
+/* 主枝：先沿接近垂直的方向起笔，再弧线向外——树的舒展感 */
+function bough(sp,angDeg,len,w,color){
+  var a=angDeg*RAD;
+  var end={x:sp.x+Math.cos(a)*len, y:sp.y+Math.sin(a)*len};
+  var liftDeg=angDeg + (angDeg<-90?28:(angDeg>-90?-28:0));
+  var l=liftDeg*RAD;
+  var c1={x:sp.x+Math.cos(l)*len*0.42, y:sp.y+Math.sin(l)*len*0.42};
+  var c2={x:end.x-Math.cos(a)*len*0.30, y:end.y-Math.sin(a)*len*0.30};
+  gBranch.appendChild(el('path',{
+    d:'M'+sp.x.toFixed(1)+','+sp.y.toFixed(1)+' C'+c1.x.toFixed(1)+','+c1.y.toFixed(1)+' '+c2.x.toFixed(1)+','+c2.y.toFixed(1)+' '+end.x.toFixed(1)+','+end.y.toFixed(1),
+    fill:'none',stroke:color,'stroke-width':w,'stroke-linecap':'round','class':'branch-main'
+  }));
+  return {p0:sp,p1:c1,p2:c2,p3:end};
+}
+
+/* 细枝：二次贝塞尔，轻微弯曲 */
+function twig(sp,angDeg,len,color){
+  var a=angDeg*RAD;
+  var end={x:sp.x+Math.cos(a)*len, y:sp.y+Math.sin(a)*len};
+  var l=(angDeg+(angDeg<-90?18:-18))*RAD;
+  var c1={x:sp.x+Math.cos(l)*len*0.5, y:sp.y+Math.sin(l)*len*0.5};
+  gBranch.appendChild(el('path',{
+    d:'M'+sp.x.toFixed(1)+','+sp.y.toFixed(1)+' Q'+c1.x.toFixed(1)+','+c1.y.toFixed(1)+' '+end.x.toFixed(1)+','+end.y.toFixed(1),
+    fill:'none',stroke:'var(--fg3)','stroke-width':2,'stroke-linecap':'round','class':'branch-twig'
+  }));
+  return end;
+}
+
+/* ---------- 叶片 ---------- */
+/* 水滴形叶：基部在原点，尖端朝 +x，靠外层 g 定位与旋转 */
+var LEAF_D='M0,0 C5,-7 16,-9 26,0 C16,9 5,7 0,0 Z';
+var LEAF_D_SM='M0,0 C3,-4.5 8,-6 14,0 C8,6 3,4.5 0,0 Z';
+
+function decorLeaf(x,y,angDeg,color,seed){
+  var sc=0.8+rand(seed*1.7)*0.5;
+  var g=el('g',{transform:'translate('+x.toFixed(1)+' '+y.toFixed(1)+') rotate('+angDeg.toFixed(1)+') scale('+sc.toFixed(2)+')',opacity:(0.34+rand(seed)*0.22).toFixed(2)});
+  g.appendChild(el('path',{d:LEAF_D_SM,fill:color}));
+  gLeaf.appendChild(g);
+}
+
+function articleLeaf(p,cat,bx,by,angDeg){
+  var g=el('g',{'class':'leaf','data-cat':cat.id,tabindex:'0',role:'button',
+    'aria-label':p.t+'，'+cat.n+'，'+p.d});
+  var pos=el('g',{transform:'translate('+bx.toFixed(1)+' '+by.toFixed(1)+') rotate('+angDeg.toFixed(1)+')'});
+  var sc=el('g',{'class':'leaf-scale'});
+  sc.appendChild(el('ellipse',{'class':'halo',cx:13,cy:0,rx:17,ry:11,stroke:cat.color}));
+  sc.appendChild(el('path',{'class':'core',d:LEAF_D,fill:cat.color,filter:'url(#leafShadow)'}));
+  sc.appendChild(el('path',{'class':'vein',d:'M3,0 L22,0',stroke:'#fff','stroke-width':1,opacity:.45,fill:'none','stroke-linecap':'round'}));
+  pos.appendChild(sc); g.appendChild(pos); gLeaf.appendChild(g);
+  return g;
+}
+
+/* 标签：放在叶片尖端外侧，沿叶片朝向 */
+function labelFor(p,bx,by,angDeg){
+  var ar=angDeg*RAD;
+  var tipX=bx+Math.cos(ar)*26, tipY=by+Math.sin(ar)*26;
+  var dx=Math.cos(ar), dyv=Math.sin(ar);
+  var anchor = dx>0.3 ? 'start' : (dx<-0.3 ? 'end' : 'middle');
+  var dy = anchor!=='middle' ? 4 : (dyv>0?15:-9);
+  var t=el('text',{'class':'lbl',x:tipX.toFixed(1),y:tipY.toFixed(1),dy:dy,
+    'text-anchor':anchor,tabindex:'0',role:'button','aria-label':'阅读：'+p.t});
+  t.textContent=p.t;
+  gLabel.appendChild(t);
+  return t;
+}
+
+/* ---------- 组装树 ---------- */
+var leaves=[], listItems=[], selected=null;
+
+activeCats.forEach(function(cat,ci){
+  var posts=POSTS.filter(function(p){ return p.c===cat.id; });
+  if (!posts.length || !BOUGHS[ci]) return;
+  var spec=BOUGHS[ci];
+  var sp={x:trunkX(spec.y), y:spec.y};
+  var b=bough(sp, spec.ang, spec.len, 5, cat.color);
+
+  /* 主枝沿线密集装饰叶（不可交互），交替两侧、朝向蓬松，形成茂密树冠 */
+  [0.38,0.54,0.70,0.85].forEach(function(tt,di){
+    var pt=bezPt(b.p0,b.p1,b.p2,b.p3,tt);
+    var side=(di%2?-1:1);
+    var jit=(rand(ci*17+di)-0.5)*40;
+    decorLeaf(pt.x, pt.y, spec.ang+side*(32+rand(ci+di*3)*30)+jit, cat.color, ci*13+di+1);
+    if (di%2===0){ /* 隔一个点位在对侧再补一片 */
+      var jit2=(rand(ci*23+di)-0.5)*40;
+      decorLeaf(pt.x, pt.y, spec.ang-side*(30+rand(ci+di*5)*28)+jit2, cat.color, ci*19+di+2);
+    }
+  });
+  /* 主枝末端一小簇 */
+  var tipPt=bezPt(b.p0,b.p1,b.p2,b.p3,0.96);
+  decorLeaf(tipPt.x, tipPt.y, spec.ang-22+(rand(ci*3+5)-0.5)*24, cat.color, ci*11+3);
+  decorLeaf(tipPt.x, tipPt.y, spec.ang+22+(rand(ci*3+9)-0.5)*24, cat.color, ci*11+4);
+
+  posts.forEach(function(p,k){
+    var spread = posts.length>1 ? (k-(posts.length-1)/2)*34 : 0;
+    var twigAng = spec.ang + spread;
+    var startPt = bezPt(b.p0,b.p1,b.p2,b.p3, posts.length>1 ? 0.72 : 0.82);
+    var end = twig(startPt, twigAng, 30+rand(k+ci*2)*8, cat.color);
+
+    /* 细枝上 2 片装饰叶，围绕枝条两侧 */
+    [0.35,0.68].forEach(function(ft,fi){
+      var px=startPt.x+(end.x-startPt.x)*ft, py=startPt.y+(end.y-startPt.y)*ft;
+      var side=(fi%2?-1:1);
+      decorLeaf(px, py, twigAng+side*(28+rand(k+fi*2)*26)+(rand(k*3+ci*5+fi)-0.5)*24, cat.color, k+ci*13+fi+7);
+    });
+
+    /* 文章叶 */
+    var leafAng = twigAng + (rand(k*5+ci*3+1)-0.5)*24;
+    var g=articleLeaf(p,cat,end.x,end.y,leafAng);
+    var t=labelFor(p,end.x,end.y,leafAng);
+
+    function showTip(){
+      tip.innerHTML='<div class="tt">'+esc(p.t)+'</div>'+
+        '<div class="tm"><span class="dot" style="background:'+cat.color+'"></span>'+cat.n+
+        ' · '+p.d+' · '+p.m+' 分钟'+(p.em?' · '+p.em+' 张图':'')+'</div>'+
+        '<div class="te">'+esc(p.ex)+'</div>';
+      var r=svg.getBoundingClientRect(), s=r.width/VB.w;
+      var left=(end.x-VB.x)*s+14, top=(end.y-VB.y)*s-10;
+      tip.style.left=Math.max(6,Math.min(left,r.width-244))+'px';
+      tip.style.top=Math.max(4,top)+'px';
+      tip.style.opacity=1;
+    }
+    function hideTip(){ tip.style.opacity=0; }
+    function onKey(e){ if (e.key==='Enter'||e.key===' '){ e.preventDefault(); select(p); } }
+
+    g.addEventListener('mouseenter',showTip); g.addEventListener('mouseleave',hideTip);
+    t.addEventListener('mouseenter',showTip); t.addEventListener('mouseleave',hideTip);
+    g.addEventListener('click',function(){ select(p); });
+    t.addEventListener('click',function(){ select(p); });
+    g.addEventListener('keydown',onKey); t.addEventListener('keydown',onKey);
+    g.addEventListener('focus',showTip); g.addEventListener('blur',hideTip);
+    t.addEventListener('focus',showTip); t.addEventListener('blur',hideTip);
+
+    leaves.push({g:g,t:t,p:p});
+  });
+});
+
+/* ---------- 标签避让：分支密集时向下错开，避免标题互相压盖 ---------- */
+function avoidLabelOverlap(){
+  var placed=[];
+  var sorted=leaves.slice().sort(function(a,b){
+    return (+a.t.getAttribute('y'))-(+b.t.getAttribute('y'));
+  });
+  sorted.forEach(function(L){
+    var t=L.t, step=0;
+    while (step<10){
+      var b;
+      try { b=t.getBBox(); } catch(e){ return; }
+      var hit=false;
+      for (var i=0;i<placed.length;i++){
+        var p=placed[i];
+        if (b.x<p.x+p.w+3 && b.x+b.w+3>p.x && b.y<p.y+p.h+2 && b.y+b.h+2>p.y){ hit=true; break; }
+      }
+      if (!hit){ placed.push({x:b.x,y:b.y,w:b.w,h:b.h}); break; }
+      t.setAttribute('y', (+t.getAttribute('y'))+14);
+      step++;
+    }
+  });
+}
+
+/* ---------- 自适应画布：按树的实际边界扩展 viewBox ----------
+   内容变高（新增分类/分支）时向上扩展 y 与 height，左右保持不小于 1000，
+   树始终完整可见且不被压小；tip 坐标也随 VB 换算。 */
+function fitCanvas(){
+  var box;
+  try { box=svg.getBBox(); } catch(e){ return; }
+  if (!box || !box.width || !box.height) return;
+  var padX=46, padTop=34, padBottom=30;
+  var x0=Math.min(0, box.x-padX);
+  var y0=Math.min(0, box.y-padTop);
+  var x1=Math.max(1000, box.x+box.width+padX);
+  var y1=Math.max(480, box.y+box.height+padBottom);
+  VB.x=x0; VB.y=y0; VB.w=x1-x0; VB.h=y1-y0;
+  svg.setAttribute('viewBox', VB.x+' '+VB.y+' '+VB.w+' '+VB.h);
+}
+
+/* ---------- 图例筛选 ---------- */
+var legend=document.getElementById('legend'), activeCat=null;
+activeCats.forEach(function(cat){
+  var b=document.createElement('button');
+  b.className='chip'; b.dataset.cat=cat.id;
+  b.innerHTML='<span class="dot" style="background:'+cat.color+'"></span>'+cat.n+
+    ' · '+POSTS.filter(function(p){return p.c===cat.id}).length;
+  b.addEventListener('click',function(){
+    activeCat = activeCat===cat.id ? null : cat.id;
+    syncUI();
+  });
+  legend.appendChild(b);
+});
+var allBtn=document.createElement('button');
+allBtn.className='chip chip-all'; allBtn.textContent='清除筛选'; allBtn.hidden=true;
+allBtn.addEventListener('click',function(){
+  activeCat=null; document.getElementById('search').value=''; syncUI();
+});
+legend.appendChild(allBtn);
+
+/* ---------- 文章列表（按年月分组） ---------- */
+var groupsBox=document.getElementById('groups'), ymOrder=[];
+POSTS.slice().sort(function(a,b){ return a.date<b.date?1:-1; }).forEach(function(p){
+  if (ymOrder.indexOf(p.ym)<0) ymOrder.push(p.ym);
+});
+ymOrder.forEach(function(ym){
+  var sec=document.createElement('section'); sec.className='group'; sec.dataset.ym=ym;
+  var h=document.createElement('h2'); h.className='month'; h.textContent=ym;
+  var ul=document.createElement('ul'); ul.className='post-list';
+  sec.appendChild(h); sec.appendChild(ul); groupsBox.appendChild(sec);
+});
+POSTS.slice().sort(function(a,b){ return a.date<b.date?1:-1; }).forEach(function(p){
+  var cat=catOf(p.c), sec=groupsBox.querySelector('[data-ym="'+p.ym+'"] .post-list');
+  var li=document.createElement('li');
+  li.className='post-item'; li.dataset.url=p.url;
+  li.innerHTML='<span class="pl-dot" style="background:'+cat.color+'"></span>'+
+    '<span class="pl-date">'+p.d+'</span>'+
+    '<a class="pl-title" href="'+p.url+'" target="_blank" rel="noopener">'+esc(p.t)+'</a>'+
+    (p.em?'<span class="pl-em">'+p.em+' 图</span>':'')+
+    '<span class="pl-cat">'+cat.n+'</span>';
+  li.addEventListener('click',function(e){
+    if (e.target.tagName==='A') return;
+    e.preventDefault(); select(p);
+  });
+  sec.appendChild(li); listItems.push({li:li,p:p});
+});
+
+/* ---------- 筛选联动 ---------- */
+var search=document.getElementById('search'), clearBtn=document.getElementById('clear');
+var shownCount=document.getElementById('shown-count'), emptyBox=document.getElementById('empty');
+function syncUI(){
+  var q=search.value.trim().toLowerCase();
+  clearBtn.hidden=!q;
+  allBtn.hidden=!activeCat && !q;
+  var chips=legend.querySelectorAll('.chip[data-cat]');
+  for (var j=0;j<chips.length;j++) chips[j].classList.toggle('on',chips[j].dataset.cat===activeCat);
+
+  var total=0;
+  leaves.forEach(function(L){
+    var p=L.p, cat=catOf(p.c);
+    var hay=(p.t+' '+cat.n+' '+p.ex+' '+p.date).toLowerCase();
+    p._ok=(!activeCat||p.c===activeCat) && (!q||hay.indexOf(q)>-1);
+    L.g.classList.toggle('dim',!p._ok); L.t.classList.toggle('dim',!p._ok);
+    if (p._ok) total++;
+  });
+  listItems.forEach(function(it){ it.li.hidden=!it.p._ok; });
+  [].forEach.call(groupsBox.querySelectorAll('.group'),function(g){
+    g.hidden = !g.querySelector('.post-item:not([hidden])');
+  });
+  shownCount.textContent=total+' / '+POSTS.length+' 篇';
+  emptyBox.hidden=total!==0;
+  if (selected && !selected._ok) clearSelect();
+}
+search.addEventListener('input',syncUI);
+clearBtn.addEventListener('click',function(){ search.value=''; syncUI(); search.focus(); });
+
+/* ---------- 选中卡片 ---------- */
+var card=document.getElementById('post-card');
+function clearSelect(){
+  selected=null;
+  leaves.forEach(function(L){ L.g.classList.remove('sel'); L.t.classList.remove('sel'); });
+  listItems.forEach(function(it){ it.li.classList.remove('sel'); });
+  card.style.borderLeftColor='var(--accent)';
+  card.innerHTML='<div class="pc-main"><div class="pc-empty">点选树上的叶片，查看文章摘要。</div></div>';
+}
+function select(p){
+  selected=p;
+  var cat=catOf(p.c);
+  leaves.forEach(function(L){ var on=L.p===p; L.g.classList.toggle('sel',on); L.t.classList.toggle('sel',on); });
+  listItems.forEach(function(it){ it.li.classList.toggle('sel',it.p===p); });
+  card.style.borderLeftColor=cat.color;
+  card.innerHTML=
+    '<div class="pc-main">'+
+      '<div class="pc-meta"><span class="tag"><span class="dot" style="background:'+cat.color+'"></span>'+cat.n+'</span>'+
+        '<span>'+p.date+'</span><span>'+p.m+' 分钟阅读</span>'+
+        (p.em?'<span>'+p.em+' 张嵌入图</span>':'')+'</div>'+
+      '<h2 class="pc-title">'+esc(p.t)+'</h2>'+
+      '<p class="pc-ex">'+esc(p.ex)+'</p>'+
+    '</div>'+
+    '<div class="pc-side">'+
+      (p.em?'<span class="pc-embed">含交互内容</span>':'')+
+      '<a class="pc-read" href="'+p.url+'" target="_blank" rel="noopener">阅读全文 →</a>'+
+    '</div>';
+  tip.style.opacity=0;
+}
+
+avoidLabelOverlap();
+fitCanvas();
+syncUI();
+clearSelect();
+})();
+</script>
+</body>
+</html>

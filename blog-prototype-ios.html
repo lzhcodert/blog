@@ -47,7 +47,8 @@ main{max-width:2000px;margin:0 auto;padding-top:14px;padding-bottom:48px}
 .dot{width:7px;height:7px;border-radius:50%;flex:none;background:#8e8e93}
 .dot.design{background:#007aff}.dot.frontend{background:#5ac8fa}.dot.essay{background:#8e8e93}
 .dot.efficiency{background:#ff9500}.dot.tool{background:#1d9e75}.dot.reading{background:#af52de}
-.title{font-size:14px;line-height:1.35;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title{font-size:14px;line-height:1.35;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:inherit;text-decoration:none;cursor:pointer}
+.title:hover{color:var(--blue)}
 .meta{font-size:12px;color:var(--faint);white-space:nowrap;flex:none}
 .embed-strip{margin:0 16px 10px 33px;padding:7px 10px;border-radius:8px;background:var(--blue-soft);color:var(--blue);font-size:11px;cursor:pointer;user-select:none}
 .embed-panel{margin:0 16px 12px 33px;border:.5px solid var(--line);border-radius:10px;overflow:hidden}
@@ -92,6 +93,7 @@ main{max-width:2000px;margin:0 auto;padding-top:14px;padding-bottom:48px}
       <button class="chip" data-cat="效率">效率</button>
       <button class="chip" data-cat="工具">工具</button>
       <button class="chip" data-cat="阅读">阅读</button>
+      <button class="chip" data-cat="技术">技术</button>
     </div>
     <span class="count" id="count">9 篇</span>
   </div>
@@ -189,11 +191,13 @@ main{max-width:2000px;margin:0 auto;padding-top:14px;padding-bottom:48px}
   document.addEventListener('click', function(e){
     var strip = e.target.closest('.embed-strip');
     if (!strip) return;
+    if (e.target.closest('.embed-open')) return; // 弹窗按钮不触发展开
     var panel = document.getElementById(strip.dataset.embed);
     if (!panel) return;
     var open = panel.hidden;
     panel.hidden = !open;
-    strip.textContent = open ? '嵌入 HTML 内容预览 · 点击收起' : '嵌入 HTML 内容预览 · 点击展开';
+    var label = strip.querySelector('.strip-label');
+    if (label) label.textContent = label.textContent.replace(/点击(展开|收起)/, open ? '点击收起' : '点击展开');
   });
 
   apply();
