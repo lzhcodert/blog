@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MCP Client 与 Server · 关系与从零构建</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 40px}
+  .hero{background:linear-gradient(135deg,#5856d6,#0a84ff 60%,#34c759);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.6;opacity:.93}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;margin-left:6px;font-weight:500}
+  .fig{overflow:hidden;background:#fcfcfd;touch-action:none;cursor:grab}
+  .fig:active{cursor:grabbing}
+  .fig svg{display:block;width:100%;height:auto;transform-origin:0 0;user-select:none}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.6}
+  .foot b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Client 与 Server 到底什么关系？</h1>
+  <p>一张图看懂 Host / Client / Server 三者分工、它们之间怎么说话，以及如何用官方 SDK 从零写一个自己的 MCP Server。滚轮缩放、拖拽平移、双击复位。</p>
+</div>
+<div class="hint"><span><b>滚轮</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span><span>博客弹窗里可放大查看细节</span></div>
+<div class="nav">
+  <a href="#c1">三者关系</a><a href="#c2">1:1 连接</a><a href="#c3">两层与 JSON-RPC</a><a href="#c4">从零构建六步</a><a href="#c5">三种能力</a>
+</div>
+
+<!-- 1 三者关系 -->
+<div class="card" id="c1">
+  <div class="card-head">
+    <h2><span class="num">1</span>Host、Client、Server 各有分工 <span class="tag">关系</span></h2>
+    <p>Host 是你在用的 AI 应用；Client 是 Host 内部专门维护一条连接的组件；Server 是提供能力和数据的程序。模型只跟 Client 对话，Client 再去找对应的 Server。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 320" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="34" width="992" height="252" rx="16" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="62" font-size="14" font-weight="700" fill="#0a58ca">MCP Host（AI 应用，如 WorkBuddy / Claude Desktop）</text>
+        <rect x="48" y="82" width="420" height="186" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="68" y="108" font-size="13" font-weight="700" fill="#3a2a7a">Host 内部</text>
+        <rect x="68" y="122" width="380" height="54" rx="10" fill="#fff" stroke="#d2c8ff"/>
+        <text x="84" y="145" font-size="13" font-weight="700" fill="#1d1d1f">LLM 模型</text>
+        <text x="84" y="165" font-size="11.5" fill="#6e6e73">负责「想」：判断该调用哪个工具</text>
+        <rect x="68" y="190" width="380" height="60" rx="10" fill="#fff" stroke="#d2c8ff"/>
+        <text x="84" y="214" font-size="13" font-weight="700" fill="#1d1d1f">MCP Client</text>
+        <text x="84" y="234" font-size="11.5" fill="#6e6e73">负责「传」：把模型的意图翻译成标准请求</text>
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#a1)" fill="none">
+          <path d="M258,176 L258,188"/>
+        </g>
+        <g stroke="#8e8e93" stroke-width="1.6" marker-end="url(#a1)" fill="none">
+          <path d="M448,220 L596,220"/>
+        </g>
+        <text x="470" y="210" font-size="11.5" fill="#6e6e73">JSON-RPC</text>
+        <rect x="600" y="90" width="396" height="180" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="620" y="116" font-size="14" font-weight="700" fill="#1d7a45">MCP Server（提供能力的程序）</text>
+        <rect x="620" y="132" width="356" height="42" rx="9" fill="#fff" stroke="#bfe8cf"/>
+        <text x="636" y="159" font-size="12.5" fill="#1d1d1f">Tools · 可被调用的函数</text>
+        <rect x="620" y="184" width="356" height="42" rx="9" fill="#fff" stroke="#bfe8cf"/>
+        <text x="636" y="211" font-size="12.5" fill="#1d1d1f">Resources · 可读的数据</text>
+        <rect x="620" y="236" width="356" height="26" rx="9" fill="#fff" stroke="#bfe8cf"/>
+        <text x="636" y="254" font-size="12.5" fill="#1d1d1f">Prompts · 可复用的模板</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>关键：</b>MCP 只规定 Client 与 Server 之间「怎么说话」，不规定 Host 怎么用 LLM。模型不认识 Server，Server 也不用知道是谁在调它。</div>
+</div>
+
+<!-- 2 1:1 连接 -->
+<div class="card" id="c2">
+  <div class="card-head">
+    <h2><span class="num">2</span>一个 Client 对一条连接，一个 Server 可服务多个 Client <span class="tag">连接</span></h2>
+    <p>Host 每接一个 Server，就创建一个 Client，两者之间是专属连接（dedicated connection）。但一个远程 Server 可以同时服务很多 Client——「一对一」说的是连接，不是 Server 的容量。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 300" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="12.5">
+        <rect x="24" y="30" width="330" height="240" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="56" font-size="14" font-weight="700" fill="#0a58ca">MCP Host</text>
+        <g fill="#fff" stroke="#c9dcff">
+          <rect x="44" y="74" width="290" height="48" rx="9"/>
+          <rect x="44" y="138" width="290" height="48" rx="9"/>
+          <rect x="44" y="202" width="290" height="48" rx="9"/>
+        </g>
+        <g fill="#1d1d1f" font-weight="600"><text x="60" y="104">Client 1</text><text x="60" y="168">Client 2</text><text x="60" y="232">Client 3</text></g>
+
+        <g stroke="#8e8e93" stroke-width="1.5" stroke-dasharray="5 4" fill="none">
+          <path d="M334,98 L470,98"/><path d="M334,162 L470,162"/><path d="M334,226 L470,226"/>
+        </g>
+        <text x="360" y="142" font-size="11" fill="#6e6e73">专属连接</text>
+
+        <g>
+          <rect x="474" y="46" width="250" height="104" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <text x="494" y="74" font-size="13" font-weight="700" fill="#1d7a45">本地 Server（stdio）</text>
+          <text x="494" y="98" font-size="11.5" fill="#6e6e73">通常只服务一个 Client</text>
+          <text x="494" y="122" font-size="11.5" fill="#6e6e73">进程级通信，无网络开销</text>
+          <rect x="474" y="166" width="250" height="104" rx="12" fill="#fff5e8" stroke="#f7ddb6"/>
+          <text x="494" y="194" font-size="13" font-weight="700" fill="#8a5a00">远程 Server（HTTP）</text>
+          <text x="494" y="218" font-size="11.5" fill="#6e6e73">可同时服务多个 Client</text>
+          <text x="494" y="242" font-size="11.5" fill="#6e6e73">走 HTTP + 鉴权</text>
+        </g>
+        <g stroke="#8e8e93" stroke-width="1.6" fill="none">
+          <path d="M474,98 L420,98"/><path d="M474,162 L420,162"/><path d="M474,226 L420,226"/>
+        </g>
+        <text x="748" y="104" font-size="12" fill="#6e6e73">同一个 Server 程序</text>
+        <text x="748" y="126" font-size="12" fill="#6e6e73">两种 transport</text>
+        <text x="748" y="160" font-size="12" fill="#6e6e73">工具清单完全一样，</text>
+        <text x="748" y="182" font-size="12" fill="#6e6e73">变的只是传输通道。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>类比：</b>Host 像手机，Client 像手机上的一个个 App 图标，Server 像提供服务的服务器。一个 App 连一个服务，但同一台服务器可以被很多 App 访问。</div>
+</div>
+
+<!-- 3 两层与 JSON-RPC -->
+<div class="card" id="c3">
+  <div class="card-head">
+    <h2><span class="num">3</span>两层结构：说什么（Data）和怎么送（Transport） <span class="tag">协议</span></h2>
+    <p>Data layer 用 JSON-RPC 2.0 定义消息格式；Transport layer 负责把消息送过去。换传输方式，消息内容不变——这正是 MCP 能同时支持本地进程和远程服务的原因。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 300" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="30" width="992" height="58" rx="12" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="55" font-size="13.5" font-weight="700" fill="#0a58ca">Transport layer（外层）：stdio / Streamable HTTP · 连接建立 · 消息分帧 · 鉴权</text>
+        <text x="44" y="76" font-size="11.5" fill="#6e6e73">负责「怎么送」：换这里，不影响下面的消息格式</text>
+        <rect x="24" y="102" width="992" height="168" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="44" y="128" font-size="13.5" font-weight="700" fill="#3a2a7a">Data layer（内层）：JSON-RPC 2.0</text>
+        <text x="44" y="150" font-size="11.5" fill="#6e6e73">负责「说什么」：请求 / 响应 / 通知，能力发现与版本协商</text>
+        <g fill="#fff" stroke="#d2c8ff" font-size="12">
+          <rect x="44" y="166" width="220" height="40" rx="8"/><rect x="278" y="166" width="220" height="40" rx="8"/>
+          <rect x="512" y="166" width="220" height="40" rx="8"/><rect x="746" y="166" width="250" height="40" rx="8"/>
+        </g>
+        <g fill="#1d1d1f" text-anchor="middle">
+          <text x="154" y="191">server/discover</text><text x="388" y="191">tools/list</text>
+          <text x="622" y="191">tools/call</text><text x="871" y="191">notifications/*</text>
+        </g>
+        <rect x="44" y="218" width="952" height="38" rx="8" fill="#fafafe" stroke="#e6e2ff"/>
+        <text x="58" y="242" font-size="11.5" fill="#3a2a7a" font-family="monospace">{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add","arguments":{"a":1,"b":2}}}</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>典型流程：</b>Client 先 <b>tools/list</b> 问有哪些工具 → 把清单交给模型 → 模型选中后 <b>tools/call</b> 带参数调用 → Server 执行并返回结果。</div>
+</div>
+
+<!-- 4 从零构建 -->
+<div class="card" id="c4">
+  <div class="card-head">
+    <h2><span class="num">4</span>从 0 到 1：六步写出自己的 Server <span class="tag">实战</span></h2>
+    <p>以官方 Python SDK 为例（Python 3.11+，SDK 2.0+）。类型注解就是入参规范，docstring 就是说明，不用手写 JSON Schema。写完先用 Inspector 调试，再接进 AI 客户端。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 360" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <g>
+          <rect x="24" y="30" width="316" height="96" rx="12" fill="#eef4ff" stroke="#c9dcff"/>
+          <rect x="362" y="30" width="316" height="96" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+          <rect x="700" y="30" width="316" height="96" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <rect x="24" y="150" width="316" height="96" rx="12" fill="#fff5e8" stroke="#f7ddb6"/>
+          <rect x="362" y="150" width="316" height="96" rx="12" fill="#eef9fb" stroke="#bde6ef"/>
+          <rect x="700" y="150" width="316" height="96" rx="12" fill="#f2f2f7" stroke="#d9d9de"/>
+        </g>
+        <g font-size="13" font-weight="700" fill="#1d1d1f">
+          <text x="42" y="56">① 建环境</text><text x="380" y="56">② 建实例</text><text x="718" y="56">③ 写工具</text>
+          <text x="42" y="176">④ 跑起来</text><text x="380" y="176">⑤ 调试</text><text x="718" y="176">⑥ 接入客户端</text>
+        </g>
+        <g font-size="11.5" fill="#6e6e73" font-family="monospace">
+          <text x="42" y="82">uv add "mcp[cli]"</text><text x="380" y="82">mcp = MCPServer("Demo")</text><text x="718" y="82">@mcp.tool()</text>
+          <text x="42" y="104">Python 3.11+</text><text x="380" y="104">from mcp.server import MCPServer</text><text x="718" y="104">def add(a: int, b: int) -&gt; int</text>
+          <text x="42" y="202">mcp.run(transport="stdio")</text><text x="380" y="202">uv run mcp dev server.py</text><text x="718" y="202">写 mcpServers 配置</text>
+          <text x="42" y="224">或 --transport streamable-http</text><text x="380" y="224">在 Inspector 里点调用验证</text><text x="718" y="224">填 command+args 或 url</text>
+        </g>
+        <rect x="24" y="272" width="992" height="68" rx="12" fill="#fff6f6" stroke="#ffd6d6"/>
+        <text x="44" y="298" font-size="13" font-weight="700" fill="#c62828">最大的坑：stdio 模式下千万别 print 到 stdout</text>
+        <text x="44" y="322" font-size="11.5" fill="#8a3b3b">标准输出是 JSON-RPC 的通道，一个 print 就会把协议消息打乱；日志请用 logging 写 stderr（Python）或 console.error（TS）。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>为什么这么简单：</b>SDK 从类型注解和 docstring 自动生成 inputSchema 与能力声明，你只需写「做什么」，协议握手、消息封装、参数校验都由 SDK 处理。</div>
+</div>
+
+<!-- 5 三种能力 -->
+<div class="card" id="c5">
+  <div class="card-head">
+    <h2><span class="num">5</span>Server 能暴露的三类能力 <span class="tag">边界</span></h2>
+    <p>工具（能做什么）、资源（能读到什么）、提示词（能复用什么模板）。每个能力都有对应的发现方法和执行方法，客户端先 list 再 use。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 280" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="13">
+        <rect x="24" y="30" width="316" height="200" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="48" y="62" font-size="15" font-weight="700" fill="#0a58ca">Tools 工具</text>
+        <text x="48" y="92" font-size="12" fill="#6e6e73">可被模型调用的函数</text>
+        <rect x="48" y="108" width="268" height="34" rx="8" fill="#fff" stroke="#c9dcff"/>
+        <text x="60" y="131" font-size="11.5" font-family="monospace" fill="#1d1d1f">tools/list → tools/call</text>
+        <text x="48" y="170" font-size="11.5" fill="#6e6e73">例：查天气、改设置、</text>
+        <text x="48" y="190" font-size="11.5" fill="#6e6e73">写数据库、调用 API</text>
+        <text x="48" y="216" font-size="11.5" fill="#0a58ca">重点：会产生副作用</text>
+
+        <rect x="362" y="30" width="316" height="200" rx="14" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="386" y="62" font-size="15" font-weight="700" fill="#1d7a45">Resources 资源</text>
+        <text x="386" y="92" font-size="12" fill="#6e6e73">可被读取的上下文数据</text>
+        <rect x="386" y="108" width="268" height="34" rx="8" fill="#fff" stroke="#bfe8cf"/>
+        <text x="398" y="131" font-size="11.5" font-family="monospace" fill="#1d1d1f">resources/list → resources/read</text>
+        <text x="386" y="170" font-size="11.5" fill="#6e6e73">例：文件内容、数据库记录、</text>
+        <text x="386" y="190" font-size="11.5" fill="#6e6e73">API 返回结果</text>
+        <text x="386" y="216" font-size="11.5" fill="#1d7a45">用 URI 标识，只读</text>
+
+        <rect x="700" y="30" width="316" height="200" rx="14" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="724" y="62" font-size="15" font-weight="700" fill="#8a5a00">Prompts 提示词</text>
+        <text x="724" y="92" font-size="12" fill="#6e6e73">可复用的交互模板</text>
+        <rect x="724" y="108" width="268" height="34" rx="8" fill="#fff" stroke="#f7ddb6"/>
+        <text x="736" y="131" font-size="11.5" font-family="monospace" fill="#1d1d1f">prompts/list → prompts/get</text>
+        <text x="724" y="170" font-size="11.5" fill="#6e6e73">例：系统提示、few-shot 示例、</text>
+        <text x="724" y="190" font-size="11.5" fill="#6e6e73">固定工作流模板</text>
+        <text x="724" y="216" font-size="11.5" fill="#8a5a00">由用户选择触发</text>
+        <text x="24" y="262" font-size="11.5" fill="#6e6e73">写一个 Server 不必三种全做——只做工具也很常见（官方天气教程就只做了 tools）。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>能力清单就是权限清单：</b>接入别人的 Server 前先看这里，你就知道 AI 最多能做什么、会不会改数据。自己写 Server 时，也只暴露必要的工具。</div>
+</div>
+
+<script>
+(function(){
+  document.querySelectorAll('.fig').forEach(function(fig){
+    var svg=fig.querySelector('svg');
+    var scale=1,tx=0,ty=0;
+    function apply(){svg.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')';}
+    function zoom(f,x,y){
+      var r=fig.getBoundingClientRect();
+      var mx=x-r.left,my=y-r.top,ns=Math.min(5,Math.max(.6,scale*f));
+      tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;apply();
+    }
+    fig.addEventListener('wheel',function(e){e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);},{passive:false});
+    var drag=false,lx=0,ly=0;
+    fig.addEventListener('pointerdown',function(e){drag=true;lx=e.clientX;ly=e.clientY;fig.setPointerCapture(e.pointerId);});
+    fig.addEventListener('pointermove',function(e){if(!drag)return;tx+=e.clientX-lx;ty+=e.clientY-ly;lx=e.clientX;ly=e.clientY;apply();});
+    function up(e){drag=false;try{fig.releasePointerCapture(e.pointerId);}catch(x){}}
+    fig.addEventListener('pointerup',up);fig.addEventListener('pointercancel',up);
+    fig.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
