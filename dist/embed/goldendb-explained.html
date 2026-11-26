@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoldenDB 原理图解 · CN / DN / GTM 与 MySQL 机制</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#0a84ff,#5856d6 58%,#34c759);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.94}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;height:min(64vh,560px);min-height:340px;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  .pz-tip{position:absolute;left:12px;bottom:10px;z-index:5;background:rgba(255,255,255,.9);color:#64748b;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;pointer-events:none}
+  @media(max-width:600px){.pz-viewport{height:58vh;min-height:300px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>GoldenDB 原理图解</h1>
+  <p>七张图讲清：CN / DN / GTM 各管什么，一条 SQL 怎么跑，数据怎么分片，它和 MySQL 哪些地方像，跨分片转账怎么做到不串账，以及 MVCC 为什么读不挡写。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#c1">总览</a><a href="#c2">三个角色</a><a href="#c3">SQL 旅程</a><a href="#c4">分片副本</a><a href="#c5">MySQL 对照</a><a href="#c6">分布式事务</a><a href="#c7">MVCC</a>
+</div>
+
+<!-- 1 总览 -->
+<div class="card" id="c1">
+  <div class="card-head">
+    <h2><span class="num">1</span>一张图看 GoldenDB 的家底 <span class="tag">总览</span></h2>
+    <p>官方白皮书说它由四类节点组成：CN、DN、GTM、管理节点。各节点不共享资源，靠高速网络协作；计算节点无状态多活，数据节点和 GTM 都是主备多副本，所以没有单点。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 360" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m1" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="992" height="312" rx="18" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="44" y="50" font-size="14" font-weight="700" fill="#1d1d1f">应用 App</text>
+        <text x="44" y="70" font-size="11.5" fill="#6e6e73">JDBC / ODBC / MySQL 协议 · 只看到「一个数据库」</text>
+        <rect x="44" y="82" width="952" height="42" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="60" y="108" font-size="12.5" fill="#1d1d1f">业务 SQL：看起来还是熟悉的连接、库表、事务、增删改查</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#m1)" fill="none">
+          <path d="M250,124 L250,150"/><path d="M780,124 L780,150"/>
+        </g>
+
+        <rect x="44" y="154" width="292" height="126" rx="12" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="62" y="180" font-size="14" font-weight="700" fill="#0a58ca">CN 计算节点（多个、对等）</text>
+        <rect x="62" y="194" width="256" height="32" rx="8" fill="#fff" stroke="#c9dcff"/>
+        <text x="76" y="215" font-size="11.5" fill="#1d1d1f">CN-1 · 解析 / 优化 / 路由 / 汇总</text>
+        <rect x="62" y="234" width="256" height="32" rx="8" fill="#fff" stroke="#c9dcff"/>
+        <text x="76" y="255" font-size="11.5" fill="#1d1d1f">CN-2 · 无状态，挂一台换一台</text>
+
+        <rect x="374" y="154" width="272" height="126" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="392" y="180" font-size="14" font-weight="700" fill="#3a2a7a">GTM 全局事务管理器</text>
+        <text x="392" y="206" font-size="11.5" fill="#6e6e73">发全局事务 ID（GTID）</text>
+        <text x="392" y="228" font-size="11.5" fill="#6e6e73">维护活跃事务与全局快照</text>
+        <text x="392" y="258" font-size="11.5" fill="#3a2a7a">一主多备，避免自己成单点</text>
+
+        <rect x="684" y="154" width="312" height="126" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="702" y="180" font-size="14" font-weight="700" fill="#1d7a45">DN 数据节点（分片 + 副本）</text>
+        <rect x="702" y="194" width="276" height="28" rx="7" fill="#fff" stroke="#bfe8cf"/>
+        <text x="716" y="213" font-size="11.5" fill="#1d1d1f">安全组 1：主 DN + 备 DN</text>
+        <rect x="702" y="230" width="276" height="28" rx="7" fill="#fff" stroke="#bfe8cf"/>
+        <text x="716" y="249" font-size="11.5" fill="#1d1d1f">安全组 2：主 DN + 备 DN</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#m1)" fill="none">
+          <path d="M336,208 L374,208"/>
+          <path d="M336,258 L684,230"/>
+          <path d="M646,190 L684,190"/>
+        </g>
+        <text x="340" y="200" font-size="10.5" fill="#6e6e73">协调</text>
+        <text x="470" y="300" font-size="11.5" fill="#6e6e73">GTM 不存业务数据，只管「谁在改、改到哪一步」</text>
+
+        <rect x="300" y="308" width="440" height="22" rx="7" fill="#fff6e8" stroke="#f2d9ae" stroke-dasharray="5 4"/>
+        <text x="316" y="323" font-size="11" fill="#8a5a00">管理节点 Insight：运维 / 元数据 / 监控 / 主备切换（不挡业务流量）</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>别搞混：</b>CN 和 GTM 都在「调度层」，但 CN 管 SQL 怎么执行，GTM 管跨节点事务怎么算数；DN 才是真正放数据的地方。</div>
+</div>
+
+<!-- 2 三个角色 -->
+<div class="card" id="c2">
+  <div class="card-head">
+    <h2><span class="num">2</span>CN / DN / GTM 讲成人话 <span class="tag">类比</span></h2>
+    <p>把集群想成一个大仓库：CN 是前台调度，DN 是仓库和账本，GTM 是发号员兼裁判。应用只跟前台打交道，不用知道货放在哪个货架。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 320" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="28" width="316" height="222" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="58" font-size="15" font-weight="700" fill="#0a58ca">CN · 计算节点</text>
+        <text x="44" y="84" font-size="12.5" font-weight="600" fill="#1d1d1f">大白话：前台 + 调度员</text>
+        <text x="44" y="112" font-size="11.5" fill="#6e6e73">接单：收 SQL</text>
+        <text x="44" y="136" font-size="11.5" fill="#6e6e73">看菜单：解析、逻辑/物理优化</text>
+        <text x="44" y="160" font-size="11.5" fill="#6e6e73">派单：按分片规则找 DN</text>
+        <text x="44" y="184" font-size="11.5" fill="#6e6e73">出餐：汇总、排序、聚合结果</text>
+        <rect x="44" y="204" width="276" height="30" rx="8" fill="#fff" stroke="#c9dcff"/>
+        <text x="56" y="224" font-size="11" fill="#0a58ca">无状态 · 多个 CN 完全对等</text>
+
+        <rect x="362" y="28" width="316" height="222" rx="14" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="382" y="58" font-size="15" font-weight="700" fill="#1d7a45">DN · 数据节点</text>
+        <text x="382" y="84" font-size="12.5" font-weight="600" fill="#1d1d1f">大白话：仓库 + 账本</text>
+        <text x="382" y="112" font-size="11.5" fill="#6e6e73">真存数据，按分片放货</text>
+        <text x="382" y="136" font-size="11.5" fill="#6e6e73">一个安全组：一主多备</text>
+        <text x="382" y="160" font-size="11.5" fill="#6e6e73">主节点读写，备节点可分摊读</text>
+        <text x="382" y="184" font-size="11.5" fill="#6e6e73">副本用改进 raft / gSync 同步</text>
+        <rect x="382" y="204" width="276" height="30" rx="8" fill="#fff" stroke="#bfe8cf"/>
+        <text x="394" y="224" font-size="11" fill="#1d7a45">挂一个备的顶上，数据不丢</text>
+
+        <rect x="700" y="28" width="316" height="222" rx="14" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="720" y="58" font-size="15" font-weight="700" fill="#3a2a7a">GTM · 全局事务管理器</text>
+        <text x="720" y="84" font-size="12.5" font-weight="600" fill="#1d1d1f">大白话：发号员 + 裁判</text>
+        <text x="720" y="112" font-size="11.5" fill="#6e6e73">给每个分布式写事务发 GTID</text>
+        <text x="720" y="136" font-size="11.5" fill="#6e6e73">记录哪些事务正活跃</text>
+        <text x="720" y="160" font-size="11.5" fill="#6e6e73">给 SELECT 一份全局快照</text>
+        <text x="720" y="184" font-size="11.5" fill="#6e6e73">帮 CN 判断「这行能不能读」</text>
+        <rect x="720" y="204" width="276" height="30" rx="8" fill="#fff" stroke="#d2c8ff"/>
+        <text x="732" y="224" font-size="11" fill="#3a2a7a">跨分片不乱套，靠它发号</text>
+
+        <rect x="24" y="266" width="992" height="38" rx="10" fill="#fff6e8" stroke="#f2d9ae"/>
+        <text x="44" y="291" font-size="12.5" fill="#8a5a00"><tspan font-weight="700">一句话：</tspan>CN 决定去哪查，DN 真查真存，GTM 决定跨仓库的动作算不算数。管理节点只是「物业」，不参与点单。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>为什么 CN 无状态很重要：</b>它不存业务数据，所以加机器就能加处理能力；某台 CN 挂了，应用换一台继续访问，不影响数据。</div>
+</div>
+
+<!-- 3 SQL 旅程 -->
+<div class="card" id="c3">
+  <div class="card-head">
+    <h2><span class="num">3</span>一条 SQL 的六站旅程 <span class="tag">执行</span></h2>
+    <p>官方给出的数据流向：应用连到 CN 的服务端口，CN 解析优化后生成分布式执行计划树，把请求下发到对应安全组，DN 本地执行，最后 CN 汇总返回。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 300" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <g stroke="#007aff" stroke-width="1.6" marker-end="url(#m3)" fill="none">
+          <path d="M178,140 L190,140"/><path d="M346,140 L358,140"/><path d="M514,140 L526,140"/><path d="M682,140 L694,140"/><path d="M850,140 L862,140"/>
+        </g>
+        <g font-size="11.5" fill="#1d1d1f">
+          <rect x="22" y="80" width="156" height="120" rx="11" fill="#f2f2f7" stroke="#d1d1d6"/>
+          <text x="36" y="104" font-size="13" font-weight="700" fill="#1d1d1f">① 应用发 SQL</text>
+          <text x="36" y="132" fill="#6e6e73">JDBC / ODBC</text>
+          <text x="36" y="154" fill="#6e6e73">连到 CN 端口</text>
+          <text x="36" y="176" fill="#6e6e73">以为在查一张表</text>
+
+          <rect x="190" y="80" width="156" height="120" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+          <text x="204" y="104" font-size="13" font-weight="700" fill="#0a58ca">② CN 解析优化</text>
+          <text x="204" y="132" fill="#6e6e73">语法解析</text>
+          <text x="204" y="154" fill="#6e6e73">逻辑 / 物理优化</text>
+          <text x="204" y="176" fill="#6e6e73">生成计划树</text>
+
+          <rect x="358" y="80" width="156" height="120" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+          <text x="372" y="104" font-size="13" font-weight="700" fill="#0a58ca">③ 路由到分片</text>
+          <text x="372" y="132" fill="#6e6e73">查分片规则</text>
+          <text x="372" y="154" fill="#6e6e73">id=10086</text>
+          <text x="372" y="176" fill="#6e6e73">→ 安全组 2</text>
+
+          <rect x="526" y="80" width="156" height="120" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <text x="540" y="104" font-size="13" font-weight="700" fill="#1d7a45">④ DN 本地执行</text>
+          <text x="540" y="132" fill="#6e6e73">本地索引 / 过滤</text>
+          <text x="540" y="154" fill="#6e6e73">主库读写</text>
+          <text x="540" y="176" fill="#6e6e73">备库可分摊读</text>
+
+          <rect x="694" y="80" width="156" height="120" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+          <text x="708" y="104" font-size="13" font-weight="700" fill="#3a2a7a">⑤ CN 汇总计算</text>
+          <text x="708" y="132" fill="#6e6e73">归并结果集</text>
+          <text x="708" y="154" fill="#6e6e73">排序 / 聚合 / 分页</text>
+          <text x="708" y="176" fill="#6e6e73">必要时多次交互</text>
+
+          <rect x="862" y="80" width="156" height="120" rx="11" fill="#f2f2f7" stroke="#d1d1d6"/>
+          <text x="876" y="104" font-size="13" font-weight="700" fill="#1d1d1f">⑥ 返回应用</text>
+          <text x="876" y="132" fill="#6e6e73">结果像单机</text>
+          <text x="876" y="154" fill="#6e6e73">应用不改代码</text>
+          <text x="876" y="176" fill="#6e6e73">只看到一张表</text>
+        </g>
+        <rect x="22" y="226" width="996" height="46" rx="10" fill="#fff" stroke="#e5e5ea"/>
+        <text x="40" y="254" font-size="11.5" font-family="monospace" fill="#1d1d1f">select * from account where id = 10086;   -- 前台看着普通，后台可能已经跨了好几台机器</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>像点外卖。你只管下单（SQL），平台接单后决定哪个厨房做（CN 路由），厨房出品（DN 执行），平台把几盒菜拼成一单送到你手上（CN 汇总）。</div>
+</div>
+
+<!-- 4 分片与安全组 -->
+<div class="card" id="c4">
+  <div class="card-head">
+    <h2><span class="num">4</span>数据怎么切：分片 + 安全组 <span class="tag">存储</span></h2>
+    <p>一张大表按哈希、范围、列表、复制或多级策略拆到不同分片；每个分片再做成「一主多备」的安全组，主备之间实时复制。这样既能横向扩展，也不怕单台机器坏。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 360" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m4" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <text x="30" y="38" font-size="14" font-weight="700" fill="#1d1d1f">切之前：一张大表</text>
+        <rect x="30" y="52" width="400" height="132" rx="12" fill="#fff" stroke="#d1d1d6"/>
+        <g fill="#f2f2f7" stroke="#e5e5ea">
+          <rect x="44" y="64" width="372" height="24" rx="5"/><rect x="44" y="92" width="372" height="24" rx="5"/>
+          <rect x="44" y="120" width="372" height="24" rx="5"/><rect x="44" y="148" width="372" height="24" rx="5"/>
+        </g>
+        <g font-size="11" fill="#6e6e73"><text x="56" y="81">id=10001 ...</text><text x="56" y="109">id=10002 ...</text><text x="56" y="137">id=10003 ...</text><text x="56" y="165">id=10004 ...</text></g>
+        <text x="30" y="212" font-size="12.5" fill="#6e6e73">按 id 做哈希 / 按日期做范围 / 按地区做列表……</text>
+
+        <g stroke="#8e8e93" stroke-width="1.6" marker-end="url(#m4)" fill="none">
+          <path d="M430,118 L480,118"/>
+        </g>
+
+        <text x="500" y="38" font-size="14" font-weight="700" fill="#1d7a45">切之后：三个安全组</text>
+        <g font-size="11.5">
+          <rect x="500" y="52" width="510" height="56" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <text x="516" y="76" font-size="12.5" font-weight="700" fill="#1d7a45">安全组 1 · 分片 A</text>
+          <text x="516" y="96" fill="#6e6e73">主 DN（读写） ←→ 备 DN（同步复制，可分摊读）</text>
+
+          <rect x="500" y="118" width="510" height="56" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <text x="516" y="142" font-size="12.5" font-weight="700" fill="#1d7a45">安全组 2 · 分片 B</text>
+          <text x="516" y="162" fill="#6e6e73">主 DN（读写） ←→ 备 DN（同步复制，可分摊读）</text>
+
+          <rect x="500" y="184" width="510" height="56" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <text x="516" y="208" font-size="12.5" font-weight="700" fill="#1d7a45">安全组 3 · 分片 C</text>
+          <text x="516" y="228" fill="#6e6e73">主 DN（读写） ←→ 备 DN（同步复制，可分摊读）</text>
+        </g>
+
+        <rect x="30" y="262" width="980" height="76" rx="12" fill="#fff6e8" stroke="#f2d9ae"/>
+        <text x="48" y="288" font-size="12.5" font-weight="700" fill="#8a5a00">两个容易忽略的细节</text>
+        <text x="48" y="312" font-size="11.5" fill="#6e6e73">· 复制策略：不常改的小表复制到每个分片，跨分片 JOIN 不用满集群找人。</text>
+        <text x="48" y="330" font-size="11.5" fill="#6e6e73">· 全局索引：用非分片字段查数据时，先查「这个字段落在哪片」，避免把 SQL 群发到所有 DN。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>类比：</b>分片是「把货架分到不同仓库」，安全组是「每个仓库都有正本和副本」。正本坏了副本顶上；常用小手册每个仓库都放一份，查起来就不用跨仓跑。</div>
+</div>
+
+<!-- 5 MySQL 对照 -->
+<div class="card" id="c5">
+  <div class="card-head">
+    <h2><span class="num">5</span>和 MySQL 到底哪里像 <span class="tag">兼容</span></h2>
+    <p>官方说的是「兼容 MySQL 语法/协议/特性」「分布式事务借鉴单机事务」，不是「把 MySQL 直接改成分布式」。像的是使用习惯和单机事务功底；多出来的是跨机器调度与一致性。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 360" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="28" width="474" height="280" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="58" font-size="15" font-weight="700" fill="#0a58ca">像 MySQL 的地方（兼容 / 借鉴）</text>
+        <g font-size="11.5" fill="#1d1d1f">
+          <text x="44" y="88">✓ 常用语法、数据类型、函数、自增列</text>
+          <text x="44" y="114">✓ 存储过程、触发器、视图、匿名块</text>
+          <text x="44" y="140">✓ sql_mode 特性、binlog 特性</text>
+          <text x="44" y="166">✓ JDBC / ODBC 等标准驱动与协议</text>
+          <text x="44" y="192">✓ MVCC：读不加锁，读写不冲突</text>
+          <text x="44" y="218">✓ undo 前像：读到「自己该看的旧版本」</text>
+          <text x="44" y="244">✓ 四种隔离级别，推荐 Read Committed</text>
+          <text x="44" y="270">✓ ACID 事务语义、XA 接口</text>
+        </g>
+
+        <rect x="542" y="28" width="474" height="280" rx="14" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="562" y="58" font-size="15" font-weight="700" fill="#8a5a00">GoldenDB 多出来的一层</text>
+        <g font-size="11.5" fill="#1d1d1f">
+          <text x="562" y="88">＋ CN：SQL 解析、优化、分片路由、汇总</text>
+          <text x="562" y="114">＋ DN 分片：一张表拆到多台机器</text>
+          <text x="562" y="140">＋ GTM：全局 GTID 与活跃事务快照</text>
+          <text x="562" y="166">＋ 每行加 GTID 隐含列当「全局锁」</text>
+          <text x="562" y="192">＋ 改进的两阶段提交协调跨片事务</text>
+          <text x="562" y="218">＋ 已提交事务补偿回滚（binlog 反解）</text>
+          <text x="562" y="244">＋ 主备多副本：raft / gSync 同步</text>
+          <text x="562" y="270">＋ 全局索引、广播表、在线数据重分布</text>
+        </g>
+
+        <rect x="232" y="322" width="576" height="28" rx="9" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="248" y="341" font-size="11.5" fill="#3a2a7a">同一套「单机功夫」+ 一群机器上的调度裁判 = 分布式事务型数据库</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>别被「兼容」带偏：</b>官方文档强调的兼容，是让原有 MySQL 应用能少改甚至不改地迁过来；内部怎么分片、怎么协调，是 GoldenDB 自己的设计。</div>
+</div>
+
+<!-- 6 分布式事务 -->
+<div class="card" id="c6">
+  <div class="card-head">
+    <h2><span class="num">6</span>跨分片转账怎么不出错 <span class="tag">事务</span></h2>
+    <p>A、B 两个账户在不同分片，A 给 B 转 50。白皮书的做法是：GTM 发全局 GTID，每行带上这个隐藏列，CN 当协调者，DN 本地执行；万一某片提交失败，就解析 binlog 构造反向 SQL，把已提交的那一笔补偿回来。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 420" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m6" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="992" height="48" rx="11" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="44" y="54" font-size="13" font-weight="700" fill="#1d1d1f">场景：A 账户在安全组 1，B 账户在安全组 2，A 给 B 转 50 元</text>
+
+        <rect x="24" y="96" width="300" height="86" rx="12" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="42" y="122" font-size="13" font-weight="700" fill="#0a58ca">① CN 申请 GTID</text>
+        <text x="42" y="146" font-size="11.5" fill="#6e6e73">事务开始，向 GTM 申请</text>
+        <text x="42" y="166" font-size="11.5" fill="#6e6e73">批量申请，减少来回次数</text>
+
+        <rect x="360" y="96" width="286" height="86" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="378" y="122" font-size="13" font-weight="700" fill="#3a2a7a">② GTM 发号 GTID=9527</text>
+        <text x="378" y="146" font-size="11.5" fill="#6e6e73">登记为活跃事务</text>
+        <text x="378" y="166" font-size="11.5" fill="#6e6e73">维护活跃 GTIDs 快照</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#m6)" fill="none"><path d="M324,138 L360,138"/></g>
+
+        <rect x="682" y="96" width="334" height="86" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="700" y="122" font-size="13" font-weight="700" fill="#1d7a45">③ 每行加 GTID 隐含列</text>
+        <text x="700" y="146" font-size="11.5" fill="#6e6e73">更新数据时同时更新 GTID</text>
+        <text x="700" y="166" font-size="11.5" fill="#6e6e73">它就像这批改动的统一工单号</text>
+
+        <rect x="24" y="214" width="300" height="92" rx="12" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="42" y="240" font-size="13" font-weight="700" fill="#0a58ca">④ CN 当协调者</text>
+        <text x="42" y="264" font-size="11.5" fill="#6e6e73">改进的两阶段提交</text>
+        <text x="42" y="286" font-size="11.5" fill="#6e6e73">协调多个 DN 的本地事务</text>
+
+        <rect x="360" y="214" width="300" height="92" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="378" y="240" font-size="13" font-weight="700" fill="#1d7a45">DN1：A 扣 50</text>
+        <text x="378" y="266" font-size="11.5" fill="#1d1d1f">本地 COMMIT 成功 ✓</text>
+        <text x="378" y="288" font-size="11.5" fill="#6e6e73">行上写 GTID=9527</text>
+
+        <rect x="698" y="214" width="318" height="92" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="716" y="240" font-size="13" font-weight="700" fill="#c62828">DN2：B 加 50</text>
+        <text x="716" y="266" font-size="11.5" fill="#1d1d1f">本地 COMMIT 失败 ✗</text>
+        <text x="716" y="288" font-size="11.5" fill="#6e6e73">假如这里出了岔子</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#m6)" fill="none">
+          <path d="M324,258 L360,258"/><path d="M660,258 L698,258"/>
+        </g>
+
+        <rect x="360" y="336" width="656" height="62" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="378" y="360" font-size="12.5" font-weight="700" fill="#c62828">⑤ 补偿回滚：DBAgent 解析 binlog，找 GTID=9527</text>
+        <text x="378" y="382" font-size="11.5" fill="#6e6e73">构造反向 SQL 下发到 DN1：A 的 -50 被抵掉 → 两个分片回到事务前</text>
+
+        <rect x="24" y="336" width="300" height="62" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="42" y="360" font-size="12.5" font-weight="700" fill="#1d7a45">结果：强一致</text>
+        <text x="42" y="382" font-size="11.5" fill="#6e6e73">要么都成功，要么都回滚</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>两个仓库同时搬货，总部给这次搬运发同一张运单号 9527。其中一个仓库搬砸了，就按运单号把另一个仓库已经搬走的货原样搬回去——所以不会出现「钱扣了、没到账」。</div>
+</div>
+
+<!-- 7 MVCC -->
+<div class="card" id="c7">
+  <div class="card-head">
+    <h2><span class="num">7</span>MVCC：为什么读不用排队等写 <span class="tag">并发</span></h2>
+    <p>官方说 GoldenDB 支持分布式 MVCC：CN 把全局活跃事务列表带到 DN，DN 看数据行上的 GTID。不活跃就直接返回；活跃就顺着 undo 找前像，直到找到全局可见的版本。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 340" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m7" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="28" width="420" height="240" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="58" font-size="14" font-weight="700" fill="#0a58ca">CN 带着「全局快照」来</text>
+        <text x="44" y="88" font-size="11.5" fill="#6e6e73">SELECT 发起时，从 GTM 拿活跃事务清单</text>
+        <rect x="44" y="106" width="380" height="44" rx="9" fill="#fff" stroke="#c9dcff"/>
+        <text x="60" y="134" font-size="12" font-family="monospace" fill="#1d1d1f">active_gtm_gtid_list = [ 101 ]</text>
+        <text x="44" y="178" font-size="12" fill="#1d1d1f">GTID 101 正在写，别让它污染我的读</text>
+        <text x="44" y="206" font-size="12" fill="#1d1d1f">GTID 100 已提交，我可以看它的结果</text>
+        <rect x="44" y="222" width="380" height="30" rx="8" fill="#eaf3ff" stroke="#c9dcff"/>
+        <text x="56" y="242" font-size="11.5" fill="#0a58ca">读不加锁，所以读写不冲突</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#m7)" fill="none"><path d="M444,148 L488,148"/></g>
+
+        <rect x="492" y="28" width="524" height="240" rx="14" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="512" y="58" font-size="14" font-weight="700" fill="#1d7a45">DN 沿版本链找「我能看见的那版」</text>
+        <rect x="512" y="76" width="484" height="52" rx="9" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="528" y="98" font-size="12" font-weight="700" fill="#c62828">v3 · GTID 101（活跃）</text>
+        <text x="528" y="118" font-size="11" fill="#6e6e73">正在改，跳过 → 沿 undo 往前找</text>
+        <rect x="512" y="140" width="484" height="52" rx="9" fill="#eaf8ee" stroke="#bfe8cf"/>
+        <text x="528" y="162" font-size="12" font-weight="700" fill="#1d7a45">v2 · GTID 100（已提交）</text>
+        <text x="528" y="182" font-size="11" fill="#6e6e73">全局可见 → 返回这一版 ✓</text>
+        <rect x="512" y="204" width="484" height="44" rx="9" fill="#fff" stroke="#d1d1d6"/>
+        <text x="528" y="232" font-size="11.5" fill="#6e6e73">v1 · GTID 99（更早的前像，必要时继续回溯）</text>
+
+        <rect x="24" y="286" width="992" height="36" rx="10" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="44" y="310" font-size="12" fill="#3a2a7a"><tspan font-weight="700">关键差别：</tspan>单机 MVCC 看本地活跃事务；GoldenDB 还要把 GTM 的「全局活跃名单」带下来，判断跨节点改动作不算数。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>类比：</b>你读一本正在被修改的账簿。账簿每改一次就贴一张新补丁（undo 前像）。管理员告诉你「101 号修改还没生效」，你就跳过它，看上一版已经盖章生效的账页。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    var tip=document.createElement('div');tip.className='pz-tip';tip.textContent='\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+    vp.appendChild(bar);vp.appendChild(tip);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+      tip.textContent=zoomMode?'\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u518d\u5355\u51fb\u9000\u51fa':'\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6a21\u5f0f\u5185\u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
