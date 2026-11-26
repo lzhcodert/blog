@@ -135,7 +135,7 @@ function splitTableRow(line) {
 
 function isBlockStart(t) {
   return /^```/.test(t) || /^#{1,6}\s/.test(t) || /^\|/.test(t) ||
-    /^[-*]\s+/.test(t) || /^\d+\.\s+/.test(t) || /^>\s?/.test(t) ||
+    /^!\[/.test(t) || /^[-*]\s+/.test(t) || /^\d+\.\s+/.test(t) || /^>\s?/.test(t) ||
     /^(---|\*\*\*|___)$/.test(t);
 }
 
@@ -153,6 +153,19 @@ function renderMarkdown(md, headings) {
       while (i < lines.length && !/^```/.test(lines[i].trim())) { buf.push(lines[i]); i++; }
       i++;
       out.push('<pre><code>' + escapeHtml(buf.join('\n')) + '</code></pre>');
+      continue;
+    }
+
+    // 块级图片：![说明](embed/xxx.png)，相对路径统一改写为详情页可用的 ../ 前缀
+    const img = t.match(/^!\[(.*?)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$/);
+    if (img) {
+      let src = img[2];
+      if (!/^(https?:)?\/\//.test(src) && src.charAt(0) !== '/' && src.indexOf('../') !== 0) {
+        src = '../' + src;
+      }
+      out.push('<figure class="md-figure"><img src="' + escapeHtml(src) + '" alt="' +
+        escapeHtml(img[1]) + '" loading="lazy"><figcaption>' + inlineMd(img[1]) + '</figcaption></figure>');
+      i++;
       continue;
     }
 
@@ -270,6 +283,9 @@ const DETAIL_CSS = `
 .article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
 .article-body th{background:var(--surface-3);font-weight:600}
 .article-body blockquote{margin:0 0 18px;padding:10px 14px;border-left:3px solid var(--blue);background:var(--blue-soft);border-radius:0 8px 8px 0}
+.md-figure{margin:22px 0;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.md-figure img{display:block;width:100%;height:auto;background:#fff}
+.md-figure figcaption{padding:9px 12px;background:var(--surface-3);font-size:12px;line-height:1.6;color:var(--muted)}
 .article-embeds{margin-top:38px;padding-top:24px;border-top:.5px solid var(--line)}
 .article-embeds h2{font-size:20px;line-height:1.4;letter-spacing:-.3px;margin:0 0 14px;color:var(--text);scroll-margin-top:72px}
 .embed-figure{margin:0 0 20px;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}

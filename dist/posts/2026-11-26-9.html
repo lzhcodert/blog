@@ -172,6 +172,9 @@ a{color:inherit}
 .article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
 .article-body th{background:var(--surface-3);font-weight:600}
 .article-body blockquote{margin:0 0 18px;padding:10px 14px;border-left:3px solid var(--blue);background:var(--blue-soft);border-radius:0 8px 8px 0}
+.md-figure{margin:22px 0;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.md-figure img{display:block;width:100%;height:auto;background:#fff}
+.md-figure figcaption{padding:9px 12px;background:var(--surface-3);font-size:12px;line-height:1.6;color:var(--muted)}
 .article-embeds{margin-top:38px;padding-top:24px;border-top:.5px solid var(--line)}
 .article-embeds h2{font-size:20px;line-height:1.4;letter-spacing:-.3px;margin:0 0 14px;color:var(--text);scroll-margin-top:72px}
 .embed-figure{margin:0 0 20px;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
@@ -319,7 +322,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <article class="article">
   <div class="article-meta-top"><span class="dot" style="background:#007aff"></span>多线程并发</div>
   <h1 class="article-title">线程池不是 new 一个就完事：7 个参数、4 种拒绝策略和一条任务流水线</h1>
-  <div class="article-meta">2026-11-26 · 22 分钟阅读</div>
+  <div class="article-meta">2026-11-26 · 24 分钟阅读</div>
   <div class="article-body">
 <p>线程池最容易被误解的一点是：它不是一个&quot;装线程的集合&quot;，而是一套<strong>任务调度规则</strong>。你把任务丢进去，它决定现在跑、排队、加开线程，还是直接拒绝。</p>
 <p>规则不复杂，但顺序很关键。很多人以为线程池会先把线程扩到最大，再排队；实际正好相反——<strong>先占满核心线程，再进队列，队列满了才加开临时线程</strong>。这一条没搞清楚，参数就会配错。</p>
@@ -340,6 +343,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
    └─ 连最大线程数也满了 ──▶ 触发拒绝策略 handler</code></pre>
 <p>一句话记忆：<strong>核心 → 队列 → 扩容 → 拒绝</strong>。</p>
 <p>所以 <code>maximumPoolSize</code> 不是&quot;线程池一上来就能开到这么大&quot;，而是&quot;队列满了以后，最多还能临时加多少&quot;。如果队列是无界的，队列永远满不了，最大线程数就永远用不上。</p>
+<figure class="md-figure"><img src="../embed/threadpool/threadpool-architecture.png" alt="原文图 1：任务先 submit 进 workQueue，核心线程 take，队列满后救急线程 poll" loading="lazy"><figcaption>原文图 1：任务先 submit 进 workQueue，核心线程 take，队列满后救急线程 poll</figcaption></figure>
 <h2 id="sec-3">ThreadPoolExecutor 和 ThreadPoolTaskExecutor 别搞混</h2>
 <ul><li><code>ThreadPoolExecutor</code>：JUC 包里的原版，7 个参数自己配，最可控。</li><li><code>ThreadPoolTaskExecutor</code>：Spring 对它的一层封装，主要目的是让线程池能注册成 Bean，交给 Spring 管理生命周期，避免每个业务方各自乱建池。核心逻辑仍然是 <code>ThreadPoolExecutor</code> 在跑。</li></ul>
 <p>日常写业务，如果项目已经用 Spring，用 <code>ThreadPoolTaskExecutor</code> 做 Bean 化配置没问题；但参数含义、执行顺序、拒绝策略，还是下面这套。</p>
@@ -441,12 +445,19 @@ public class ThreadPoolDemo {
 }</code></pre>
 <h3 id="sec-6">逐步看状态变化</h3>
 <table><thead><tr><th>步骤</th><th>poolSize</th><th>队列</th><th>发生了什么</th></tr></thead><tbody><tr><td>初始</td><td>0</td><td>空</td><td>线程按需创建，不是一构造就开满</td></tr><tr><td>加入 1</td><td>1</td><td>空</td><td>创建第 1 个核心线程</td></tr><tr><td>加入 2</td><td>2</td><td>空</td><td>创建第 2 个核心线程，核心已满</td></tr><tr><td>加入 3</td><td>2</td><td><code>[MyTask(3)]</code></td><td>核心满了，任务 3 进队列</td></tr><tr><td>加入 4</td><td>2</td><td><code>[MyTask(3), MyTask(4)]</code></td><td>队列容量 2，已满</td></tr><tr><td>加入 5</td><td>3</td><td><code>[MyTask(3), MyTask(4)]</code></td><td>队列满了，创建 1 个临时线程执行任务 5</td></tr><tr><td>加入 6</td><td>3</td><td><code>[MyTask(3), MyTask(4)]</code></td><td>最大线程 3 已满，<code>AbortPolicy</code> 抛异常</td></tr></tbody></table>
+<blockquote>下面几张运行结果截图来自原文，控制台时间、线程名以原文为准；本文示例改用 <code>execute</code> 后，队列里会直接显示 <code>MyTask(...)</code>，状态含义相同。</blockquote>
+<figure class="md-figure"><img src="../embed/threadpool/tasks-1-2.png" alt="原文图 2：任务 1、2 占满两个核心线程，poolSize=2，队列为空" loading="lazy"><figcaption>原文图 2：任务 1、2 占满两个核心线程，poolSize=2，队列为空</figcaption></figure>
+<figure class="md-figure"><img src="../embed/threadpool/tasks-3-4-queue.png" alt="原文图 3：任务 3、4 进入队列，poolSize 仍为 2" loading="lazy"><figcaption>原文图 3：任务 3、4 进入队列，poolSize 仍为 2</figcaption></figure>
+<figure class="md-figure"><img src="../embed/threadpool/task-5-extra-thread.png" alt="原文图 4：任务 5 到来时队列已满，创建 myThread3，poolSize 变成 3" loading="lazy"><figcaption>原文图 4：任务 5 到来时队列已满，创建 myThread3，poolSize 变成 3</figcaption></figure>
 <p>几个值得注意的细节：</p>
 <ul><li>任务 3、4 进了队列，但不会立刻执行，因为两个核心线程被 1、2 占着，各睡 1 小时。</li><li>任务 5 不是排到 3、4 后面，而是<strong>加开临时线程</strong>直接跑。这就是&quot;队列满才扩容&quot;。</li><li>任务 6 来的时候，核心 2 + 临时 1 都在忙，队列 2 个位置也满了，只能拒绝。</li></ul>
 <h2 id="sec-7">4 种拒绝策略</h2>
 <table><thead><tr><th>策略</th><th>行为</th><th>适合场景</th><th>风险</th></tr></thead><tbody><tr><td><code>AbortPolicy</code></td><td>抛 <code>RejectedExecutionException</code></td><td>不能丢任务的场景，让调用方知道</td><td>没捕获异常会中断提交逻辑</td></tr><tr><td><code>CallerRunsPolicy</code></td><td>让提交任务的线程自己跑</td><td>需要背压、允许变慢</td><td>会阻塞调用线程，可能拖慢主流程</td></tr><tr><td><code>DiscardPolicy</code></td><td>静默丢弃新任务</td><td>可丢的日志、埋点</td><td>没有任何通知，容易查不到</td></tr><tr><td><code>DiscardOldestPolicy</code></td><td>丢掉队列里最老的任务，再重试提交</td><td>只关心最新数据的场景</td><td>老任务被无声丢弃，可能丢关键请求</td></tr></tbody></table>
 <p>原文里的演示很直观：</p>
-<ul><li>改成 <code>CallerRunsPolicy</code>：任务 6 交给提交任务的线程执行，所以能看到 <code>main</code> 线程在跑任务 6。</li><li>改成 <code>DiscardPolicy</code>：任务 6 直接消失，不抛异常，也不执行。</li><li>改成 <code>DiscardOldestPolicy</code>：队列里的任务 3 被挤掉，任务 6 入队，任务 4 变成队首。</li></ul>
+<ul><li>改成 <code>CallerRunsPolicy</code>：任务 6 交给提交任务的线程执行，所以能看到 <code>main</code> 线程在跑任务 6。</li><li>改成 <code>DiscardPolicy</code>：任务 6 直接消失，不抛异常，也不执行。原文没有给这个策略单独放截图，因为它连日志都不会留下。</li><li>改成 <code>DiscardOldestPolicy</code>：队列里的任务 3 被挤掉，任务 6 入队，任务 4 变成队首。</li></ul>
+<figure class="md-figure"><img src="../embed/threadpool/abort-policy.png" alt="原文图 5：AbortPolicy 下任务 6 被拒绝，抛出 RejectedExecutionException" loading="lazy"><figcaption>原文图 5：AbortPolicy 下任务 6 被拒绝，抛出 RejectedExecutionException</figcaption></figure>
+<figure class="md-figure"><img src="../embed/threadpool/caller-runs-policy.png" alt="原文图 6：CallerRunsPolicy 下 main 线程亲自执行 MyTask(6)" loading="lazy"><figcaption>原文图 6：CallerRunsPolicy 下 main 线程亲自执行 MyTask(6)</figcaption></figure>
+<figure class="md-figure"><img src="../embed/threadpool/discard-oldest-policy.png" alt="原文图 7：DiscardOldestPolicy 丢弃队首任务 3，队列变成 MyTask(4) 和 MyTask(6)" loading="lazy"><figcaption>原文图 7：DiscardOldestPolicy 丢弃队首任务 3，队列变成 MyTask(4) 和 MyTask(6)</figcaption></figure>
 <p>生产上，支付、订单、扣减库存这类任务不要用后两种&quot;静默丢弃&quot;策略；至少用 <code>AbortPolicy</code> 让上游感知，或者用 <code>CallerRunsPolicy</code> 做背压。</p>
 <h2 id="sec-8">四个常见坑</h2>
 <h3 id="sec-9">1. 用了无界队列，最大线程数形同虚设</h3>
