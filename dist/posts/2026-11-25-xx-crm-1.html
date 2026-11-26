@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>浦发银行 CRM 系统架构：三条通道与一条数据主链 · 札记</title>
+<title>XX银行 CRM 系统架构：三条通道与一条数据主链 · 札记</title>
 <style>
 
 /* ============ 主题变量（支持浅色/深色） ============ */
@@ -215,7 +215,7 @@ a{color:inherit}
 <div class="detail-wrap">
 <article class="article">
   <div class="article-meta-top"><span class="dot" style="background:#ff9500"></span>架构</div>
-  <h1 class="article-title">浦发银行 CRM 系统架构：三条通道与一条数据主链</h1>
+  <h1 class="article-title">XX银行 CRM 系统架构：三条通道与一条数据主链</h1>
   <div class="article-meta">2026-11-25 · 6 分钟阅读</div>
   <div class="article-body">
 <p>这份整理来自两段对话。对话先各自产出了一份文档——一份讲「分层架构与上下游调用」，一份讲「系统交互流转」——本文把两份文档合并成一篇，去掉重复，只留下真正需要记住的部分。</p>
@@ -244,7 +244,7 @@ a{color:inherit}
   </div>
   <div class="article-embeds">
     <h2 id="sec-embeds">架构图与流转图</h2>
-<figure class="embed-figure"><figcaption><span>图 1 · 分层架构与上下游调用图（原始 HTML · 点击展开）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-title="浦发银行 CRM 系统架构：三条通道与一条数据主链 · 图 1 · 分层架构与上下游调用图（原始 HTML · 点击展开）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 分层架构与上下游调用图（原始 HTML · 点击展开）" srcdoc="&lt;!DOCTYPE html&gt;
+<figure class="embed-figure"><figcaption><span>图 1 · 分层架构与上下游调用图（原始 HTML · 点击展开）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-title="XX银行 CRM 系统架构：三条通道与一条数据主链 · 图 1 · 分层架构与上下游调用图（原始 HTML · 点击展开）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 分层架构与上下游调用图（原始 HTML · 点击展开）" srcdoc="&lt;!DOCTYPE html&gt;
 &lt;html data-page-node-id=&quot;HlNURr4bi5kpYMXK4FjOOS&quot; lang=&quot;zh-CN&quot;&gt;
 &lt;head data-page-node-id=&quot;1A0RnziCXjiDhj3B8souil&quot;&gt;
 &lt;meta data-page-node-id=&quot;xyi3WBRMSUk2Fj7htb47wI&quot; charset=&quot;UTF-8&quot;&gt;
@@ -294,7 +294,7 @@ a{color:inherit}
 &lt;body data-page-node-id=&quot;lxOzr9rHYH4jmg9Nod1X5k&quot;&gt;
 
 &lt;div data-page-node-id=&quot;5PNhqgOxrPmiIzqDKiaMTt&quot; class=&quot;hero&quot;&gt;
-  &lt;h1 data-page-node-id=&quot;v5zV0nbOYvbCnRC67Gvcsv&quot;&gt;&lt;!--pnid:zLbiyf4wstYraGOHPdDGHi--&gt;浦发银行 CRM 系统架构图与上下游调用图&lt;/h1&gt;
+  &lt;h1 data-page-node-id=&quot;v5zV0nbOYvbCnRC67Gvcsv&quot;&gt;&lt;!--pnid:zLbiyf4wstYraGOHPdDGHi--&gt;XX银行 CRM 系统架构图与上下游调用图&lt;/h1&gt;
   &lt;p data-page-node-id=&quot;zrCR9B543nxiEXzi1UH4oa&quot;&gt;&lt;!--pnid:tkD5x4DdhwKxk88GJ1bIBQ--&gt;基于两份对话内容整理 · 分层架构 / 调用关系 / 同步异步 / 触发机制&lt;/p&gt;
 &lt;/div&gt;
 
@@ -438,7 +438,7 @@ a{color:inherit}
         &lt;defs data-page-node-id=&quot;U5jrQCT2vn04RFWBqUOIsP&quot;&gt;&lt;linearGradient data-page-node-id=&quot;P0c2mENuJznAGQMDSM7pGI&quot; id=&quot;crmG&quot; x1=&quot;0&quot; x2=&quot;1&quot; y1=&quot;0&quot; y2=&quot;1&quot;&gt;&lt;stop data-page-node-id=&quot;NlYepRSGTTQmlCY3JVKq4N&quot; offset=&quot;0&quot; stop-color=&quot;#4338ca&quot;/&gt;&lt;stop data-page-node-id=&quot;GJN8DBKTUx2DS9Qcms7abT&quot; offset=&quot;1&quot; stop-color=&quot;#6d28d9&quot;/&gt;&lt;/linearGradient&gt;&lt;/defs&gt;
         &lt;text data-page-node-id=&quot;P0Y5qV5hxMorLplR7XKUMs&quot; fill=&quot;#fff&quot; font-size=&quot;17&quot; font-weight=&quot;700&quot; text-anchor=&quot;middle&quot; x=&quot;117&quot; y=&quot;318&quot;&gt;&lt;!--pnid:XF6zLHhl1obJEfKVLHHCcD--&gt;CRM 系统&lt;/text&gt;
         &lt;text data-page-node-id=&quot;LzVi6Q37YhhxVfQViu5YLI&quot; fill=&quot;#e0e7ff&quot; font-size=&quot;10.5&quot; text-anchor=&quot;middle&quot; x=&quot;117&quot; y=&quot;340&quot;&gt;&lt;!--pnid:2yLiVXGin1Ofv1gQVQgXkL--&gt;调用发起方 / 数据接收方&lt;/text&gt;
-        &lt;text data-page-node-id=&quot;LZHCvpPaHu6KcvYI4IIkEM&quot; fill=&quot;#c7d2fe&quot; font-size=&quot;10&quot; text-anchor=&quot;middle&quot; x=&quot;117&quot; y=&quot;362&quot;&gt;&lt;!--pnid:7sBlruhlGKuV3xzGpAiiVb--&gt;浦发银行&lt;/text&gt;
+        &lt;text data-page-node-id=&quot;LZHCvpPaHu6KcvYI4IIkEM&quot; fill=&quot;#c7d2fe&quot; font-size=&quot;10&quot; text-anchor=&quot;middle&quot; x=&quot;117&quot; y=&quot;362&quot;&gt;&lt;!--pnid:7sBlruhlGKuV3xzGpAiiVb--&gt;XX银行&lt;/text&gt;
 
         &lt;!--pnid:3ds5Qs1jZyW8P6VFBaqKyC--&gt;&lt;!-- A 区节点 --&gt;
         &lt;rect data-page-node-id=&quot;rkNMgCF94yZ2fnZJ8YUqxs&quot; fill=&quot;#fff&quot; height=&quot;78&quot; rx=&quot;9&quot; stroke=&quot;#bfdbfe&quot; stroke-width=&quot;1.5&quot; width=&quot;205&quot; x=&quot;340&quot; y=&quot;82&quot;/&gt;
@@ -682,12 +682,12 @@ a{color:inherit}
 &lt;/body&gt;
 &lt;/html&gt;
 " sandbox="allow-scripts" loading="lazy" style="height:620px"></iframe></figure>
-<figure class="embed-figure"><figcaption><span>图 2 · 系统交互流转图（原始 HTML · 点击展开）</span><button type="button" class="embed-open" data-modal-idx="1" data-modal-title="浦发银行 CRM 系统架构：三条通道与一条数据主链 · 图 2 · 系统交互流转图（原始 HTML · 点击展开）">⤢ 弹窗查看</button></figcaption><iframe title="图 2 · 系统交互流转图（原始 HTML · 点击展开）" srcdoc="&lt;!DOCTYPE html&gt;
+<figure class="embed-figure"><figcaption><span>图 2 · 系统交互流转图（原始 HTML · 点击展开）</span><button type="button" class="embed-open" data-modal-idx="1" data-modal-title="XX银行 CRM 系统架构：三条通道与一条数据主链 · 图 2 · 系统交互流转图（原始 HTML · 点击展开）">⤢ 弹窗查看</button></figcaption><iframe title="图 2 · 系统交互流转图（原始 HTML · 点击展开）" srcdoc="&lt;!DOCTYPE html&gt;
 &lt;html data-page-node-id=&quot;XTGChZTevQUjjSgJX3yreg&quot; lang=&quot;zh-CN&quot;&gt;
 &lt;head data-page-node-id=&quot;Ei7APoiOTCuR7BCBwOzkAO&quot;&gt;
 &lt;meta data-page-node-id=&quot;uqyytEBoJusHvMdWnLnYFW&quot; charset=&quot;UTF-8&quot;&gt;
 &lt;meta data-page-node-id=&quot;E2aZiMHfFlGQudu7OUvUnk&quot; content=&quot;width=device-width, initial-scale=1.0&quot; name=&quot;viewport&quot;&gt;
-&lt;title data-page-node-id=&quot;lbRHnhk4X3F0S9DnSqRDwO&quot; data-pnid-children=&quot;CV0ACBRdrRubJ3NQEh8WJH&quot;&gt;浦发银行 CRM 系统交互流转图（完善版）&lt;/title&gt;
+&lt;title data-page-node-id=&quot;lbRHnhk4X3F0S9DnSqRDwO&quot; data-pnid-children=&quot;CV0ACBRdrRubJ3NQEh8WJH&quot;&gt;XX银行 CRM 系统交互流转图（完善版）&lt;/title&gt;
 &lt;style data-page-node-id=&quot;R38Xh2Gi2QFN6lxzPshZC9&quot; data-pnid-children=&quot;cA0M6Xb7VmLLfD1s6khiBW&quot;&gt;
   :root {
     --blue: #2563eb; --blue-light: #eff6ff; --blue-dark: #1e3a8a;
@@ -762,7 +762,7 @@ a{color:inherit}
 &lt;body data-page-node-id=&quot;4Q3ulW4IG4nWYnU95YVzwB&quot;&gt;
 
 &lt;div data-page-node-id=&quot;2vrhurWjz82Pov6gxSVxkT&quot; class=&quot;hero&quot;&gt;
-  &lt;h1 data-page-node-id=&quot;98w90nKbILqjhiBzCVvoCc&quot;&gt;&lt;!--pnid:Y0IG773LstHthGwQwOn5l9--&gt;浦发银行 CRM 系统交互流转图&lt;/h1&gt;
+  &lt;h1 data-page-node-id=&quot;98w90nKbILqjhiBzCVvoCc&quot;&gt;&lt;!--pnid:Y0IG773LstHthGwQwOn5l9--&gt;XX银行 CRM 系统交互流转图&lt;/h1&gt;
   &lt;p data-page-node-id=&quot;Im0Vd4YwgpkAAafv7qHkNf&quot;&gt;&lt;!--pnid:Rs74jJPDl95aCQaJ7PkjTI--&gt;含数据集市「异步批量 + 数据交换平台双向摆渡」供数链路与调度触发机制&lt;/p&gt;
 &lt;/div&gt;
 
@@ -771,7 +771,7 @@ a{color:inherit}
   &lt;div data-page-node-id=&quot;MFEISrHXUhZ4BtqqO13n6h&quot; class=&quot;card&quot;&gt;
     &lt;h2 data-page-node-id=&quot;8YXv3cHqTYt4CPHChSSafC&quot;&gt;&lt;!--pnid:T6RNzsMN4biK0omWtGI0uc--&gt;系统流转总览（完善版）&lt;/h2&gt;
     &lt;div data-page-node-id=&quot;NwIvWcD4RhsS5WtE6mJLEA&quot; class=&quot;figure&quot;&gt;
-      &lt;svg data-page-node-id=&quot;5fr17vi3KPh82POqk9Yp0G&quot; aria-label=&quot;浦发银行CRM与ESF_ESB、数据交换平台、数据集市、信创OBS的交互流转图&quot; role=&quot;img&quot; viewBox=&quot;0 0 1120 520&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;svg data-page-node-id=&quot;5fr17vi3KPh82POqk9Yp0G&quot; aria-label=&quot;XX银行CRM与ESF_ESB、数据交换平台、数据集市、信创OBS的交互流转图&quot; role=&quot;img&quot; viewBox=&quot;0 0 1120 520&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
         &lt;defs data-page-node-id=&quot;a4mx88bxVF3FItDvQjtp7E&quot;&gt;
           &lt;linearGradient data-page-node-id=&quot;ofdHqZFJNGdSpa6t5rwLvq&quot; id=&quot;crmGrad&quot; x1=&quot;0&quot; x2=&quot;1&quot; y1=&quot;0&quot; y2=&quot;1&quot;&gt;
             &lt;stop data-page-node-id=&quot;uLeibId8NxnSRkAwskrMv7&quot; offset=&quot;0%&quot; stop-color=&quot;#4338ca&quot;/&gt;&lt;stop data-page-node-id=&quot;nhQbzJfRO8Ev3iHq5yVArM&quot; offset=&quot;100%&quot; stop-color=&quot;#6d28d9&quot;/&gt;
@@ -793,7 +793,7 @@ a{color:inherit}
         &lt;!--pnid:scyv5si3iuGaq1qg9rCdsl--&gt;&lt;!-- CRM --&gt;
         &lt;rect data-page-node-id=&quot;NuQ6Fe0Y5cWM24nrmH2WGo&quot; fill=&quot;url(#crmGrad)&quot; height=&quot;150&quot; rx=&quot;14&quot; width=&quot;174&quot; x=&quot;26&quot; y=&quot;215&quot;/&gt;
         &lt;text data-page-node-id=&quot;G9NXgzIok5t0DH4mxb9im2&quot; fill=&quot;#ffffff&quot; font-size=&quot;18&quot; font-weight=&quot;700&quot; text-anchor=&quot;middle&quot; x=&quot;113&quot; y=&quot;265&quot;&gt;&lt;!--pnid:Plm8C84gFJmoRu0JMwrldu--&gt;CRM 系统&lt;/text&gt;
-        &lt;text data-page-node-id=&quot;E4NQ5mqEAQsfLwCezUxEY9&quot; fill=&quot;#e0e7ff&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;113&quot; y=&quot;290&quot;&gt;&lt;!--pnid:GTjB8QBaarce4Y5GXqy3D9--&gt;浦发银行&lt;/text&gt;
+        &lt;text data-page-node-id=&quot;E4NQ5mqEAQsfLwCezUxEY9&quot; fill=&quot;#e0e7ff&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;113&quot; y=&quot;290&quot;&gt;&lt;!--pnid:GTjB8QBaarce4Y5GXqy3D9--&gt;XX银行&lt;/text&gt;
         &lt;text data-page-node-id=&quot;nremvlWglGDHkoeZ4hkLke&quot; fill=&quot;#e0e7ff&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;113&quot; y=&quot;308&quot;&gt;&lt;!--pnid:qEj1jDlHywrkrSCKq9FXwW--&gt;客户关系管理&lt;/text&gt;
         &lt;text data-page-node-id=&quot;Y5AFFIGHaDw7Nyir9rxO9u&quot; fill=&quot;#c7d2fe&quot; font-size=&quot;10&quot; text-anchor=&quot;middle&quot; x=&quot;113&quot; y=&quot;338&quot;&gt;&lt;!--pnid:lYl0yF8guvyfvGWCC9wn7V--&gt;核心业务系统&lt;/text&gt;
 

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>分层架构与上下游调用图</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#1d1d1f}
+#canvas{position:relative;width:100%;height:100vh;min-height:560px;overflow:hidden;touch-action:none;cursor:grab;background:#fff}
+#canvas.drag{cursor:grabbing}
+#stage{position:absolute;left:0;top:0;width:1200px;transform-origin:0 0;will-change:transform}
+svg{display:block;width:1200px;height:780px}
+.hint{position:fixed;left:10px;bottom:10px;z-index:5;font-size:11px;color:#6e6e73;background:rgba(242,242,247,.92);border:.5px solid rgba(0,0,0,.08);padding:6px 10px;border-radius:8px;pointer-events:none}
+.reset{position:fixed;right:10px;bottom:10px;z-index:5;font-size:11px;color:#007aff;background:rgba(234,243,255,.95);border:.5px solid rgba(0,122,255,.25);padding:6px 11px;border-radius:8px;cursor:pointer}
+text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+</style>
+</head>
+<body>
+<div id="canvas">
+  <div id="stage">
+    <svg viewBox="0 0 1200 780" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ab" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+        <marker id="ag" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#1d9e75"/></marker>
+        <marker id="ap" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#af52de"/></marker>
+        <marker id="ao" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#ff9500"/></marker>
+      </defs>
+
+      <rect x="0" y="0" width="1200" height="780" fill="#ffffff"/>
+      <text x="36" y="38" font-size="21" font-weight="700" fill="#1d1d1f">XX银行 CRM 系统 · 分层架构与上下游调用图</text>
+      <text x="36" y="58" font-size="12" fill="#8e8e93">基于两份对话整理文档 · 分层架构 / 调用方向 / 同步异步 / 触发机制</text>
+
+      <!-- ============ 分层架构 ============ -->
+      <g transform="translate(36,64)">
+        <rect x="0" y="0" width="1128" height="88" rx="14" fill="#eaf3ff" stroke="#007aff" stroke-width="1"/>
+        <text x="22" y="26" font-size="15" font-weight="700" fill="#007aff">操作层 · CRM 系统</text>
+        <g font-size="13" fill="#1d1d1f" text-anchor="middle">
+          <rect x="22" y="36" width="258" height="38" rx="10" fill="#fff" stroke="#cfe1ff"/><text x="151" y="60">客户全景视图</text>
+          <rect x="302" y="36" width="258" height="38" rx="10" fill="#fff" stroke="#cfe1ff"/><text x="431" y="60">精准营销名单</text>
+          <rect x="582" y="36" width="258" height="38" rx="10" fill="#fff" stroke="#cfe1ff"/><text x="711" y="60">业绩看板</text>
+          <rect x="862" y="36" width="242" height="38" rx="10" fill="#fff" stroke="#cfe1ff"/><text x="983" y="60">策略执行 / 业务操作</text>
+        </g>
+      </g>
+
+      <g transform="translate(36,164)">
+        <rect x="0" y="0" width="1128" height="92" rx="14" fill="#f1faf5" stroke="#1d9e75" stroke-width="1"/>
+        <text x="22" y="26" font-size="15" font-weight="700" fill="#1d9e75">通道层 · 三类通道 + 触发</text>
+        <g font-size="12.5">
+          <rect x="22" y="36" width="258" height="48" rx="10" fill="#fff" stroke="#cfeadd"/>
+          <text x="34" y="57" font-size="13" font-weight="700" fill="#007aff">ESF / ESB 服务总线</text><text x="34" y="75" fill="#6e6e73">同步实时 · 路由 / 协议 / 鉴权 / 流控</text>
+          <rect x="302" y="36" width="258" height="48" rx="10" fill="#fff" stroke="#cfeadd"/>
+          <text x="314" y="57" font-size="13" font-weight="700" fill="#1d9e75">数据交换平台 DataStage</text><text x="314" y="75" fill="#6e6e73">异步批量 · 上报入湖 / 回供落库</text>
+          <rect x="582" y="36" width="258" height="48" rx="10" fill="#fff" stroke="#cfeadd"/>
+          <text x="594" y="57" font-size="13" font-weight="700" fill="#ff9500">信创 OBS 对象存储</text><text x="594" y="75" fill="#6e6e73">文件 API · 库内仅存引用地址</text>
+          <rect x="862" y="36" width="242" height="48" rx="10" fill="#fff" stroke="#cfeadd"/>
+          <text x="874" y="57" font-size="13" font-weight="700" fill="#8e8e93">调度 / 消息触发</text><text x="874" y="75" fill="#6e6e73">文件就绪 · MQ/Kafka · TASKCTL</text>
+        </g>
+      </g>
+
+      <g transform="translate(36,268)">
+        <rect x="0" y="0" width="1128" height="92" rx="14" fill="#faf4fd" stroke="#af52de" stroke-width="1"/>
+        <text x="22" y="26" font-size="15" font-weight="700" fill="#af52de">数据与服务层 · 消费与加工</text>
+        <g font-size="12.5">
+          <rect x="22" y="36" width="356" height="48" rx="10" fill="#fff" stroke="#e6d2f2"/>
+          <text x="34" y="57" font-size="13" font-weight="700" fill="#af52de">微服务群</text><text x="34" y="75" fill="#6e6e73">客户 · 账户 · 产品 · 交易微服务</text>
+          <rect x="398" y="36" width="340" height="48" rx="10" fill="#fff" stroke="#e6d2f2"/>
+          <text x="410" y="57" font-size="13" font-weight="700" fill="#af52de">数据仓库</text><text x="410" y="75" fill="#6e6e73">ODS → DWD → DWS（逐级汇总）</text>
+          <rect x="758" y="36" width="346" height="48" rx="10" fill="#fff" stroke="#e6d2f2"/>
+          <text x="770" y="57" font-size="13" font-weight="700" fill="#af52de">数据集市 Data Mart</text><text x="770" y="75" fill="#6e6e73">业务宽表 · 画像标签 · 营销模型</text>
+        </g>
+      </g>
+
+      <g transform="translate(36,372)">
+        <rect x="0" y="0" width="1128" height="76" rx="14" fill="#f2f2f7" stroke="#8e8e93" stroke-width="1"/>
+        <text x="22" y="26" font-size="15" font-weight="700" fill="#6e6e73">源系统层</text>
+        <rect x="22" y="34" width="1082" height="34" rx="10" fill="#fff" stroke="#d8d8de"/>
+        <text x="34" y="56" font-size="13" fill="#1d1d1f">核心业务系统 · 客户 / 账户 / 交易 / 交互数据（经 ETL 抽取入湖）</text>
+      </g>
+
+      <!-- 层间支撑箭头（下层支撑上层） -->
+      <g fill="#c7c7cc">
+        <path d="M296,162 l7,-9 l7,9 z"/><path d="M596,162 l7,-9 l7,9 z"/><path d="M896,162 l7,-9 l7,9 z"/>
+        <path d="M296,266 l7,-9 l7,9 z"/><path d="M596,266 l7,-9 l7,9 z"/><path d="M896,266 l7,-9 l7,9 z"/>
+        <path d="M296,370 l7,-9 l7,9 z"/><path d="M596,370 l7,-9 l7,9 z"/><path d="M896,370 l7,-9 l7,9 z"/>
+      </g>
+
+      <!-- ============ 上下游调用 ============ -->
+      <text x="36" y="478" font-size="17" font-weight="700" fill="#1d1d1f">上下游调用关系</text>
+      <text x="36" y="498" font-size="11.5" fill="#8e8e93">实线双向 = 同步实时调用　·　实线单向 = 上报入湖　·　虚线 = 异步回供落库 / 触发信号</text>
+
+      <!-- 行A 实时 -->
+      <g transform="translate(36,510)">
+        <text x="0" y="16" font-size="13" font-weight="700" fill="#007aff">① 实时服务调用通道</text>
+        <rect x="0" y="24" width="210" height="38" rx="10" fill="#eaf3ff" stroke="#007aff"/><text x="105" y="47" font-size="13" text-anchor="middle" fill="#1d1d1f">CRM 系统</text>
+        <rect x="330" y="24" width="230" height="38" rx="10" fill="#eaf3ff" stroke="#007aff"/><text x="445" y="47" font-size="13" text-anchor="middle" fill="#1d1d1f">ESF / ESB 服务总线</text>
+        <rect x="690" y="24" width="280" height="38" rx="10" fill="#eaf3ff" stroke="#007aff"/><text x="830" y="47" font-size="13" text-anchor="middle" fill="#1d1d1f">客户 / 账户微服务群</text>
+        <line x1="212" y1="43" x2="328" y2="43" stroke="#007aff" stroke-width="1.6" marker-start="url(#ab)" marker-end="url(#ab)"/>
+        <line x1="562" y1="43" x2="688" y2="43" stroke="#007aff" stroke-width="1.6" marker-start="url(#ab)" marker-end="url(#ab)"/>
+        <text x="1000" y="48" font-size="12" fill="#007aff">同步 · 秒级返回</text>
+      </g>
+
+      <!-- 行B 批量 -->
+      <g transform="translate(36,582)">
+        <text x="0" y="16" font-size="13" font-weight="700" fill="#1d9e75">② 批量数据流转通道（双向摆渡）</text>
+        <text x="470" y="16" font-size="11.5" fill="#8e8e93">实线 = 上报入湖　·　虚线 = 加工结果回供落库　·　遵循「交易与批处理分离」</text>
+        <g font-size="12" text-anchor="middle">
+          <rect x="0" y="24" width="140" height="42" rx="10" fill="#f1faf5" stroke="#1d9e75"/><text x="70" y="49" fill="#1d1d1f">CRM</text>
+          <rect x="180" y="24" width="170" height="42" rx="10" fill="#f1faf5" stroke="#1d9e75"/><text x="265" y="49" fill="#1d1d1f">数据交换平台</text>
+          <rect x="390" y="24" width="180" height="42" rx="10" fill="#f1faf5" stroke="#1d9e75"/><text x="480" y="49" fill="#1d1d1f">数据湖 / 数仓</text>
+          <rect x="610" y="24" width="180" height="42" rx="10" fill="#faf4fd" stroke="#af52de"/><text x="700" y="49" fill="#1d1d1f">数据集市加工</text>
+          <rect x="830" y="24" width="220" height="42" rx="10" fill="#faf4fd" stroke="#af52de"/><text x="940" y="49" fill="#1d1d1f">CRM 落库（标签/名单）</text>
+        </g>
+        <line x1="142" y1="45" x2="178" y2="45" stroke="#1d9e75" stroke-width="1.6" marker-end="url(#ag)"/>
+        <line x1="352" y1="45" x2="388" y2="45" stroke="#1d9e75" stroke-width="1.6" marker-end="url(#ag)"/>
+        <line x1="572" y1="45" x2="608" y2="45" stroke="#1d9e75" stroke-width="1.6" marker-end="url(#ag)"/>
+        <line x1="792" y1="45" x2="828" y2="45" stroke="#af52de" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ap)"/>
+        <text x="810" y="80" font-size="11" fill="#af52de">T+1 回供</text>
+      </g>
+
+      <!-- 行C 文件 -->
+      <g transform="translate(36,672)">
+        <text x="0" y="16" font-size="13" font-weight="700" fill="#ff9500">③ 文件存储通道</text>
+        <rect x="0" y="24" width="210" height="38" rx="10" fill="#fff8ee" stroke="#ff9500"/><text x="105" y="47" font-size="13" text-anchor="middle" fill="#1d1d1f">CRM 系统</text>
+        <rect x="560" y="24" width="300" height="38" rx="10" fill="#fff8ee" stroke="#ff9500"/><text x="710" y="47" font-size="13" text-anchor="middle" fill="#1d1d1f">信创 OBS（录音 / 转写 / 报告）</text>
+        <line x1="212" y1="43" x2="558" y2="43" stroke="#ff9500" stroke-width="1.6" marker-start="url(#ao)" marker-end="url(#ao)"/>
+        <text x="900" y="48" font-size="12" fill="#ff9500">库内仅存 URL 引用</text>
+      </g>
+
+      <text x="36" y="762" font-size="11" fill="#a1a1a6">按文档内容重绘 · 供架构交流参考　|　滚轮缩放 · 拖拽平移 · 双击复位</text>
+    </svg>
+  </div>
+</div>
+<div class="hint">滚轮缩放 · 拖拽平移 · 双击复位</div>
+<div class="reset" id="reset">复位</div>
+<script>
+(function(){
+  var canvas=document.getElementById('canvas'),stage=document.getElementById('stage');
+  var scale=1,tx=0,ty=0,drag=false,lx=0,ly=0;
+  function apply(){stage.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')';}
+  function fit(){var w=canvas.clientWidth;scale=Math.min(1,w/1200);tx=0;ty=0;apply();}
+  canvas.addEventListener('wheel',function(e){
+    e.preventDefault();
+    var r=canvas.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+    var ns=Math.min(4,Math.max(.5,scale*(e.deltaY<0?1.15:1/1.15)));
+    tx=mx-(mx-tx)*ns/scale;ty=my-(my-ty)*ns/scale;scale=ns;apply();
+  },{passive:false});
+  canvas.addEventListener('pointerdown',function(e){drag=true;lx=e.clientX-tx;ly=e.clientY-ty;canvas.classList.add('drag');canvas.setPointerCapture(e.pointerId);});
+  canvas.addEventListener('pointermove',function(e){if(!drag)return;tx=e.clientX-lx;ty=e.clientY-ly;apply();});
+  canvas.addEventListener('pointerup',function(){drag=false;canvas.classList.remove('drag');});
+  canvas.addEventListener('pointercancel',function(){drag=false;canvas.classList.remove('drag');});
+  canvas.addEventListener('dblclick',fit);
+  document.getElementById('reset').addEventListener('click',fit);
+  window.addEventListener('resize',fit);
+  fit();
+})();
+</script>
+</body>
+</html>
