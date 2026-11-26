@@ -532,7 +532,7 @@ legend.appendChild(allBtn);
 
 /* ---------- 文章列表（按年月分组） ---------- */
 var groupsBox=document.getElementById('groups'), ymOrder=[];
-POSTS.slice().sort(function(a,b){ return a.date<b.date?1:-1; }).forEach(function(p){
+POSTS.slice().sort(function(a,b){ return b.date.localeCompare(a.date); }).forEach(function(p){
   if (ymOrder.indexOf(p.ym)<0) ymOrder.push(p.ym);
 });
 ymOrder.forEach(function(ym){
@@ -541,7 +541,7 @@ ymOrder.forEach(function(ym){
   var ul=document.createElement('ul'); ul.className='post-list';
   sec.appendChild(h); sec.appendChild(ul); groupsBox.appendChild(sec);
 });
-POSTS.slice().sort(function(a,b){ return a.date<b.date?1:-1; }).forEach(function(p){
+POSTS.slice().sort(function(a,b){ return b.date.localeCompare(a.date); }).forEach(function(p){
   var cat=catOf(p.c), sec=groupsBox.querySelector('[data-ym="'+p.ym+'"] .post-list');
   var li=document.createElement('li');
   li.className='post-item'; li.dataset.url=p.url;
