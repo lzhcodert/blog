@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>软件工程中的图：什么时候该画哪一种 · 札记</title>
+<title>死锁不是玄学：一段 Java 代码看懂它怎么发生、怎么抓、怎么拆 · 札记</title>
 <style>
 
 /* ============ 主题变量（支持浅色/深色） ============ */
@@ -317,409 +317,198 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <main class="pad">
 <div class="detail-wrap">
 <article class="article">
-  <div class="article-meta-top"><span class="dot" style="background:#007aff"></span>建模</div>
-  <h1 class="article-title">软件工程中的图：什么时候该画哪一种</h1>
-  <div class="article-meta">2026-11-26 · 4 分钟阅读</div>
+  <div class="article-meta-top"><span class="dot" style="background:#007aff"></span>多线程并发</div>
+  <h1 class="article-title">死锁不是玄学：一段 Java 代码看懂它怎么发生、怎么抓、怎么拆</h1>
+  <div class="article-meta">2026-11-26 · 19 分钟阅读</div>
   <div class="article-body">
-<p>团队里最常见的沟通事故，不是&quot;没画图&quot;，而是&quot;画错了图&quot;——想说清一次调用的顺序，却画了一张架构图；想理清订单的状态流转，却丢过来一张类图。图不是装饰，是压缩沟通成本的工具，一张图只回答一个问题。</p>
-<h2 id="sec-1">先分清两大类</h2>
-<p>所有图可以粗分成两类，选图之前先问自己：我要描述的是<strong>结构</strong>还是<strong>行为</strong>？</p>
-<ul><li><strong>静态结构图</strong>回答&quot;系统是什么样&quot;：有哪些模块、类、数据实体、功能边界。它不随时间变化。</li><li><strong>动态行为图</strong>回答&quot;系统怎么运行&quot;：消息按什么顺序传递、流程如何分支、状态怎样跳转。它描述一段过程。</li></ul>
-<p>分不清的时候，看你的句子里有没有时间词。&quot;用户下单后先校验库存，再扣减，最后创建订单&quot;——有先后，是行为图；&quot;系统分为表现层、应用层、领域层和基础设施层&quot;——没时间，是结构图。</p>
-<h2 id="sec-2">七种图各自解决什么</h2>
-<p><strong>架构图</strong>——系统的地图。它画出有哪些块、边界在哪、谁依赖谁。新项目定边界、技术评审、给非技术同事讲全貌时用它。别往里塞接口字段和数据库细节，那会让地图变成施工图。</p>
-<p><strong>时序图</strong>——一次交互的回放。纵轴是时间，横轴是参与者，消息箭头从上往下走。排查&quot;谁先谁后&quot;的调用问题、设计跨服务接口时最顺手。实线通常是同步调用，虚线常表示返回。</p>
-<p><strong>流程图</strong>——分支逻辑的展开。矩形是动作，菱形是判断。业务规则、算法步骤、异常分支用它表达最清楚。它和时序图的区别是：流程图看重&quot;判断与分支&quot;，时序图看重&quot;谁在什么时候发给谁&quot;。</p>
-<p><strong>类图</strong>——面向对象的骨架。每个类分三格：类名、属性、方法；空心三角是继承，普通箭头是关联，旁边的数字表示一对几。领域建模、评审类职责是否清晰时画它。</p>
-<p><strong>ER 图</strong>——数据的地图。矩形是实体，菱形是关系，连线两端标注基数（1:N、N:M）。设计数据库表结构、梳理业务实体关系时用它。它只关心&quot;数据怎么存、怎么关联&quot;，不描述方法行为——这是它和类图最大的不同。</p>
-<p><strong>状态机图</strong>——对象的生命周期。实心圆是起点，双圈是终点，中间是各种状态和触发跳转的事件。订单、工单、审批流这类状态驱动的功能特别适合它，能提前暴露&quot;不可能的状态&quot;。</p>
-<p><strong>用例图</strong>——功能的边界。小人代表参与者，椭圆是一个用例，虚线框圈出系统边界。需求初期用它划定范围、识别不同角色能做什么。记住：用例只说&quot;做什么&quot;，绝不说&quot;怎么做&quot;。</p>
-<h2 id="sec-3">怎么选：一张速查表</h2>
-<table><thead><tr><th>你想回答的问题</th><th>该画的图</th></tr></thead><tbody><tr><td>系统由哪些模块组成？</td><td>架构图</td></tr><tr><td>一次调用谁先谁后？</td><td>时序图</td></tr><tr><td>流程有哪些判断分支？</td><td>流程图</td></tr><tr><td>有哪些类、怎么继承和关联？</td><td>类图</td></tr><tr><td>存哪些数据、实体怎么关联？</td><td>ER 图</td></tr><tr><td>对象有哪些状态、怎么跳转？</td><td>状态机图</td></tr><tr><td>谁能用系统做什么？</td><td>用例图</td></tr></tbody></table>
-<h2 id="sec-4">三个取舍原则</h2>
-<p><strong>一张图只讲一件事。</strong> 把架构、时序、状态全塞进一张图，结果是谁都看不懂。宁可画三张小图，也别画一张&quot;全景图&quot;。</p>
-<p><strong>读者决定详略。</strong> 给业务方看，用用例图和流程图；给前端后端对接口，用时序图；给 DBA 和设计评审，用 ER 图和类图。同一套系统，面对不同人要有不同切面。</p>
-<p><strong>图要能跟着代码活。</strong> 图之所以过时，往往是因为它躺在文档里没人维护。能把图写进代码仓库、随代码一起评审更新，比画得多精美都重要。</p>
-  </div>
-  <div class="article-embeds">
-    <h2 id="sec-embeds">七种图的样例速览</h2>
-<figure class="embed-figure"><figcaption><span>图 1 · 软件工程常见图鉴（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/se-diagrams-gallery.html" data-modal-title="软件工程中的图：什么时候该画哪一种 · 图 1 · 软件工程常见图鉴（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 软件工程常见图鉴（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
-&lt;html lang=&quot;zh-CN&quot;&gt;
-&lt;head&gt;
-&lt;meta charset=&quot;UTF-8&quot;&gt;
-&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
-&lt;title&gt;软件工程常见图鉴 · 样例速览&lt;/title&gt;
-&lt;style&gt;
-  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 40px}
-  .hero{background:linear-gradient(135deg,#5b5bd6,#7a5bd6 55%,#0a84ff);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(90,90,220,.22)}
-  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
-  .hero p{margin:0;font-size:13px;line-height:1.6;opacity:.92}
-  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
-  .hint b{color:var(--blue);font-weight:600}
-  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
-  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
-  .nav a:hover{background:#efeff4}
-  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
-  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
-  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px}
-  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700}
-  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
-  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;margin-left:6px;font-weight:500}
-  .fig{overflow:hidden;background:#fcfcfd;touch-action:none;cursor:grab}
-  .fig:active{cursor:grabbing}
-  .fig svg{display:block;width:100%;height:auto;transform-origin:0 0;user-select:none}
-  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.6}
-  .foot b{color:var(--ink)}
-&lt;/style&gt;
-&lt;/head&gt;
-&lt;body&gt;
-&lt;div class=&quot;hero&quot;&gt;
-  &lt;h1&gt;软件工程常见图鉴&lt;/h1&gt;
-  &lt;p&gt;七种最常画的图，各回答一个问题。示例为简化示意，重点看结构与表达意图，而非细节。滚轮缩放、拖拽平移、双击复位。&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;滚轮&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;span&gt;博客弹窗里可放大查看细节&lt;/span&gt;&lt;/div&gt;
-&lt;div class=&quot;nav&quot;&gt;
-  &lt;a href=&quot;#g-arch&quot;&gt;架构图&lt;/a&gt;&lt;a href=&quot;#g-seq&quot;&gt;时序图&lt;/a&gt;&lt;a href=&quot;#g-flow&quot;&gt;流程图&lt;/a&gt;&lt;a href=&quot;#g-class&quot;&gt;类图&lt;/a&gt;&lt;a href=&quot;#g-er&quot;&gt;ER 图&lt;/a&gt;&lt;a href=&quot;#g-state&quot;&gt;状态机图&lt;/a&gt;&lt;a href=&quot;#g-usecase&quot;&gt;用例图&lt;/a&gt;
-&lt;/div&gt;
+<p>一句话说清：<strong>死锁就是几个人各占着一件别人要用的东西，又都等着别人先松手，结果谁也不动。</strong></p>
+<p>它不像空指针那样啪一下报错，而是程序&quot;看起来还在跑&quot;，实际上线程全卡住、日志不再增长、请求一直不返回。更烦的是，重启就好了，于是很多人把它当玄学。其实它是有确定形状的：一个环。</p>
+<h2 id="sec-1">死锁到底是什么</h2>
+<p>经典定义是：两个或两个以上的线程在执行过程中，因为竞争资源或彼此通信而互相等待，没有外力就都无法推进。</p>
+<p>放到 Java 里，最常见的画面是：</p>
+<pre><code>A线程：拿着 object1，想拿 object2（在 B 手里）
+B线程：拿着 object2，想拿 object1（在 A 手里）
 
-&lt;!-- 1 架构图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-arch&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;架构图 &lt;span class=&quot;tag&quot;&gt;静态 · 是什么&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「系统由哪些块组成、边界在哪、谁依赖谁」。看的是稳定的结构，不关心执行顺序。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 352&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar1&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;13&quot;&gt;
-        &lt;g fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;&gt;
-          &lt;rect x=&quot;20&quot; y=&quot;16&quot; width=&quot;1000&quot; height=&quot;66&quot; rx=&quot;12&quot;/&gt;
-          &lt;rect x=&quot;20&quot; y=&quot;100&quot; width=&quot;1000&quot; height=&quot;66&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d9d2ff&quot;/&gt;
-          &lt;rect x=&quot;20&quot; y=&quot;184&quot; width=&quot;1000&quot; height=&quot;66&quot; rx=&quot;12&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#c8ecd5&quot;/&gt;
-          &lt;rect x=&quot;20&quot; y=&quot;268&quot; width=&quot;1000&quot; height=&quot;66&quot; rx=&quot;12&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#3a3a3c&quot;&gt;
-          &lt;text x=&quot;38&quot; y=&quot;55&quot;&gt;表现层&lt;/text&gt;&lt;text x=&quot;38&quot; y=&quot;139&quot;&gt;应用层&lt;/text&gt;&lt;text x=&quot;38&quot; y=&quot;223&quot;&gt;领域层&lt;/text&gt;&lt;text x=&quot;38&quot; y=&quot;307&quot;&gt;基础设施层&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g text-anchor=&quot;middle&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;g&gt;
-            &lt;rect x=&quot;170&quot; y=&quot;30&quot; width=&quot;180&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;/&gt;
-            &lt;rect x=&quot;380&quot; y=&quot;30&quot; width=&quot;180&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;/&gt;
-            &lt;rect x=&quot;590&quot; y=&quot;30&quot; width=&quot;180&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;/&gt;
-            &lt;text x=&quot;260&quot; y=&quot;54&quot;&gt;Web 工作台&lt;/text&gt;&lt;text x=&quot;470&quot; y=&quot;54&quot;&gt;iOS App&lt;/text&gt;&lt;text x=&quot;680&quot; y=&quot;54&quot;&gt;Android App&lt;/text&gt;
-          &lt;/g&gt;
-          &lt;g&gt;
-            &lt;rect x=&quot;170&quot; y=&quot;114&quot; width=&quot;230&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#d2c9ff&quot;/&gt;
-            &lt;rect x=&quot;430&quot; y=&quot;114&quot; width=&quot;230&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#d2c9ff&quot;/&gt;
-            &lt;text x=&quot;285&quot; y=&quot;138&quot;&gt;API 网关 · 鉴权限流&lt;/text&gt;&lt;text x=&quot;545&quot; y=&quot;138&quot;&gt;业务编排 · 用例聚合&lt;/text&gt;
-          &lt;/g&gt;
-          &lt;g&gt;
-            &lt;rect x=&quot;170&quot; y=&quot;198&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe6cd&quot;/&gt;
-            &lt;rect x=&quot;370&quot; y=&quot;198&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe6cd&quot;/&gt;
-            &lt;rect x=&quot;570&quot; y=&quot;198&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe6cd&quot;/&gt;
-            &lt;text x=&quot;255&quot; y=&quot;222&quot;&gt;用户域&lt;/text&gt;&lt;text x=&quot;455&quot; y=&quot;222&quot;&gt;订单域&lt;/text&gt;&lt;text x=&quot;655&quot; y=&quot;222&quot;&gt;商品域&lt;/text&gt;
-          &lt;/g&gt;
-          &lt;g&gt;
-            &lt;rect x=&quot;170&quot; y=&quot;282&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#f2d6a8&quot;/&gt;
-            &lt;rect x=&quot;370&quot; y=&quot;282&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#f2d6a8&quot;/&gt;
-            &lt;rect x=&quot;570&quot; y=&quot;282&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#f2d6a8&quot;/&gt;
-            &lt;text x=&quot;255&quot; y=&quot;306&quot;&gt;MySQL&lt;/text&gt;&lt;text x=&quot;455&quot; y=&quot;306&quot;&gt;Redis 缓存&lt;/text&gt;&lt;text x=&quot;655&quot; y=&quot;306&quot;&gt;消息队列&lt;/text&gt;
-          &lt;/g&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.3&quot; marker-end=&quot;url(#ar1)&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M900,286 L900,258&quot;/&gt;&lt;path d=&quot;M900,202 L900,174&quot;/&gt;&lt;path d=&quot;M900,118 L900,90&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;916&quot; y=&quot;150&quot; font-size=&quot;11.5&quot; fill=&quot;#8e8e93&quot;&gt;上层调用下层&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;新项目定边界、技术评审、给非技术同事讲系统全貌。&lt;b&gt;别塞：&lt;/b&gt;接口细节、数据库字段。&lt;/div&gt;
-&lt;/div&gt;
+        ┌──────── 等待 object2 ────────┐
+        │                              ▼
+      A线程                          B线程
+        ▲                              │
+        └──────── 等待 object1 ────────┘</code></pre>
+<p>只要这个环闭上，两个线程就会永远停在 <code>synchronized</code> 门口。</p>
+<h2 id="sec-2">四个条件：必须同时成立</h2>
+<p>死锁有四个必要条件，缺一个都死不了。理解它们，比背定义有用得多。</p>
+<table><thead><tr><th>条件</th><th>大白话</th><th>能不能破</th></tr></thead><tbody><tr><td>互斥使用</td><td>一把锁同一时刻只给一个人</td><td>基本不能破，锁本来就是干这个的</td></tr><tr><td>不可剥夺</td><td>别人手里的锁，你抢不走，只能等他主动放</td><td>可以破：<code>tryLock</code> 超时后自己退让</td></tr><tr><td>请求和保持</td><td>手里拿着一把，还去要另一把，而且不放手里这把</td><td>可以破：一次性申请全部，或申请不到就先放</td></tr><tr><td>循环等待</td><td>A 等 B、B 等 C、C 又等 A，首尾接上</td><td>最好破：所有线程按同一顺序加锁</td></tr></tbody></table>
+<p>注意最后一句话：<strong>四个条件同时满足才会死锁</strong>。所以&quot;避免死锁&quot;不需要四个全改，拆掉后面三个里的任意一个就够了。</p>
+<h2 id="sec-3">用一段代码把它复现出来</h2>
+<p>下面这段代码来自韩顺平教程的死锁模拟，原文里就有，这里做了排版整理，并加了一个 100 ms 的 <code>sleep</code>——不是为了制造 bug，而是为了让&quot;各拿一把&quot;的窗口稳定出现，跑一次就能看到死锁。</p>
+<pre><code>/**
+ * 模拟死锁：两个线程各持一把锁，再互相申请对方手里的锁。
+ */
+public class DeadLock {
+    public static void main(String[] args) {
+        ThreadDemo a = new ThreadDemo(true);
+        ThreadDemo b = new ThreadDemo(false);
+        a.setName(&quot;A线程&quot;);
+        b.setName(&quot;B线程&quot;);
+        a.start();
+        b.start();
+    }
+}
 
-&lt;!-- 2 时序图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-seq&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;时序图 &lt;span class=&quot;tag&quot;&gt;动态 · 怎么走&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「一次交互中，消息按什么时间顺序在对象之间传递」。纵轴是时间，横轴是参与者。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 392&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar2&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ar2b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;g text-anchor=&quot;middle&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;rect x=&quot;40&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#b8d2ff&quot;/&gt;&lt;text x=&quot;95&quot; y=&quot;38&quot;&gt;用户&lt;/text&gt;
-          &lt;rect x=&quot;240&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#b8d2ff&quot;/&gt;&lt;text x=&quot;295&quot; y=&quot;38&quot;&gt;前端&lt;/text&gt;
-          &lt;rect x=&quot;440&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c9ff&quot;/&gt;&lt;text x=&quot;495&quot; y=&quot;38&quot;&gt;API 网关&lt;/text&gt;
-          &lt;rect x=&quot;640&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bfe6cd&quot;/&gt;&lt;text x=&quot;695&quot; y=&quot;38&quot;&gt;订单服务&lt;/text&gt;
-          &lt;rect x=&quot;840&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f2d6a8&quot;/&gt;&lt;text x=&quot;895&quot; y=&quot;38&quot;&gt;数据库&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#c7c7cc&quot; stroke-width=&quot;1&quot; stroke-dasharray=&quot;4 4&quot;&gt;
-          &lt;path d=&quot;M95,50 L95,372&quot;/&gt;&lt;path d=&quot;M295,50 L295,372&quot;/&gt;&lt;path d=&quot;M495,50 L495,372&quot;/&gt;&lt;path d=&quot;M695,50 L695,372&quot;/&gt;&lt;path d=&quot;M895,50 L895,372&quot;/&gt;
-        &lt;/g&gt;
-        &lt;rect x=&quot;688&quot; y=&quot;150&quot; width=&quot;14&quot; height=&quot;92&quot; rx=&quot;4&quot; fill=&quot;#007aff&quot; opacity=&quot;.14&quot;/&gt;
-        &lt;g font-size=&quot;11.5&quot; fill=&quot;#3a3a3c&quot;&gt;
-          &lt;text x=&quot;105&quot; y=&quot;78&quot;&gt;提交订单&lt;/text&gt;
-          &lt;text x=&quot;305&quot; y=&quot;116&quot;&gt;POST /orders&lt;/text&gt;
-          &lt;text x=&quot;505&quot; y=&quot;154&quot;&gt;鉴权后转发&lt;/text&gt;
-          &lt;text x=&quot;705&quot; y=&quot;192&quot;&gt;INSERT order&lt;/text&gt;
-          &lt;text x=&quot;760&quot; y=&quot;230&quot;&gt;写入成功&lt;/text&gt;
-          &lt;text x=&quot;515&quot; y=&quot;268&quot;&gt;201 Created&lt;/text&gt;
-          &lt;text x=&quot;315&quot; y=&quot;306&quot;&gt;下单成功&lt;/text&gt;
-          &lt;text x=&quot;115&quot; y=&quot;344&quot;&gt;显示结果&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g stroke-width=&quot;1.4&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar2)&quot;&gt;
-          &lt;path d=&quot;M95,70 L290,70&quot;/&gt;&lt;path d=&quot;M295,108 L490,108&quot;/&gt;&lt;path d=&quot;M495,146 L690,146&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g stroke-width=&quot;1.4&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar2b)&quot;&gt;
-          &lt;path d=&quot;M695,184 L890,184&quot;/&gt;&lt;path d=&quot;M895,222 L700,222&quot;/&gt;&lt;path d=&quot;M695,260 L500,260&quot;/&gt;
-          &lt;path d=&quot;M495,298 L300,298&quot;/&gt;&lt;path d=&quot;M295,336 L100,336&quot;/&gt;
-        &lt;/g&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;理清跨服务调用链、排查&quot;谁先谁后&quot;的时序 bug、设计接口交互。&lt;b&gt;要点：&lt;/b&gt;实线是同步调用，虚线常表示返回。&lt;/div&gt;
-&lt;/div&gt;
+class ThreadDemo extends Thread {
+    // static 很关键：无论 new 多少个 ThreadDemo，看到的都是同一两把锁
+    private static final Object object1 = new Object();
+    private static final Object object2 = new Object();
 
-&lt;!-- 3 流程图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-flow&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;流程图 &lt;span class=&quot;tag&quot;&gt;动态 · 怎么判&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「从开始到结束经过哪些步骤与判断」。菱形是判断，矩形是动作，最能表达分支逻辑。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 300&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar3&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;12.5&quot; text-anchor=&quot;middle&quot;&gt;
-        &lt;rect x=&quot;30&quot; y=&quot;118&quot; width=&quot;96&quot; height=&quot;44&quot; rx=&quot;22&quot; fill=&quot;#1d1d1f&quot;/&gt;&lt;text x=&quot;78&quot; y=&quot;145&quot; fill=&quot;#fff&quot;&gt;开始&lt;/text&gt;
-        &lt;rect x=&quot;176&quot; y=&quot;118&quot; width=&quot;130&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#b8d2ff&quot;/&gt;&lt;text x=&quot;241&quot; y=&quot;145&quot; fill=&quot;#1d1d1f&quot;&gt;提交订单&lt;/text&gt;
-        &lt;polygon points=&quot;410,100 480,140 410,180 340,140&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f2d6a8&quot;/&gt;&lt;text x=&quot;410&quot; y=&quot;145&quot; fill=&quot;#1d1d1f&quot;&gt;库存充足？&lt;/text&gt;
-        &lt;rect x=&quot;540&quot; y=&quot;52&quot; width=&quot;140&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bfe6cd&quot;/&gt;&lt;text x=&quot;610&quot; y=&quot;79&quot; fill=&quot;#1d1d1f&quot;&gt;创建订单&lt;/text&gt;
-        &lt;rect x=&quot;730&quot; y=&quot;52&quot; width=&quot;120&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bfe6cd&quot;/&gt;&lt;text x=&quot;790&quot; y=&quot;79&quot; fill=&quot;#1d1d1f&quot;&gt;发起支付&lt;/text&gt;
-        &lt;rect x=&quot;540&quot; y=&quot;190&quot; width=&quot;140&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#f2d6a8&quot;/&gt;&lt;text x=&quot;610&quot; y=&quot;217&quot; fill=&quot;#1d1d1f&quot;&gt;提示缺货&lt;/text&gt;
-        &lt;rect x=&quot;920&quot; y=&quot;52&quot; width=&quot;94&quot; height=&quot;44&quot; rx=&quot;22&quot; fill=&quot;#1d1d1f&quot;/&gt;&lt;text x=&quot;967&quot; y=&quot;79&quot; fill=&quot;#fff&quot;&gt;结束&lt;/text&gt;
-        &lt;rect x=&quot;920&quot; y=&quot;190&quot; width=&quot;94&quot; height=&quot;44&quot; rx=&quot;22&quot; fill=&quot;#1d1d1f&quot;/&gt;&lt;text x=&quot;967&quot; y=&quot;217&quot; fill=&quot;#fff&quot;&gt;结束&lt;/text&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar3)&quot;&gt;
-          &lt;path d=&quot;M126,140 L172,140&quot;/&gt;&lt;path d=&quot;M306,140 L336,140&quot;/&gt;
-          &lt;path d=&quot;M480,128 L536,74&quot;/&gt;&lt;path d=&quot;M680,74 L726,74&quot;/&gt;&lt;path d=&quot;M850,74 L916,74&quot;/&gt;
-          &lt;path d=&quot;M410,182 L410,214 L536,214&quot;/&gt;&lt;path d=&quot;M680,214 L916,214&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;505&quot; y=&quot;96&quot; fill=&quot;#34c759&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot;&gt;是&lt;/text&gt;
-        &lt;text x=&quot;466&quot; y=&quot;205&quot; fill=&quot;#ff9500&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot;&gt;否&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;梳理业务规则、算法步骤、异常分支。&lt;b&gt;和时序图的区别：&lt;/b&gt;流程图看重&quot;判断与分支&quot;，时序图看重&quot;谁在什么时候发给谁&quot;。&lt;/div&gt;
-&lt;/div&gt;
+    private final boolean flag;
 
-&lt;!-- 4 类图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-class&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;类图 &lt;span class=&quot;tag&quot;&gt;静态 · 面向对象&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「有哪些类、各自的属性与方法、类之间如何关联与继承」。是面向对象设计的核心图。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 372&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar4&quot; markerWidth=&quot;10&quot; markerHeight=&quot;10&quot; refX=&quot;9&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L9,3 L0,6 Z&quot; fill=&quot;#5856d6&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ar4h&quot; markerWidth=&quot;12&quot; markerHeight=&quot;12&quot; refX=&quot;10&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,1 L10,4 L0,7 Z&quot; fill=&quot;none&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.2&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;g font-size=&quot;13&quot;&gt;
-          &lt;rect x=&quot;60&quot; y=&quot;30&quot; width=&quot;230&quot; height=&quot;132&quot; rx=&quot;4&quot; fill=&quot;#fff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;
-          &lt;rect x=&quot;60&quot; y=&quot;30&quot; width=&quot;230&quot; height=&quot;32&quot; fill=&quot;#efedff&quot;/&gt;&lt;text x=&quot;175&quot; y=&quot;51&quot; text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a2fa0&quot;&gt;User&lt;/text&gt;
-          &lt;text x=&quot;74&quot; y=&quot;82&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ id : Long&lt;/text&gt;&lt;text x=&quot;74&quot; y=&quot;102&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ name : String&lt;/text&gt;
-          &lt;line x1=&quot;60&quot; y1=&quot;114&quot; x2=&quot;290&quot; y2=&quot;114&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-          &lt;text x=&quot;74&quot; y=&quot;136&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ getOrders() : List&lt;/text&gt;&lt;text x=&quot;74&quot; y=&quot;154&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ changeName()&lt;/text&gt;
+    public ThreadDemo(boolean flag) {
+        this.flag = flag;
+    }
 
-          &lt;rect x=&quot;420&quot; y=&quot;30&quot; width=&quot;250&quot; height=&quot;150&quot; rx=&quot;4&quot; fill=&quot;#fff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;
-          &lt;rect x=&quot;420&quot; y=&quot;30&quot; width=&quot;250&quot; height=&quot;32&quot; fill=&quot;#efedff&quot;/&gt;&lt;text x=&quot;545&quot; y=&quot;51&quot; text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a2fa0&quot;&gt;Order&lt;/text&gt;
-          &lt;text x=&quot;434&quot; y=&quot;82&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ id : Long&lt;/text&gt;&lt;text x=&quot;434&quot; y=&quot;102&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ userId : Long&lt;/text&gt;&lt;text x=&quot;434&quot; y=&quot;122&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ amount : BigDecimal&lt;/text&gt;
-          &lt;line x1=&quot;420&quot; y1=&quot;134&quot; x2=&quot;670&quot; y2=&quot;134&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-          &lt;text x=&quot;434&quot; y=&quot;156&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ addItem(item)&lt;/text&gt;&lt;text x=&quot;434&quot; y=&quot;174&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ pay() : boolean&lt;/text&gt;
+    @Override
+    public void run() {
+        if (flag) {
+            synchronized (object1) {
+                System.out.println(Thread.currentThread().getName() + &quot;---开始持有资源object1&quot;);
+                sleepABit();
+                synchronized (object2) {
+                    System.out.println(&quot;第一个线程拿到object2&quot;);
+                }
+            }
+        } else {
+            synchronized (object2) {
+                System.out.println(Thread.currentThread().getName() + &quot;---开始持有资源object2&quot;);
+                sleepABit();
+                synchronized (object1) {
+                    System.out.println(&quot;第二个线程拿到object1&quot;);
+                }
+            }
+        }
+    }
 
-          &lt;rect x=&quot;790&quot; y=&quot;30&quot; width=&quot;220&quot; height=&quot;132&quot; rx=&quot;4&quot; fill=&quot;#fff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;
-          &lt;rect x=&quot;790&quot; y=&quot;30&quot; width=&quot;220&quot; height=&quot;32&quot; fill=&quot;#efedff&quot;/&gt;&lt;text x=&quot;900&quot; y=&quot;51&quot; text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a2fa0&quot;&gt;OrderItem&lt;/text&gt;
-          &lt;text x=&quot;804&quot; y=&quot;82&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ productId : Long&lt;/text&gt;&lt;text x=&quot;804&quot; y=&quot;102&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ qty : int&lt;/text&gt;
-          &lt;line x1=&quot;790&quot; y1=&quot;114&quot; x2=&quot;1010&quot; y2=&quot;114&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-          &lt;text x=&quot;804&quot; y=&quot;136&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ subtotal()&lt;/text&gt;
+    private static void sleepABit() {
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}</code></pre>
+<p>典型输出只有两行，然后就安静了：</p>
+<pre><code>A线程---开始持有资源object1
+B线程---开始持有资源object2</code></pre>
+<p>程序没退出，也没异常。因为它没有&quot;出错&quot;，只是两个线程都在等一把永远拿不到的锁。</p>
+<h3 id="sec-4">这段代码里藏着三个关键点</h3>
+<ol><li><strong><code>static</code> 让锁变成共享的。</strong> 如果写成普通成员变量，每个 <code>ThreadDemo</code> 实例都有自己的 <code>object1/object2</code>，那两把锁根本不冲突，死锁演示不出来。</li><li><strong>嵌套 <code>synchronized</code> 就是&quot;请求和保持&quot;。</strong> 进入外层 <code>synchronized</code> 后锁没放，又去申请内层锁，正好踩中第三个条件。</li><li><strong>两个线程的加锁顺序相反。</strong> A 是 <code>object1 → object2</code>，B 是 <code>object2 → object1</code>，环就来自这里。</li></ol>
+<h2 id="sec-5">怎么确认它是死锁，而不是单纯卡住</h2>
+<p>&quot;卡住&quot;不等于&quot;死锁&quot;。可能是慢 SQL、网络等超时、线程池队列满，也可能真是死锁。别猜，抓线程栈。</p>
+<h3 id="sec-6">第一步：找到进程</h3>
+<pre><code>jps -l</code></pre>
+<p>输出类似：</p>
+<pre><code>107840 DeadLock
+99504
+110052 KotlinCompileDaemon
+113212 Jps</code></pre>
+<p>记下 <code>DeadLock</code> 前面的 PID：<code>107840</code>。</p>
+<h3 id="sec-7">第二步：抓栈</h3>
+<pre><code>jstack -l 107840</code></pre>
+<p><code>-l</code> 会额外打印关于可持有同步器的信息。真正的死锁，JVM 会主动帮你检测并在末尾给出一段：</p>
+<pre><code>Found one Java-level deadlock:
+=============================
+&quot;B线程&quot;:
+  waiting to lock monitor 0x00007f..., (object 0x000000076cda86f8, a java.lang.Object),
+  which is held by &quot;A线程&quot;
+&quot;A线程&quot;:
+  waiting to lock monitor 0x00007f..., (object 0x000000076cda8708, a java.lang.Object),
+  which is held by &quot;B线程&quot;</code></pre>
+<p>比原文里更直接的读法：</p>
+<ul><li><code>waiting to lock &lt;地址&gt;</code>：这个线程正在门口等哪把锁；</li><li><code>locked &lt;地址&gt;</code>：这个线程手里已经拿着哪把锁；</li><li>把&quot;谁拿着&quot;和&quot;谁在等&quot;配对，就能画出上面那个环。</li></ul>
+<p>线程状态也有讲究。<code>synchronized</code> 抢锁失败通常是 <code>BLOCKED</code>；<code>LockSupport.park()</code> 或 <code>Object.wait()</code> 则显示为 <code>WAITING / TIMED_WAITING</code>。死锁两种状态都可能出现，所以看栈里的锁地址比只看状态更靠谱。</p>
+<h3 id="sec-8">第三步：图形界面兜底</h3>
+<p>不想敲命令，可以 <code>Win + R</code> 输入 <code>jconsole</code>，连到目标进程，切到&quot;线程&quot;标签，点&quot;检测死锁&quot;。它会直接列出互相持有的两个线程，和 <code>jstack</code> 结论一致。</p>
+<h3 id="sec-9">现场排查四步法</h3>
+<ol><li><strong>看现象</strong>：请求不返回、日志停住、线程数只增不减、CPU 反而很低。</li><li><strong>抓现场</strong>：<code>jps -l</code> 找 PID，<code>jstack -l &lt;pid&gt;</code> 导栈；线上建议连抓三次，间隔 5 秒，避免单次采样误判。</li><li><strong>配对锁地址</strong>：找 <code>waiting to lock</code> 和 <code>locked</code> 的同一串十六进制地址，连成等待链；链闭合成环就是死锁。</li><li><strong>先救火再治本</strong>：救火靠重启 / 摘流量；治本靠下面的拆环办法。</li></ol>
+<h2 id="sec-10">怎么拆：四种办法，从最推荐到最省事</h2>
+<h3 id="sec-11">1. 统一加锁顺序（首选，破坏循环等待）</h3>
+<p>既然环来自&quot;顺序相反&quot;，那就让所有线程按同一顺序加锁。改原文代码，去掉 <code>flag</code> 分支即可：</p>
+<pre><code>@Override
+public void run() {
+    // 所有线程都先 object1，再 object2
+    synchronized (object1) {
+        System.out.println(Thread.currentThread().getName() + &quot;---开始持有资源object1&quot;);
+        sleepABit();
+        synchronized (object2) {
+            System.out.println(Thread.currentThread().getName() + &quot;---拿到object2，继续干活&quot;);
+        }
+    }
+}</code></pre>
+<p>这样 B 想进 <code>object2</code> 之前，必须先拿到 <code>object1</code>；拿不到就在第一把锁门口等，绝不会出现&quot;A 拿 1 等 2、B 拿 2 等 1&quot;的交叉。</p>
+<p>业务上确实没法写死顺序时，可以给资源编号（比如按数据库主键、按对象 ID），一律先小后大。<strong>别用 <code>identityHashCode()</code> 当顺序</strong>，哈希碰撞时一样会死锁。</p>
+<h3 id="sec-12">2. tryLock 超时（破坏请求和保持）</h3>
+<p><code>synchronized</code> 拿不到锁就死等，没法反悔。换成 <code>ReentrantLock.tryLock(timeout)</code>，第二把锁拿不到就把第一把也放了，环就接不上。</p>
+<pre><code>import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
-          &lt;rect x=&quot;420&quot; y=&quot;258&quot; width=&quot;250&quot; height=&quot;66&quot; rx=&quot;4&quot; fill=&quot;#fff&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.4&quot;/&gt;
-          &lt;rect x=&quot;420&quot; y=&quot;258&quot; width=&quot;250&quot; height=&quot;28&quot; fill=&quot;#f2f2f7&quot;/&gt;&lt;text x=&quot;545&quot; y=&quot;277&quot; text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a3a3c&quot;&gt;«abstract» BaseEntity&lt;/text&gt;
-          &lt;text x=&quot;434&quot; y=&quot;310&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ createdAt / updatedAt&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#5856d6&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M290,86 L416,86&quot; marker-end=&quot;url(#ar4)&quot;/&gt;&lt;path d=&quot;M670,86 L786,86&quot; marker-end=&quot;url(#ar4)&quot;/&gt;
-          &lt;path d=&quot;M545,180 L545,254&quot; marker-end=&quot;url(#ar4h)&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;11.5&quot; fill=&quot;#5856d6&quot;&gt;
-          &lt;text x=&quot;330&quot; y=&quot;78&quot;&gt;1&lt;/text&gt;&lt;text x=&quot;360&quot; y=&quot;78&quot;&gt;*&lt;/text&gt;
-          &lt;text x=&quot;710&quot; y=&quot;78&quot;&gt;1&lt;/text&gt;&lt;text x=&quot;740&quot; y=&quot;78&quot;&gt;*&lt;/text&gt;
-          &lt;text x=&quot;558&quot; y=&quot;222&quot;&gt;继承&lt;/text&gt;
-        &lt;/g&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;领域建模、代码结构设计、评审类职责是否清晰。&lt;b&gt;读图：&lt;/b&gt;空心三角是继承，普通箭头是关联，数字表示多重性。&lt;/div&gt;
-&lt;/div&gt;
+public class SafeTransfer {
+    private static final Lock lockA = new ReentrantLock();
+    private static final Lock lockB = new ReentrantLock();
 
-&lt;!-- 5 ER 图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-er&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;ER 图 &lt;span class=&quot;tag&quot;&gt;静态 · 数据模型&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「要存哪些实体、实体之间是什么关系」。数据库建模的基础，关注数据而不是行为。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 310&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar5&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; text-anchor=&quot;middle&quot;&gt;
-        &lt;rect x=&quot;70&quot; y=&quot;106&quot; width=&quot;170&quot; height=&quot;78&quot; rx=&quot;8&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;155&quot; y=&quot;136&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;用户&lt;/text&gt;
-        &lt;text x=&quot;155&quot; y=&quot;160&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;id · name · phone&lt;/text&gt;
+    public void transfer(boolean first) {
+        Lock firstLock = first ? lockA : lockB;
+        Lock secondLock = first ? lockB : lockA;
 
-        &lt;polygon points=&quot;430,145 480,108 530,145 480,182&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#ff9500&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;480&quot; y=&quot;150&quot; font-size=&quot;13&quot; fill=&quot;#b26b00&quot;&gt;下单&lt;/text&gt;
+        boolean gotFirst = false;
+        boolean gotSecond = false;
+        try {
+            gotFirst = firstLock.tryLock(1, TimeUnit.SECONDS);
+            if (!gotFirst) {
+                System.out.println(&quot;第一把锁没拿到，直接放弃&quot;);
+                return;
+            }
 
-        &lt;rect x=&quot;590&quot; y=&quot;106&quot; width=&quot;170&quot; height=&quot;78&quot; rx=&quot;8&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#34c759&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;675&quot; y=&quot;136&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;订单&lt;/text&gt;
-        &lt;text x=&quot;675&quot; y=&quot;160&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;id · amount · time&lt;/text&gt;
+            gotSecond = secondLock.tryLock(1, TimeUnit.SECONDS);
+            if (!gotSecond) {
+                System.out.println(&quot;第二把锁超时，准备放掉第一把&quot;);
+                return;
+            }
 
-        &lt;polygon points=&quot;810,145 850,108 890,145 850,182&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#ff9500&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;850&quot; y=&quot;150&quot; font-size=&quot;13&quot; fill=&quot;#b26b00&quot;&gt;包含&lt;/text&gt;
-
-        &lt;rect x=&quot;920&quot; y=&quot;106&quot; width=&quot;100&quot; height=&quot;78&quot; rx=&quot;8&quot; fill=&quot;#f0edff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;970&quot; y=&quot;140&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;商品&lt;/text&gt;
-        &lt;text x=&quot;970&quot; y=&quot;160&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;id · price&lt;/text&gt;
-
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M240,145 L426,145&quot;/&gt;&lt;path d=&quot;M534,145 L586,145&quot;/&gt;&lt;path d=&quot;M760,145 L806,145&quot;/&gt;&lt;path d=&quot;M894,145 L916,145&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;
-          &lt;text x=&quot;300&quot; y=&quot;136&quot;&gt;1&lt;/text&gt;&lt;text x=&quot;378&quot; y=&quot;136&quot;&gt;N&lt;/text&gt;
-          &lt;text x=&quot;710&quot; y=&quot;136&quot;&gt;N&lt;/text&gt;&lt;text x=&quot;900&quot; y=&quot;200&quot;&gt;M&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;520&quot; y=&quot;262&quot; font-size=&quot;12.5&quot; fill=&quot;#6e6e73&quot;&gt;矩形＝实体　菱形＝关系　连线两端标注基数（1 : N / N : M）&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;设计数据库表结构、梳理业务实体关系。&lt;b&gt;和类图的区别：&lt;/b&gt;ER 图描述&quot;数据怎么存、怎么关联&quot;，不描述方法行为。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 6 状态机图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-state&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;状态机图 &lt;span class=&quot;tag&quot;&gt;动态 · 状态变化&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「一个对象能处于哪些状态、什么事件触发状态跳转」。特别适合订单、审批这类有明确生命周期的对象。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 286&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar6&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;circle cx=&quot;30&quot; cy=&quot;62&quot; r=&quot;8&quot; fill=&quot;#1d1d1f&quot;/&gt;
-        &lt;g font-size=&quot;13&quot; text-anchor=&quot;middle&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;rect x=&quot;70&quot; y=&quot;38&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#ff9500&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;140&quot; y=&quot;67&quot;&gt;待支付&lt;/text&gt;
-          &lt;rect x=&quot;300&quot; y=&quot;38&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;370&quot; y=&quot;67&quot;&gt;已支付&lt;/text&gt;
-          &lt;rect x=&quot;530&quot; y=&quot;38&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;600&quot; y=&quot;67&quot;&gt;已发货&lt;/text&gt;
-          &lt;rect x=&quot;760&quot; y=&quot;38&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#34c759&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;830&quot; y=&quot;67&quot;&gt;已完成&lt;/text&gt;
-          &lt;rect x=&quot;300&quot; y=&quot;180&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;370&quot; y=&quot;209&quot;&gt;已取消&lt;/text&gt;
-          &lt;rect x=&quot;530&quot; y=&quot;180&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;600&quot; y=&quot;209&quot;&gt;已退款&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.4&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar6)&quot;&gt;
-          &lt;path d=&quot;M38,62 L66,62&quot;/&gt;&lt;path d=&quot;M210,62 L296,62&quot;/&gt;&lt;path d=&quot;M440,62 L526,62&quot;/&gt;&lt;path d=&quot;M670,62 L756,62&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot; stroke-dasharray=&quot;4 3&quot; marker-end=&quot;url(#ar6)&quot;&gt;
-          &lt;path d=&quot;M140,86 L140,176&quot;/&gt;&lt;path d=&quot;M370,86 L370,176&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;11&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;
-          &lt;text x=&quot;253&quot; y=&quot;54&quot;&gt;支付成功&lt;/text&gt;&lt;text x=&quot;483&quot; y=&quot;54&quot;&gt;发货&lt;/text&gt;&lt;text x=&quot;713&quot; y=&quot;54&quot;&gt;确认收货&lt;/text&gt;
-          &lt;text x=&quot;150&quot; y=&quot;136&quot;&gt;超时/取消&lt;/text&gt;&lt;text x=&quot;382&quot; y=&quot;136&quot;&gt;申请退款&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;circle cx=&quot;930&quot; cy=&quot;62&quot; r=&quot;9&quot; fill=&quot;none&quot; stroke=&quot;#1d1d1f&quot; stroke-width=&quot;2&quot;/&gt;
-        &lt;path d=&quot;M900,62 L917,62&quot; stroke=&quot;#1d1d1f&quot; stroke-width=&quot;1.4&quot; marker-end=&quot;url(#ar6)&quot;/&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;订单、工单、审批流等状态驱动的功能；防止出现&quot;不可能的状态&quot;。&lt;b&gt;要点：&lt;/b&gt;实心圆是起点，双圈是终点。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 7 用例图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-usecase&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;7&lt;/span&gt;用例图 &lt;span class=&quot;tag&quot;&gt;静态 · 功能边界&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「谁在用系统、系统对外提供哪些功能」。用于划定系统边界和角色权限，不涉及实现顺序。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 356&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar7&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; text-anchor=&quot;middle&quot;&gt;
-        &lt;rect x=&quot;230&quot; y=&quot;30&quot; width=&quot;580&quot; height=&quot;296&quot; rx=&quot;18&quot; fill=&quot;#fbfbfe&quot; stroke=&quot;#c7c7cc&quot; stroke-width=&quot;1.4&quot; stroke-dasharray=&quot;6 4&quot;/&gt;
-        &lt;text x=&quot;520&quot; y=&quot;58&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#6e6e73&quot;&gt;电商系统（系统边界）&lt;/text&gt;
-        &lt;g fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;1.3&quot; font-size=&quot;12.5&quot; fill-opacity=&quot;1&quot;&gt;
-          &lt;ellipse cx=&quot;370&quot; cy=&quot;120&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot;/&gt;
-          &lt;ellipse cx=&quot;370&quot; cy=&quot;230&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot;/&gt;
-          &lt;ellipse cx=&quot;570&quot; cy=&quot;120&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#34c759&quot;/&gt;
-          &lt;ellipse cx=&quot;570&quot; cy=&quot;230&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#34c759&quot;/&gt;
-          &lt;ellipse cx=&quot;770&quot; cy=&quot;175&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#f0edff&quot; stroke=&quot;#5856d6&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;text x=&quot;370&quot; y=&quot;125&quot;&gt;登录&lt;/text&gt;&lt;text x=&quot;370&quot; y=&quot;235&quot;&gt;浏览商品&lt;/text&gt;
-          &lt;text x=&quot;570&quot; y=&quot;125&quot;&gt;下单&lt;/text&gt;&lt;text x=&quot;570&quot; y=&quot;235&quot;&gt;支付&lt;/text&gt;&lt;text x=&quot;770&quot; y=&quot;180&quot;&gt;查看订单&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g transform=&quot;translate(110,160)&quot; stroke=&quot;#1d1d1f&quot; stroke-width=&quot;1.6&quot; fill=&quot;none&quot;&gt;
-          &lt;circle cx=&quot;0&quot; cy=&quot;-26&quot; r=&quot;10&quot;/&gt;&lt;path d=&quot;M0,-16 L0,6 M-12,-8 L12,-8 M0,6 L-10,26 M0,6 L10,26&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;110&quot; y=&quot;216&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;用户&lt;/text&gt;
-        &lt;g transform=&quot;translate(930,160)&quot; stroke=&quot;#1d1d1f&quot; stroke-width=&quot;1.6&quot; fill=&quot;none&quot;&gt;
-          &lt;circle cx=&quot;0&quot; cy=&quot;-26&quot; r=&quot;10&quot;/&gt;&lt;path d=&quot;M0,-16 L0,6 M-12,-8 L12,-8 M0,6 L-10,26 M0,6 L10,26&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;930&quot; y=&quot;216&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;管理员&lt;/text&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.2&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar7)&quot;&gt;
-          &lt;path d=&quot;M138,168 L286,120&quot;/&gt;&lt;path d=&quot;M138,176 L286,230&quot;/&gt;
-          &lt;path d=&quot;M902,168 L854,175&quot;/&gt;
-        &lt;/g&gt;
-        &lt;path d=&quot;M452,120 L488,120&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.2&quot; stroke-dasharray=&quot;3 2&quot; fill=&quot;none&quot;/&gt;
-        &lt;text x=&quot;520&quot; y=&quot;316&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;小人＝参与者　椭圆＝用例　虚线框＝系统边界&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;需求初期梳理功能范围、识别不同角色能做什么。&lt;b&gt;注意：&lt;/b&gt;用例只说&quot;做什么&quot;，不说&quot;怎么做&quot;。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;script&gt;
-(function(){
-  document.querySelectorAll(&#39;.fig&#39;).forEach(function(fig){
-    var svg=fig.querySelector(&#39;svg&#39;); if(!svg)return;
-    var scale=1,tx=0,ty=0;
-    function apply(){svg.style.transform=&#39;translate(&#39;+tx+&#39;px,&#39;+ty+&#39;px) scale(&#39;+scale+&#39;)&#39;;}
-    fig.addEventListener(&#39;wheel&#39;,function(e){
-      e.preventDefault();
-      var r=fig.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
-      var f=e.deltaY&lt;0?1.12:1/1.12,ns=Math.min(5,Math.max(.6,scale*f));
-      tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;apply();
-    },{passive:false});
-    var drag=false,sx=0,sy=0,ox=0,oy=0;
-    fig.addEventListener(&#39;pointerdown&#39;,function(e){drag=true;sx=e.clientX;sy=e.clientY;ox=tx;oy=ty;try{fig.setPointerCapture(e.pointerId)}catch(err){}});
-    fig.addEventListener(&#39;pointermove&#39;,function(e){if(!drag)return;tx=ox+(e.clientX-sx);ty=oy+(e.clientY-sy);apply();});
-    fig.addEventListener(&#39;pointerup&#39;,function(){drag=false;});
-    fig.addEventListener(&#39;pointercancel&#39;,function(){drag=false;});
-    fig.addEventListener(&#39;dblclick&#39;,function(){scale=1;tx=0;ty=0;apply();});
-  });
-})();
-&lt;/script&gt;
-&lt;/body&gt;
-&lt;/html&gt;
-" sandbox="allow-scripts" loading="lazy" style="height:700px"></iframe></figure>
+            // 两把都拿到了，安全地干活
+            System.out.println(Thread.currentThread().getName() + &quot; 完成转账&quot;);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            // 关键：拿不到第二把时，第一把也必须在 finally 里释放
+            if (gotSecond) secondLock.unlock();
+            if (gotFirst) firstLock.unlock();
+        }
+    }
+}</code></pre>
+<p>注意 <code>finally</code> 里的两行：这才是真正&quot;拆环&quot;的地方。只在成功分支解锁，超时那次就会把第一把锁攥到天荒地老，等于没改。</p>
+<h3 id="sec-13">3. 一次性申请所有资源</h3>
+<p>为每个业务操作提前列出需要的全部锁，一次性申请；只要有一个拿不到，就整体放弃并全部释放。银行家算法就是这个思路。优点是彻底，缺点是资源粒度和业务耦合重，Java 业务里不如前两种常用。</p>
+<h3 id="sec-14">4. 缩小锁范围，别套娃</h3>
+<p>很多时候死锁不是因为&quot;必须用两把锁&quot;，而是把锁范围写大了：一个 <code>synchronized</code> 里调用了别的 <code>synchronized</code> 方法，又因为回调绕回了原锁。能拆成&quot;各锁各的数据&quot;就别用大锁；能用 <code>ConcurrentHashMap</code>、<code>AtomicInteger</code> 这类线程安全工具，就别自己套锁。</p>
+<h2 id="sec-15">三个常见误区</h2>
+<ul><li><strong>&quot;加了 <code>volatile</code> 就不会死锁。&quot;</strong> 不会。<code>volatile</code> 只保证可见性和禁止重排序，不提供互斥，也不解决锁的持有等待。</li><li><strong>&quot;把 <code>synchronized</code> 换成 <code>Lock</code> 就没事。&quot;</strong> 不会。<code>lock()</code> 一样是死等，照样能死锁；只有 <code>tryLock()</code> 才给了你反悔的机会。</li><li><strong>&quot;死锁一定会让 CPU 飙高。&quot;</strong> 通常相反。线程都在 <code>BLOCKED</code>，不消耗 CPU，所以&quot;CPU 很闲但请求不回&quot;反而该怀疑死锁。</li></ul>
+<h2 id="sec-16">小结</h2>
+<p>把这篇文章压缩成四句话：</p>
+<ol><li>死锁 = 持有 + 等待 + 不成环才怪；</li><li>四个条件同时成立才死锁，互斥别动，拆后三个；</li><li>排查靠 <code>jps</code> + <code>jstack -l</code>，看 <code>waiting to lock</code> 和 <code>locked</code> 配成环；</li><li>修复首选<strong>统一加锁顺序</strong>，需要反悔能力就用 <strong><code>tryLock</code> 超时 + 全量释放</strong>。</li></ol>
+<p>原文把地基打好了：定义、四条件、复现代码、检测方法都在。这里补的是&quot;怎么读栈&quot;和&quot;怎么落地修&quot;，两半合起来才算完整。</p>
+<h2 id="sec-17">参考</h2>
+<ul><li>原文：<a href="http://localhost:4000/2022/07/22/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/%E4%BB%80%E4%B9%88%E6%98%AF%E6%AD%BB%E9%94%81/" target="_blank" rel="noopener">模拟死锁</a>（LZH_BLOG，2022-07-22，含韩顺平教程的死锁模拟代码）</li><li>原文参考资料：知乎「什么是死锁？」、百度百科「死锁」、JavaGuide「什么是死锁？」</li><li>JDK 自带工具：<code>jps</code>、<code>jstack -l</code>、<code>jconsole</code>（<code>jstack</code> 输出中的 <code>Found one Java-level deadlock</code> 由 JVM 自动生成）</li></ul>
   </div>
 </article>
-<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">先分清两大类</a></div><div class="toc-group"><a href="#sec-2" class="">七种图各自解决什么</a></div><div class="toc-group"><a href="#sec-3" class="">怎么选：一张速查表</a></div><div class="toc-group"><a href="#sec-4" class="">三个取舍原则</a></div><div class="toc-group"><a href="#sec-embeds" class="">七种图的样例速览</a></div></nav>
+<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">死锁到底是什么</a></div><div class="toc-group"><a href="#sec-2" class="">四个条件：必须同时成立</a></div><div class="toc-group"><a href="#sec-3" class="">用一段代码把它复现出来</a><a href="#sec-4" class="lv3">这段代码里藏着三个关键点</a></div><div class="toc-group"><a href="#sec-5" class="">怎么确认它是死锁，而不是单纯卡住</a><a href="#sec-6" class="lv3">第一步：找到进程</a><a href="#sec-7" class="lv3">第二步：抓栈</a><a href="#sec-8" class="lv3">第三步：图形界面兜底</a><a href="#sec-9" class="lv3">现场排查四步法</a></div><div class="toc-group"><a href="#sec-10" class="">怎么拆：四种办法，从最推荐到最省事</a><a href="#sec-11" class="lv3">1. 统一加锁顺序（首选，破坏循环等待）</a><a href="#sec-12" class="lv3">2. tryLock 超时（破坏请求和保持）</a><a href="#sec-13" class="lv3">3. 一次性申请所有资源</a><a href="#sec-14" class="lv3">4. 缩小锁范围，别套娃</a></div><div class="toc-group"><a href="#sec-15" class="">三个常见误区</a></div><div class="toc-group"><a href="#sec-16" class="">小结</a></div><div class="toc-group"><a href="#sec-17" class="">参考</a></div></nav>
 </div>
 </main>
 <button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button>
 <div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
   <div class="toc-backdrop" data-toc-close></div>
   <div class="toc-panel">
-    <div class="toc-panel-head"><span>本页目录 · 5 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
-    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先分清两大类</a></div><div class="toc-group"><a href="#sec-2" class="">七种图各自解决什么</a></div><div class="toc-group"><a href="#sec-3" class="">怎么选：一张速查表</a></div><div class="toc-group"><a href="#sec-4" class="">三个取舍原则</a></div><div class="toc-group"><a href="#sec-embeds" class="">七种图的样例速览</a></div></nav>
+    <div class="toc-panel-head"><span>本页目录 · 17 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">死锁到底是什么</a></div><div class="toc-group"><a href="#sec-2" class="">四个条件：必须同时成立</a></div><div class="toc-group"><a href="#sec-3" class="">用一段代码把它复现出来</a><a href="#sec-4" class="lv3">这段代码里藏着三个关键点</a></div><div class="toc-group"><a href="#sec-5" class="">怎么确认它是死锁，而不是单纯卡住</a><a href="#sec-6" class="lv3">第一步：找到进程</a><a href="#sec-7" class="lv3">第二步：抓栈</a><a href="#sec-8" class="lv3">第三步：图形界面兜底</a><a href="#sec-9" class="lv3">现场排查四步法</a></div><div class="toc-group"><a href="#sec-10" class="">怎么拆：四种办法，从最推荐到最省事</a><a href="#sec-11" class="lv3">1. 统一加锁顺序（首选，破坏循环等待）</a><a href="#sec-12" class="lv3">2. tryLock 超时（破坏请求和保持）</a><a href="#sec-13" class="lv3">3. 一次性申请所有资源</a><a href="#sec-14" class="lv3">4. 缩小锁范围，别套娃</a></div><div class="toc-group"><a href="#sec-15" class="">三个常见误区</a></div><div class="toc-group"><a href="#sec-16" class="">小结</a></div><div class="toc-group"><a href="#sec-17" class="">参考</a></div></nav>
   </div>
 </div>
 

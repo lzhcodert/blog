@@ -89,11 +89,13 @@ function parseMarkdown(file, index) {
 
   const minutes = Math.max(1, Math.round(body.replace(/\s/g, '').length / 300));
   const parts = meta.date.split('-');
+  const time = /^\d{2}:\d{2}$/.test(meta.time || '') ? meta.time : '00:00';
 
   return {
     slug: slugify(path.basename(file), index),
     title: meta.title,
     date: meta.date,
+    stamp: meta.date + 'T' + time,
     monthLabel: parts[0] + ' 年 ' + parts[1] + ' 月',
     shortDate: parts[1] + '.' + parts[2],
     category: meta.category,
@@ -669,7 +671,7 @@ function renderIndex(posts, template) {
 
   const postJson = posts.map(function(p) {
     return "  { url:'posts/" + encodeURI(p.slug) + ".html', c:'" + catId(p.category) + "',\n" +
-      "    t:" + JSON.stringify(p.title) + ", date:'" + p.date + "', m:" + p.minutes +
+      "    t:" + JSON.stringify(p.title) + ", date:'" + p.date + "', stamp:'" + p.stamp + "', m:" + p.minutes +
       ", em:" + p.embeds.length + ",\n" +
       "    ex:" + JSON.stringify(p.summary) + " }";
   }).join(',\n');
@@ -824,7 +826,7 @@ function build() {
   const posts = files.map(function(name, i) {
     return parseMarkdown(path.join(MD_DIR, name), i + 1);
   }).filter(Boolean).sort(function(a, b) {
-    return b.date.localeCompare(a.date);
+    return b.stamp.localeCompare(a.stamp);
   });
 
   // 先根据当前文章重建分类，后续首页/详情页都使用动态分类表

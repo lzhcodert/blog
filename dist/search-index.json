@@ -1,5 +1,23 @@
 [
   {
+    "title": "死锁不是玄学：一段 Java 代码看懂它怎么发生、怎么抓、怎么拆",
+    "date": "2026-11-26",
+    "category": "多线程并发",
+    "summary": "两个线程各拿一把锁，再伸手去抢对方手里的锁，就会一起卡死。本文用可运行代码复现死锁，用 jps/jstack 抓住现场，再用统一加锁顺序和 tryLock 超时把等待环拆掉。",
+    "tags": [
+      "Java",
+      "多线程",
+      "并发",
+      "死锁",
+      "jstack",
+      "Lock"
+    ],
+    "readingMinutes": 19,
+    "url": "posts/2026-11-26-8.html",
+    "embeds": [],
+    "body": "一句话说清：死锁就是几个人各占着一件别人要用的东西，又都等着别人先松手，结果谁也不动。\n\n它不像空指针那样啪一下报错，而是程序\"看起来还在跑\"，实际上线程全卡住、日志不再增长、请求一直不返回。更烦的是，重启就好了，于是很多人把它当玄学。其实它是有确定形状的：一个环。\n\n 死锁到底是什么\n\n经典定义是：两个或两个以上的线程在执行过程中，因为竞争资源或彼此通信而互相等待，没有外力就都无法推进。\n\n放到 Java 里，最常见的画面是：\n\ntext\nA线程：拿着 object1，想拿 object2（在 B 手里）\nB线程：拿着 object2，想拿 object1（在 A 手里）\n\n        ┌──────── 等待 object2 ────────┐\n        │                              ▼\n      A线程                          B线程\n        ▲                              │\n        └──────── 等待 object1 ────────┘\n\n\n只要这个环闭上，两个线程就会永远停在 synchronized 门口。\n\n 四个条件：必须同时成立\n\n死锁有四个必要条件，缺一个都死不了。理解它们，比背定义有用得多。\n\n| 条件 | 大白话 | 能不能破 |\n|---|---|---|\n| 互斥使用 | 一把锁同一时刻只给一个人 | 基本不能破，锁本来就是干这个的 |\n| 不可剥夺 | 别人手里的锁，你抢不走，只能等他主动放 | 可以破：tryLock 超时后自己退让 |\n| 请求和保持 | 手里拿着一把，还去要另一把，而且不放手里这把 | 可以破：一次性申请全部，或申请不到就先放 |\n| 循环等待 | A 等 B、B 等 C、C 又等 A，首尾接上 | 最好破：所有线程按同一顺序加锁 |\n\n注意最后一句话：四个条件同时满足才会死锁。所以\"避免死锁\"不需要四个全改，拆掉后面三个里的任意一个就够了。\n\n 用一段代码把它复现出来\n\n下面这段代码来自韩顺平教程的死锁模拟，原文里就有，这里做了排版整理，并加了一个 100 ms 的 sleep——不是为了制造 bug，而是为了让\"各拿一把\"的窗口稳定出现，跑一次就能看到死锁。\n\njava\n/\n  模拟死锁：两个线程各持一把锁，再互相申请对方手里的锁。\n /\npublic class DeadLock {\n    public static void main(String args) {\n        ThreadDemo a = new ThreadDemo(true);\n        ThreadDemo b = new ThreadDemo(false);\n        a.setName(\"A线程\");\n        b.setName(\"B线程\");\n        a.start();\n        b.start();\n    }\n}\n\nclass ThreadDemo extends Thread {\n    // static 很关键：无论 new 多少个 ThreadDemo，看到的都是同一两把锁\n    private static final Object object1 = new Object();\n    private static final Object object2 = new Object();\n\n    private final boolean flag;\n\n    public ThreadDemo(boolean flag) {\n        this.flag = flag;\n    }\n\n    @Override\n    public void run() {\n        if (flag) {\n            synchronized (object1) {\n                System.out.println(Thread.currentThread().getName() + \"---开始持有资源object1\");\n                sleepABit();\n                synchronized (object2) {\n                    System.out.println(\"第一个线程拿到object2\");\n                }\n            }\n        } else {\n            synchronized (object2) {\n               "
+  },
+  {
     "title": "GoldenDB 如何协调分布式事务？一笔转账背后的发号、派活与补偿",
     "date": "2026-11-26",
     "category": "数据库",
@@ -127,7 +145,7 @@
       "UML"
     ],
     "readingMinutes": 4,
-    "url": "posts/2026-11-26-8.html",
+    "url": "posts/2026-11-26-9.html",
     "embeds": [
       "embed/se-diagrams-gallery.html"
     ],
