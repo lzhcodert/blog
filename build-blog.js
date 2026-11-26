@@ -538,6 +538,70 @@ const MODAL_JS = `
   });
 })();`;
 
+/* ==================== 护眼模式（首页 + 详情页共用） ==================== */
+/* 启动脚本放在 head：在正文渲染前恢复状态，避免刷新时闪烁 */
+const EYE_BOOT_JS = `
+<script>
+(function(){
+  try{ if(localStorage.getItem('blog-eye-care')==='on') document.documentElement.setAttribute('data-eye','on'); }catch(e){}
+})();
+</script>`;
+
+const EYE_CARE_CSS = `
+/* ---------- 护眼模式：暖色纸张配色，覆盖首页与详情页两套变量 ---------- */
+html[data-eye="on"]{
+  --bg:#f5efdf; --fg:#43392c; --fg2:#6f6250; --fg3:#9c8d76;
+  --border:#ddd0b6; --card:#fbf6e9; --hover:#efe4cd;
+  --accent:#8a6a3b; --accent-soft:#ecdfc2;
+  --surface:#fbf6e9; --surface-3:#efe4cd; --line:#ddd0b6;
+  --text:#43392c; --muted:#6f6250; --faint:#9c8d76;
+  --blue:#8a6a3b; --blue-soft:#ecdfc2;
+}
+html[data-eye="on"] body{background:var(--bg);color:var(--fg)}
+html[data-eye="on"] .article-body{color:var(--text)}
+html[data-eye="on"] .stage-scroll{background:radial-gradient(ellipse at 50% 118%,rgba(138,106,59,.08),transparent 68%)}
+html[data-eye="on"] .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(138,106,59,.14)}
+/* 嵌入图本身是白底 SVG，护眼模式下加极轻暖色滤镜，减少刺眼但不改变图的结构与配色识别 */
+html[data-eye="on"] .embed-figure iframe,html[data-eye="on"] .modal-body iframe{filter:sepia(.12) saturate(.94)}
+/* 弹窗里几处硬编码白底 */
+html[data-eye="on"] .modal-body,html[data-eye="on"] .modal-overlay.landscape-mode,html[data-eye="on"] .modal-overlay:fullscreen{background:#f5efdf}
+/* 右上角悬浮开关：桌面与手机同位置，不与详情页右下角目录按钮冲突 */
+.eye-toggle{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:16px;z-index:150;width:38px;height:38px;border:1px solid var(--border);border-radius:50%;background:var(--card);color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.1);transition:background .18s,color .18s,border-color .18s}
+.eye-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.eye-toggle[aria-pressed="true"]{background:var(--blue-soft);border-color:var(--blue);color:var(--blue)}
+.eye-toggle svg{width:19px;height:19px;display:block}
+@media(max-width:760px){.eye-toggle{width:36px;height:36px;top:calc(12px + env(safe-area-inset-top,0px));right:12px}}`;
+
+const EYE_HTML = `
+<button type="button" class="eye-toggle" id="eyeToggle" aria-label="切换护眼模式" aria-pressed="false" title="开启护眼模式"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg></button>`;
+
+const EYE_JS = `
+<script>
+(function(){
+  var btn=document.getElementById('eyeToggle'); if(!btn) return;
+  var root=document.documentElement;
+  function sync(){
+    var on=root.getAttribute('data-eye')==='on';
+    btn.setAttribute('aria-pressed', on?'true':'false');
+    btn.setAttribute('title', on?'关闭护眼模式':'开启护眼模式');
+  }
+  sync();
+  btn.addEventListener('click', function(){
+    var on=root.getAttribute('data-eye')!=='on';
+    if(on) root.setAttribute('data-eye','on'); else root.removeAttribute('data-eye');
+    try{ localStorage.setItem('blog-eye-care', on?'on':'off'); }catch(e){}
+    sync();
+  });
+})();
+</script>`;
+
+function injectEyeCare(html) {
+  return html
+    .replace('</head>', EYE_BOOT_JS + '\n</head>')
+    .replace('</style>', EYE_CARE_CSS + '\n</style>')
+    .replace('</body>', EYE_HTML + '\n' + EYE_JS + '\n</body>');
+}
+
 function injectModal(html) {
   return html
     .replace('</style>', MODAL_CSS + '\n</style>')
@@ -683,7 +747,7 @@ function renderDetail(post, baseCss) {
     tocMobileHtml + '\n' +
     TOC_JS +
     '</body>\n</html>\n';
-  return injectModal(html);
+  return injectEyeCare(injectModal(html));
 }
 
 function copyDir(src, dest) {
@@ -721,7 +785,7 @@ function build() {
   if (template.indexOf('/* __DATA_START__ */') < 0 || template.indexOf('/* __DATA_END__ */') < 0) {
     throw new Error('模板中找不到 /* __DATA_START__ */ ... /* __DATA_END__ */ 数据注入标记');
   }
-  const finalOutput = renderIndex(posts, template);
+  const finalOutput = injectEyeCare(renderIndex(posts, template));
   const embedCount = posts.reduce(function(n, p) { return n + p.embeds.length; }, 0);
   const usedCatCount = CATS.filter(function(c) {
     return posts.some(function(p) { return catId(p.category) === c.id; });
