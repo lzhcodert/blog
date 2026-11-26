@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>软件工程中的图：什么时候该画哪一种 · 札记</title>
+<title>四川银行信创迁移：133 套系统如何零差错切换 · 札记</title>
 <style>
 
 /* ============ 主题变量（支持浅色/深色） ============ */
@@ -258,409 +258,66 @@ a{color:inherit}
 <main class="pad">
 <div class="detail-wrap">
 <article class="article">
-  <div class="article-meta-top"><span class="dot" style="background:#007aff"></span>建模</div>
-  <h1 class="article-title">软件工程中的图：什么时候该画哪一种</h1>
-  <div class="article-meta">2026-11-26 · 4 分钟阅读</div>
+  <div class="article-meta-top"><span class="dot" style="background:#af52de"></span>行业观察</div>
+  <h1 class="article-title">四川银行信创迁移：133 套系统如何零差错切换</h1>
+  <div class="article-meta">2026-11-26 · 13 分钟阅读</div>
   <div class="article-body">
-<p>团队里最常见的沟通事故，不是&quot;没画图&quot;，而是&quot;画错了图&quot;——想说清一次调用的顺序，却画了一张架构图；想理清订单的状态流转，却丢过来一张类图。图不是装饰，是压缩沟通成本的工具，一张图只回答一个问题。</p>
-<h2 id="sec-1">先分清两大类</h2>
-<p>所有图可以粗分成两类，选图之前先问自己：我要描述的是<strong>结构</strong>还是<strong>行为</strong>？</p>
-<ul><li><strong>静态结构图</strong>回答&quot;系统是什么样&quot;：有哪些模块、类、数据实体、功能边界。它不随时间变化。</li><li><strong>动态行为图</strong>回答&quot;系统怎么运行&quot;：消息按什么顺序传递、流程如何分支、状态怎样跳转。它描述一段过程。</li></ul>
-<p>分不清的时候，看你的句子里有没有时间词。&quot;用户下单后先校验库存，再扣减，最后创建订单&quot;——有先后，是行为图；&quot;系统分为表现层、应用层、领域层和基础设施层&quot;——没时间，是结构图。</p>
-<h2 id="sec-2">七种图各自解决什么</h2>
-<p><strong>架构图</strong>——系统的地图。它画出有哪些块、边界在哪、谁依赖谁。新项目定边界、技术评审、给非技术同事讲全貌时用它。别往里塞接口字段和数据库细节，那会让地图变成施工图。</p>
-<p><strong>时序图</strong>——一次交互的回放。纵轴是时间，横轴是参与者，消息箭头从上往下走。排查&quot;谁先谁后&quot;的调用问题、设计跨服务接口时最顺手。实线通常是同步调用，虚线常表示返回。</p>
-<p><strong>流程图</strong>——分支逻辑的展开。矩形是动作，菱形是判断。业务规则、算法步骤、异常分支用它表达最清楚。它和时序图的区别是：流程图看重&quot;判断与分支&quot;，时序图看重&quot;谁在什么时候发给谁&quot;。</p>
-<p><strong>类图</strong>——面向对象的骨架。每个类分三格：类名、属性、方法；空心三角是继承，普通箭头是关联，旁边的数字表示一对几。领域建模、评审类职责是否清晰时画它。</p>
-<p><strong>ER 图</strong>——数据的地图。矩形是实体，菱形是关系，连线两端标注基数（1:N、N:M）。设计数据库表结构、梳理业务实体关系时用它。它只关心&quot;数据怎么存、怎么关联&quot;，不描述方法行为——这是它和类图最大的不同。</p>
-<p><strong>状态机图</strong>——对象的生命周期。实心圆是起点，双圈是终点，中间是各种状态和触发跳转的事件。订单、工单、审批流这类状态驱动的功能特别适合它，能提前暴露&quot;不可能的状态&quot;。</p>
-<p><strong>用例图</strong>——功能的边界。小人代表参与者，椭圆是一个用例，虚线框圈出系统边界。需求初期用它划定范围、识别不同角色能做什么。记住：用例只说&quot;做什么&quot;，绝不说&quot;怎么做&quot;。</p>
-<h2 id="sec-3">怎么选：一张速查表</h2>
-<table><thead><tr><th>你想回答的问题</th><th>该画的图</th></tr></thead><tbody><tr><td>系统由哪些模块组成？</td><td>架构图</td></tr><tr><td>一次调用谁先谁后？</td><td>时序图</td></tr><tr><td>流程有哪些判断分支？</td><td>流程图</td></tr><tr><td>有哪些类、怎么继承和关联？</td><td>类图</td></tr><tr><td>存哪些数据、实体怎么关联？</td><td>ER 图</td></tr><tr><td>对象有哪些状态、怎么跳转？</td><td>状态机图</td></tr><tr><td>谁能用系统做什么？</td><td>用例图</td></tr></tbody></table>
-<h2 id="sec-4">三个取舍原则</h2>
-<p><strong>一张图只讲一件事。</strong> 把架构、时序、状态全塞进一张图，结果是谁都看不懂。宁可画三张小图，也别画一张&quot;全景图&quot;。</p>
-<p><strong>读者决定详略。</strong> 给业务方看，用用例图和流程图；给前端后端对接口，用时序图；给 DBA 和设计评审，用 ER 图和类图。同一套系统，面对不同人要有不同切面。</p>
-<p><strong>图要能跟着代码活。</strong> 图之所以过时，往往是因为它躺在文档里没人维护。能把图写进代码仓库、随代码一起评审更新，比画得多精美都重要。</p>
-  </div>
-  <div class="article-embeds">
-    <h2 id="sec-embeds">七种图的样例速览</h2>
-<figure class="embed-figure"><figcaption><span>图 1 · 软件工程常见图鉴（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-title="软件工程中的图：什么时候该画哪一种 · 图 1 · 软件工程常见图鉴（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 软件工程常见图鉴（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
-&lt;html lang=&quot;zh-CN&quot;&gt;
-&lt;head&gt;
-&lt;meta charset=&quot;UTF-8&quot;&gt;
-&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
-&lt;title&gt;软件工程常见图鉴 · 样例速览&lt;/title&gt;
-&lt;style&gt;
-  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 40px}
-  .hero{background:linear-gradient(135deg,#5b5bd6,#7a5bd6 55%,#0a84ff);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(90,90,220,.22)}
-  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
-  .hero p{margin:0;font-size:13px;line-height:1.6;opacity:.92}
-  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
-  .hint b{color:var(--blue);font-weight:600}
-  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
-  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
-  .nav a:hover{background:#efeff4}
-  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
-  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
-  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px}
-  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700}
-  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
-  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;margin-left:6px;font-weight:500}
-  .fig{overflow:hidden;background:#fcfcfd;touch-action:none;cursor:grab}
-  .fig:active{cursor:grabbing}
-  .fig svg{display:block;width:100%;height:auto;transform-origin:0 0;user-select:none}
-  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.6}
-  .foot b{color:var(--ink)}
-&lt;/style&gt;
-&lt;/head&gt;
-&lt;body&gt;
-&lt;div class=&quot;hero&quot;&gt;
-  &lt;h1&gt;软件工程常见图鉴&lt;/h1&gt;
-  &lt;p&gt;七种最常画的图，各回答一个问题。示例为简化示意，重点看结构与表达意图，而非细节。滚轮缩放、拖拽平移、双击复位。&lt;/p&gt;
-&lt;/div&gt;
-&lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;滚轮&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;span&gt;博客弹窗里可放大查看细节&lt;/span&gt;&lt;/div&gt;
-&lt;div class=&quot;nav&quot;&gt;
-  &lt;a href=&quot;#g-arch&quot;&gt;架构图&lt;/a&gt;&lt;a href=&quot;#g-seq&quot;&gt;时序图&lt;/a&gt;&lt;a href=&quot;#g-flow&quot;&gt;流程图&lt;/a&gt;&lt;a href=&quot;#g-class&quot;&gt;类图&lt;/a&gt;&lt;a href=&quot;#g-er&quot;&gt;ER 图&lt;/a&gt;&lt;a href=&quot;#g-state&quot;&gt;状态机图&lt;/a&gt;&lt;a href=&quot;#g-usecase&quot;&gt;用例图&lt;/a&gt;
-&lt;/div&gt;
-
-&lt;!-- 1 架构图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-arch&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;架构图 &lt;span class=&quot;tag&quot;&gt;静态 · 是什么&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「系统由哪些块组成、边界在哪、谁依赖谁」。看的是稳定的结构，不关心执行顺序。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 352&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar1&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;13&quot;&gt;
-        &lt;g fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;&gt;
-          &lt;rect x=&quot;20&quot; y=&quot;16&quot; width=&quot;1000&quot; height=&quot;66&quot; rx=&quot;12&quot;/&gt;
-          &lt;rect x=&quot;20&quot; y=&quot;100&quot; width=&quot;1000&quot; height=&quot;66&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d9d2ff&quot;/&gt;
-          &lt;rect x=&quot;20&quot; y=&quot;184&quot; width=&quot;1000&quot; height=&quot;66&quot; rx=&quot;12&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#c8ecd5&quot;/&gt;
-          &lt;rect x=&quot;20&quot; y=&quot;268&quot; width=&quot;1000&quot; height=&quot;66&quot; rx=&quot;12&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#3a3a3c&quot;&gt;
-          &lt;text x=&quot;38&quot; y=&quot;55&quot;&gt;表现层&lt;/text&gt;&lt;text x=&quot;38&quot; y=&quot;139&quot;&gt;应用层&lt;/text&gt;&lt;text x=&quot;38&quot; y=&quot;223&quot;&gt;领域层&lt;/text&gt;&lt;text x=&quot;38&quot; y=&quot;307&quot;&gt;基础设施层&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g text-anchor=&quot;middle&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;g&gt;
-            &lt;rect x=&quot;170&quot; y=&quot;30&quot; width=&quot;180&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;/&gt;
-            &lt;rect x=&quot;380&quot; y=&quot;30&quot; width=&quot;180&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;/&gt;
-            &lt;rect x=&quot;590&quot; y=&quot;30&quot; width=&quot;180&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;/&gt;
-            &lt;text x=&quot;260&quot; y=&quot;54&quot;&gt;Web 工作台&lt;/text&gt;&lt;text x=&quot;470&quot; y=&quot;54&quot;&gt;iOS App&lt;/text&gt;&lt;text x=&quot;680&quot; y=&quot;54&quot;&gt;Android App&lt;/text&gt;
-          &lt;/g&gt;
-          &lt;g&gt;
-            &lt;rect x=&quot;170&quot; y=&quot;114&quot; width=&quot;230&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#d2c9ff&quot;/&gt;
-            &lt;rect x=&quot;430&quot; y=&quot;114&quot; width=&quot;230&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#d2c9ff&quot;/&gt;
-            &lt;text x=&quot;285&quot; y=&quot;138&quot;&gt;API 网关 · 鉴权限流&lt;/text&gt;&lt;text x=&quot;545&quot; y=&quot;138&quot;&gt;业务编排 · 用例聚合&lt;/text&gt;
-          &lt;/g&gt;
-          &lt;g&gt;
-            &lt;rect x=&quot;170&quot; y=&quot;198&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe6cd&quot;/&gt;
-            &lt;rect x=&quot;370&quot; y=&quot;198&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe6cd&quot;/&gt;
-            &lt;rect x=&quot;570&quot; y=&quot;198&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#bfe6cd&quot;/&gt;
-            &lt;text x=&quot;255&quot; y=&quot;222&quot;&gt;用户域&lt;/text&gt;&lt;text x=&quot;455&quot; y=&quot;222&quot;&gt;订单域&lt;/text&gt;&lt;text x=&quot;655&quot; y=&quot;222&quot;&gt;商品域&lt;/text&gt;
-          &lt;/g&gt;
-          &lt;g&gt;
-            &lt;rect x=&quot;170&quot; y=&quot;282&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#f2d6a8&quot;/&gt;
-            &lt;rect x=&quot;370&quot; y=&quot;282&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#f2d6a8&quot;/&gt;
-            &lt;rect x=&quot;570&quot; y=&quot;282&quot; width=&quot;170&quot; height=&quot;38&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#f2d6a8&quot;/&gt;
-            &lt;text x=&quot;255&quot; y=&quot;306&quot;&gt;MySQL&lt;/text&gt;&lt;text x=&quot;455&quot; y=&quot;306&quot;&gt;Redis 缓存&lt;/text&gt;&lt;text x=&quot;655&quot; y=&quot;306&quot;&gt;消息队列&lt;/text&gt;
-          &lt;/g&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.3&quot; marker-end=&quot;url(#ar1)&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M900,286 L900,258&quot;/&gt;&lt;path d=&quot;M900,202 L900,174&quot;/&gt;&lt;path d=&quot;M900,118 L900,90&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;916&quot; y=&quot;150&quot; font-size=&quot;11.5&quot; fill=&quot;#8e8e93&quot;&gt;上层调用下层&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;新项目定边界、技术评审、给非技术同事讲系统全貌。&lt;b&gt;别塞：&lt;/b&gt;接口细节、数据库字段。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 2 时序图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-seq&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;时序图 &lt;span class=&quot;tag&quot;&gt;动态 · 怎么走&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「一次交互中，消息按什么时间顺序在对象之间传递」。纵轴是时间，横轴是参与者。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 392&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar2&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ar2b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;g text-anchor=&quot;middle&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;rect x=&quot;40&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#b8d2ff&quot;/&gt;&lt;text x=&quot;95&quot; y=&quot;38&quot;&gt;用户&lt;/text&gt;
-          &lt;rect x=&quot;240&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#b8d2ff&quot;/&gt;&lt;text x=&quot;295&quot; y=&quot;38&quot;&gt;前端&lt;/text&gt;
-          &lt;rect x=&quot;440&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c9ff&quot;/&gt;&lt;text x=&quot;495&quot; y=&quot;38&quot;&gt;API 网关&lt;/text&gt;
-          &lt;rect x=&quot;640&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bfe6cd&quot;/&gt;&lt;text x=&quot;695&quot; y=&quot;38&quot;&gt;订单服务&lt;/text&gt;
-          &lt;rect x=&quot;840&quot; y=&quot;16&quot; width=&quot;110&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f2d6a8&quot;/&gt;&lt;text x=&quot;895&quot; y=&quot;38&quot;&gt;数据库&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#c7c7cc&quot; stroke-width=&quot;1&quot; stroke-dasharray=&quot;4 4&quot;&gt;
-          &lt;path d=&quot;M95,50 L95,372&quot;/&gt;&lt;path d=&quot;M295,50 L295,372&quot;/&gt;&lt;path d=&quot;M495,50 L495,372&quot;/&gt;&lt;path d=&quot;M695,50 L695,372&quot;/&gt;&lt;path d=&quot;M895,50 L895,372&quot;/&gt;
-        &lt;/g&gt;
-        &lt;rect x=&quot;688&quot; y=&quot;150&quot; width=&quot;14&quot; height=&quot;92&quot; rx=&quot;4&quot; fill=&quot;#007aff&quot; opacity=&quot;.14&quot;/&gt;
-        &lt;g font-size=&quot;11.5&quot; fill=&quot;#3a3a3c&quot;&gt;
-          &lt;text x=&quot;105&quot; y=&quot;78&quot;&gt;提交订单&lt;/text&gt;
-          &lt;text x=&quot;305&quot; y=&quot;116&quot;&gt;POST /orders&lt;/text&gt;
-          &lt;text x=&quot;505&quot; y=&quot;154&quot;&gt;鉴权后转发&lt;/text&gt;
-          &lt;text x=&quot;705&quot; y=&quot;192&quot;&gt;INSERT order&lt;/text&gt;
-          &lt;text x=&quot;760&quot; y=&quot;230&quot;&gt;写入成功&lt;/text&gt;
-          &lt;text x=&quot;515&quot; y=&quot;268&quot;&gt;201 Created&lt;/text&gt;
-          &lt;text x=&quot;315&quot; y=&quot;306&quot;&gt;下单成功&lt;/text&gt;
-          &lt;text x=&quot;115&quot; y=&quot;344&quot;&gt;显示结果&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g stroke-width=&quot;1.4&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar2)&quot;&gt;
-          &lt;path d=&quot;M95,70 L290,70&quot;/&gt;&lt;path d=&quot;M295,108 L490,108&quot;/&gt;&lt;path d=&quot;M495,146 L690,146&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g stroke-width=&quot;1.4&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar2b)&quot;&gt;
-          &lt;path d=&quot;M695,184 L890,184&quot;/&gt;&lt;path d=&quot;M895,222 L700,222&quot;/&gt;&lt;path d=&quot;M695,260 L500,260&quot;/&gt;
-          &lt;path d=&quot;M495,298 L300,298&quot;/&gt;&lt;path d=&quot;M295,336 L100,336&quot;/&gt;
-        &lt;/g&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;理清跨服务调用链、排查&quot;谁先谁后&quot;的时序 bug、设计接口交互。&lt;b&gt;要点：&lt;/b&gt;实线是同步调用，虚线常表示返回。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 3 流程图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-flow&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;流程图 &lt;span class=&quot;tag&quot;&gt;动态 · 怎么判&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「从开始到结束经过哪些步骤与判断」。菱形是判断，矩形是动作，最能表达分支逻辑。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 300&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar3&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;12.5&quot; text-anchor=&quot;middle&quot;&gt;
-        &lt;rect x=&quot;30&quot; y=&quot;118&quot; width=&quot;96&quot; height=&quot;44&quot; rx=&quot;22&quot; fill=&quot;#1d1d1f&quot;/&gt;&lt;text x=&quot;78&quot; y=&quot;145&quot; fill=&quot;#fff&quot;&gt;开始&lt;/text&gt;
-        &lt;rect x=&quot;176&quot; y=&quot;118&quot; width=&quot;130&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#b8d2ff&quot;/&gt;&lt;text x=&quot;241&quot; y=&quot;145&quot; fill=&quot;#1d1d1f&quot;&gt;提交订单&lt;/text&gt;
-        &lt;polygon points=&quot;410,100 480,140 410,180 340,140&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f2d6a8&quot;/&gt;&lt;text x=&quot;410&quot; y=&quot;145&quot; fill=&quot;#1d1d1f&quot;&gt;库存充足？&lt;/text&gt;
-        &lt;rect x=&quot;540&quot; y=&quot;52&quot; width=&quot;140&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bfe6cd&quot;/&gt;&lt;text x=&quot;610&quot; y=&quot;79&quot; fill=&quot;#1d1d1f&quot;&gt;创建订单&lt;/text&gt;
-        &lt;rect x=&quot;730&quot; y=&quot;52&quot; width=&quot;120&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bfe6cd&quot;/&gt;&lt;text x=&quot;790&quot; y=&quot;79&quot; fill=&quot;#1d1d1f&quot;&gt;发起支付&lt;/text&gt;
-        &lt;rect x=&quot;540&quot; y=&quot;190&quot; width=&quot;140&quot; height=&quot;44&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#f2d6a8&quot;/&gt;&lt;text x=&quot;610&quot; y=&quot;217&quot; fill=&quot;#1d1d1f&quot;&gt;提示缺货&lt;/text&gt;
-        &lt;rect x=&quot;920&quot; y=&quot;52&quot; width=&quot;94&quot; height=&quot;44&quot; rx=&quot;22&quot; fill=&quot;#1d1d1f&quot;/&gt;&lt;text x=&quot;967&quot; y=&quot;79&quot; fill=&quot;#fff&quot;&gt;结束&lt;/text&gt;
-        &lt;rect x=&quot;920&quot; y=&quot;190&quot; width=&quot;94&quot; height=&quot;44&quot; rx=&quot;22&quot; fill=&quot;#1d1d1f&quot;/&gt;&lt;text x=&quot;967&quot; y=&quot;217&quot; fill=&quot;#fff&quot;&gt;结束&lt;/text&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar3)&quot;&gt;
-          &lt;path d=&quot;M126,140 L172,140&quot;/&gt;&lt;path d=&quot;M306,140 L336,140&quot;/&gt;
-          &lt;path d=&quot;M480,128 L536,74&quot;/&gt;&lt;path d=&quot;M680,74 L726,74&quot;/&gt;&lt;path d=&quot;M850,74 L916,74&quot;/&gt;
-          &lt;path d=&quot;M410,182 L410,214 L536,214&quot;/&gt;&lt;path d=&quot;M680,214 L916,214&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;505&quot; y=&quot;96&quot; fill=&quot;#34c759&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot;&gt;是&lt;/text&gt;
-        &lt;text x=&quot;466&quot; y=&quot;205&quot; fill=&quot;#ff9500&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot;&gt;否&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;梳理业务规则、算法步骤、异常分支。&lt;b&gt;和时序图的区别：&lt;/b&gt;流程图看重&quot;判断与分支&quot;，时序图看重&quot;谁在什么时候发给谁&quot;。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 4 类图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-class&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;类图 &lt;span class=&quot;tag&quot;&gt;静态 · 面向对象&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「有哪些类、各自的属性与方法、类之间如何关联与继承」。是面向对象设计的核心图。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 372&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar4&quot; markerWidth=&quot;10&quot; markerHeight=&quot;10&quot; refX=&quot;9&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L9,3 L0,6 Z&quot; fill=&quot;#5856d6&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ar4h&quot; markerWidth=&quot;12&quot; markerHeight=&quot;12&quot; refX=&quot;10&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,1 L10,4 L0,7 Z&quot; fill=&quot;none&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.2&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;g font-size=&quot;13&quot;&gt;
-          &lt;rect x=&quot;60&quot; y=&quot;30&quot; width=&quot;230&quot; height=&quot;132&quot; rx=&quot;4&quot; fill=&quot;#fff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;
-          &lt;rect x=&quot;60&quot; y=&quot;30&quot; width=&quot;230&quot; height=&quot;32&quot; fill=&quot;#efedff&quot;/&gt;&lt;text x=&quot;175&quot; y=&quot;51&quot; text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a2fa0&quot;&gt;User&lt;/text&gt;
-          &lt;text x=&quot;74&quot; y=&quot;82&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ id : Long&lt;/text&gt;&lt;text x=&quot;74&quot; y=&quot;102&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ name : String&lt;/text&gt;
-          &lt;line x1=&quot;60&quot; y1=&quot;114&quot; x2=&quot;290&quot; y2=&quot;114&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-          &lt;text x=&quot;74&quot; y=&quot;136&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ getOrders() : List&lt;/text&gt;&lt;text x=&quot;74&quot; y=&quot;154&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ changeName()&lt;/text&gt;
-
-          &lt;rect x=&quot;420&quot; y=&quot;30&quot; width=&quot;250&quot; height=&quot;150&quot; rx=&quot;4&quot; fill=&quot;#fff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;
-          &lt;rect x=&quot;420&quot; y=&quot;30&quot; width=&quot;250&quot; height=&quot;32&quot; fill=&quot;#efedff&quot;/&gt;&lt;text x=&quot;545&quot; y=&quot;51&quot; text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a2fa0&quot;&gt;Order&lt;/text&gt;
-          &lt;text x=&quot;434&quot; y=&quot;82&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ id : Long&lt;/text&gt;&lt;text x=&quot;434&quot; y=&quot;102&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ userId : Long&lt;/text&gt;&lt;text x=&quot;434&quot; y=&quot;122&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ amount : BigDecimal&lt;/text&gt;
-          &lt;line x1=&quot;420&quot; y1=&quot;134&quot; x2=&quot;670&quot; y2=&quot;134&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-          &lt;text x=&quot;434&quot; y=&quot;156&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ addItem(item)&lt;/text&gt;&lt;text x=&quot;434&quot; y=&quot;174&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ pay() : boolean&lt;/text&gt;
-
-          &lt;rect x=&quot;790&quot; y=&quot;30&quot; width=&quot;220&quot; height=&quot;132&quot; rx=&quot;4&quot; fill=&quot;#fff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;
-          &lt;rect x=&quot;790&quot; y=&quot;30&quot; width=&quot;220&quot; height=&quot;32&quot; fill=&quot;#efedff&quot;/&gt;&lt;text x=&quot;900&quot; y=&quot;51&quot; text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a2fa0&quot;&gt;OrderItem&lt;/text&gt;
-          &lt;text x=&quot;804&quot; y=&quot;82&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ productId : Long&lt;/text&gt;&lt;text x=&quot;804&quot; y=&quot;102&quot; font-size=&quot;12&quot; fill=&quot;#3a3a3c&quot;&gt;+ qty : int&lt;/text&gt;
-          &lt;line x1=&quot;790&quot; y1=&quot;114&quot; x2=&quot;1010&quot; y2=&quot;114&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-          &lt;text x=&quot;804&quot; y=&quot;136&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ subtotal()&lt;/text&gt;
-
-          &lt;rect x=&quot;420&quot; y=&quot;258&quot; width=&quot;250&quot; height=&quot;66&quot; rx=&quot;4&quot; fill=&quot;#fff&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.4&quot;/&gt;
-          &lt;rect x=&quot;420&quot; y=&quot;258&quot; width=&quot;250&quot; height=&quot;28&quot; fill=&quot;#f2f2f7&quot;/&gt;&lt;text x=&quot;545&quot; y=&quot;277&quot; text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a3a3c&quot;&gt;«abstract» BaseEntity&lt;/text&gt;
-          &lt;text x=&quot;434&quot; y=&quot;310&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;+ createdAt / updatedAt&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#5856d6&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M290,86 L416,86&quot; marker-end=&quot;url(#ar4)&quot;/&gt;&lt;path d=&quot;M670,86 L786,86&quot; marker-end=&quot;url(#ar4)&quot;/&gt;
-          &lt;path d=&quot;M545,180 L545,254&quot; marker-end=&quot;url(#ar4h)&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;11.5&quot; fill=&quot;#5856d6&quot;&gt;
-          &lt;text x=&quot;330&quot; y=&quot;78&quot;&gt;1&lt;/text&gt;&lt;text x=&quot;360&quot; y=&quot;78&quot;&gt;*&lt;/text&gt;
-          &lt;text x=&quot;710&quot; y=&quot;78&quot;&gt;1&lt;/text&gt;&lt;text x=&quot;740&quot; y=&quot;78&quot;&gt;*&lt;/text&gt;
-          &lt;text x=&quot;558&quot; y=&quot;222&quot;&gt;继承&lt;/text&gt;
-        &lt;/g&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;领域建模、代码结构设计、评审类职责是否清晰。&lt;b&gt;读图：&lt;/b&gt;空心三角是继承，普通箭头是关联，数字表示多重性。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 5 ER 图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-er&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;ER 图 &lt;span class=&quot;tag&quot;&gt;静态 · 数据模型&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「要存哪些实体、实体之间是什么关系」。数据库建模的基础，关注数据而不是行为。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 310&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar5&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; text-anchor=&quot;middle&quot;&gt;
-        &lt;rect x=&quot;70&quot; y=&quot;106&quot; width=&quot;170&quot; height=&quot;78&quot; rx=&quot;8&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;155&quot; y=&quot;136&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;用户&lt;/text&gt;
-        &lt;text x=&quot;155&quot; y=&quot;160&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;id · name · phone&lt;/text&gt;
-
-        &lt;polygon points=&quot;430,145 480,108 530,145 480,182&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#ff9500&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;480&quot; y=&quot;150&quot; font-size=&quot;13&quot; fill=&quot;#b26b00&quot;&gt;下单&lt;/text&gt;
-
-        &lt;rect x=&quot;590&quot; y=&quot;106&quot; width=&quot;170&quot; height=&quot;78&quot; rx=&quot;8&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#34c759&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;675&quot; y=&quot;136&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;订单&lt;/text&gt;
-        &lt;text x=&quot;675&quot; y=&quot;160&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;id · amount · time&lt;/text&gt;
-
-        &lt;polygon points=&quot;810,145 850,108 890,145 850,182&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#ff9500&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;850&quot; y=&quot;150&quot; font-size=&quot;13&quot; fill=&quot;#b26b00&quot;&gt;包含&lt;/text&gt;
-
-        &lt;rect x=&quot;920&quot; y=&quot;106&quot; width=&quot;100&quot; height=&quot;78&quot; rx=&quot;8&quot; fill=&quot;#f0edff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;
-        &lt;text x=&quot;970&quot; y=&quot;140&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;商品&lt;/text&gt;
-        &lt;text x=&quot;970&quot; y=&quot;160&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;id · price&lt;/text&gt;
-
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot;&gt;
-          &lt;path d=&quot;M240,145 L426,145&quot;/&gt;&lt;path d=&quot;M534,145 L586,145&quot;/&gt;&lt;path d=&quot;M760,145 L806,145&quot;/&gt;&lt;path d=&quot;M894,145 L916,145&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;
-          &lt;text x=&quot;300&quot; y=&quot;136&quot;&gt;1&lt;/text&gt;&lt;text x=&quot;378&quot; y=&quot;136&quot;&gt;N&lt;/text&gt;
-          &lt;text x=&quot;710&quot; y=&quot;136&quot;&gt;N&lt;/text&gt;&lt;text x=&quot;900&quot; y=&quot;200&quot;&gt;M&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;520&quot; y=&quot;262&quot; font-size=&quot;12.5&quot; fill=&quot;#6e6e73&quot;&gt;矩形＝实体　菱形＝关系　连线两端标注基数（1 : N / N : M）&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;设计数据库表结构、梳理业务实体关系。&lt;b&gt;和类图的区别：&lt;/b&gt;ER 图描述&quot;数据怎么存、怎么关联&quot;，不描述方法行为。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 6 状态机图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-state&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;状态机图 &lt;span class=&quot;tag&quot;&gt;动态 · 状态变化&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「一个对象能处于哪些状态、什么事件触发状态跳转」。特别适合订单、审批这类有明确生命周期的对象。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 286&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar6&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-        &lt;circle cx=&quot;30&quot; cy=&quot;62&quot; r=&quot;8&quot; fill=&quot;#1d1d1f&quot;/&gt;
-        &lt;g font-size=&quot;13&quot; text-anchor=&quot;middle&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;rect x=&quot;70&quot; y=&quot;38&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#ff9500&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;140&quot; y=&quot;67&quot;&gt;待支付&lt;/text&gt;
-          &lt;rect x=&quot;300&quot; y=&quot;38&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;370&quot; y=&quot;67&quot;&gt;已支付&lt;/text&gt;
-          &lt;rect x=&quot;530&quot; y=&quot;38&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#5856d6&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;600&quot; y=&quot;67&quot;&gt;已发货&lt;/text&gt;
-          &lt;rect x=&quot;760&quot; y=&quot;38&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#34c759&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;830&quot; y=&quot;67&quot;&gt;已完成&lt;/text&gt;
-          &lt;rect x=&quot;300&quot; y=&quot;180&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;370&quot; y=&quot;209&quot;&gt;已取消&lt;/text&gt;
-          &lt;rect x=&quot;530&quot; y=&quot;180&quot; width=&quot;140&quot; height=&quot;48&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.4&quot;/&gt;&lt;text x=&quot;600&quot; y=&quot;209&quot;&gt;已退款&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.4&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar6)&quot;&gt;
-          &lt;path d=&quot;M38,62 L66,62&quot;/&gt;&lt;path d=&quot;M210,62 L296,62&quot;/&gt;&lt;path d=&quot;M440,62 L526,62&quot;/&gt;&lt;path d=&quot;M670,62 L756,62&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot; stroke-dasharray=&quot;4 3&quot; marker-end=&quot;url(#ar6)&quot;&gt;
-          &lt;path d=&quot;M140,86 L140,176&quot;/&gt;&lt;path d=&quot;M370,86 L370,176&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;11&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;
-          &lt;text x=&quot;253&quot; y=&quot;54&quot;&gt;支付成功&lt;/text&gt;&lt;text x=&quot;483&quot; y=&quot;54&quot;&gt;发货&lt;/text&gt;&lt;text x=&quot;713&quot; y=&quot;54&quot;&gt;确认收货&lt;/text&gt;
-          &lt;text x=&quot;150&quot; y=&quot;136&quot;&gt;超时/取消&lt;/text&gt;&lt;text x=&quot;382&quot; y=&quot;136&quot;&gt;申请退款&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;circle cx=&quot;930&quot; cy=&quot;62&quot; r=&quot;9&quot; fill=&quot;none&quot; stroke=&quot;#1d1d1f&quot; stroke-width=&quot;2&quot;/&gt;
-        &lt;path d=&quot;M900,62 L917,62&quot; stroke=&quot;#1d1d1f&quot; stroke-width=&quot;1.4&quot; marker-end=&quot;url(#ar6)&quot;/&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;订单、工单、审批流等状态驱动的功能；防止出现&quot;不可能的状态&quot;。&lt;b&gt;要点：&lt;/b&gt;实心圆是起点，双圈是终点。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 7 用例图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;g-usecase&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;7&lt;/span&gt;用例图 &lt;span class=&quot;tag&quot;&gt;静态 · 功能边界&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;回答「谁在用系统、系统对外提供哪些功能」。用于划定系统边界和角色权限，不涉及实现顺序。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;fig&quot;&gt;
-    &lt;svg viewBox=&quot;0 0 1040 356&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-      &lt;defs&gt;&lt;marker id=&quot;ar7&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; text-anchor=&quot;middle&quot;&gt;
-        &lt;rect x=&quot;230&quot; y=&quot;30&quot; width=&quot;580&quot; height=&quot;296&quot; rx=&quot;18&quot; fill=&quot;#fbfbfe&quot; stroke=&quot;#c7c7cc&quot; stroke-width=&quot;1.4&quot; stroke-dasharray=&quot;6 4&quot;/&gt;
-        &lt;text x=&quot;520&quot; y=&quot;58&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#6e6e73&quot;&gt;电商系统（系统边界）&lt;/text&gt;
-        &lt;g fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;1.3&quot; font-size=&quot;12.5&quot; fill-opacity=&quot;1&quot;&gt;
-          &lt;ellipse cx=&quot;370&quot; cy=&quot;120&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot;/&gt;
-          &lt;ellipse cx=&quot;370&quot; cy=&quot;230&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot;/&gt;
-          &lt;ellipse cx=&quot;570&quot; cy=&quot;120&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#34c759&quot;/&gt;
-          &lt;ellipse cx=&quot;570&quot; cy=&quot;230&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#34c759&quot;/&gt;
-          &lt;ellipse cx=&quot;770&quot; cy=&quot;175&quot; rx=&quot;82&quot; ry=&quot;30&quot; fill=&quot;#f0edff&quot; stroke=&quot;#5856d6&quot;/&gt;
-        &lt;/g&gt;
-        &lt;g font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;
-          &lt;text x=&quot;370&quot; y=&quot;125&quot;&gt;登录&lt;/text&gt;&lt;text x=&quot;370&quot; y=&quot;235&quot;&gt;浏览商品&lt;/text&gt;
-          &lt;text x=&quot;570&quot; y=&quot;125&quot;&gt;下单&lt;/text&gt;&lt;text x=&quot;570&quot; y=&quot;235&quot;&gt;支付&lt;/text&gt;&lt;text x=&quot;770&quot; y=&quot;180&quot;&gt;查看订单&lt;/text&gt;
-        &lt;/g&gt;
-        &lt;g transform=&quot;translate(110,160)&quot; stroke=&quot;#1d1d1f&quot; stroke-width=&quot;1.6&quot; fill=&quot;none&quot;&gt;
-          &lt;circle cx=&quot;0&quot; cy=&quot;-26&quot; r=&quot;10&quot;/&gt;&lt;path d=&quot;M0,-16 L0,6 M-12,-8 L12,-8 M0,6 L-10,26 M0,6 L10,26&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;110&quot; y=&quot;216&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;用户&lt;/text&gt;
-        &lt;g transform=&quot;translate(930,160)&quot; stroke=&quot;#1d1d1f&quot; stroke-width=&quot;1.6&quot; fill=&quot;none&quot;&gt;
-          &lt;circle cx=&quot;0&quot; cy=&quot;-26&quot; r=&quot;10&quot;/&gt;&lt;path d=&quot;M0,-16 L0,6 M-12,-8 L12,-8 M0,6 L-10,26 M0,6 L10,26&quot;/&gt;
-        &lt;/g&gt;
-        &lt;text x=&quot;930&quot; y=&quot;216&quot; font-size=&quot;12.5&quot; fill=&quot;#1d1d1f&quot;&gt;管理员&lt;/text&gt;
-        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.2&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar7)&quot;&gt;
-          &lt;path d=&quot;M138,168 L286,120&quot;/&gt;&lt;path d=&quot;M138,176 L286,230&quot;/&gt;
-          &lt;path d=&quot;M902,168 L854,175&quot;/&gt;
-        &lt;/g&gt;
-        &lt;path d=&quot;M452,120 L488,120&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.2&quot; stroke-dasharray=&quot;3 2&quot; fill=&quot;none&quot;/&gt;
-        &lt;text x=&quot;520&quot; y=&quot;316&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;小人＝参与者　椭圆＝用例　虚线框＝系统边界&lt;/text&gt;
-      &lt;/g&gt;
-    &lt;/svg&gt;
-  &lt;/div&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;什么时候画：&lt;/b&gt;需求初期梳理功能范围、识别不同角色能做什么。&lt;b&gt;注意：&lt;/b&gt;用例只说&quot;做什么&quot;，不说&quot;怎么做&quot;。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;script&gt;
-(function(){
-  document.querySelectorAll(&#39;.fig&#39;).forEach(function(fig){
-    var svg=fig.querySelector(&#39;svg&#39;); if(!svg)return;
-    var scale=1,tx=0,ty=0;
-    function apply(){svg.style.transform=&#39;translate(&#39;+tx+&#39;px,&#39;+ty+&#39;px) scale(&#39;+scale+&#39;)&#39;;}
-    fig.addEventListener(&#39;wheel&#39;,function(e){
-      e.preventDefault();
-      var r=fig.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
-      var f=e.deltaY&lt;0?1.12:1/1.12,ns=Math.min(5,Math.max(.6,scale*f));
-      tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;apply();
-    },{passive:false});
-    var drag=false,sx=0,sy=0,ox=0,oy=0;
-    fig.addEventListener(&#39;pointerdown&#39;,function(e){drag=true;sx=e.clientX;sy=e.clientY;ox=tx;oy=ty;try{fig.setPointerCapture(e.pointerId)}catch(err){}});
-    fig.addEventListener(&#39;pointermove&#39;,function(e){if(!drag)return;tx=ox+(e.clientX-sx);ty=oy+(e.clientY-sy);apply();});
-    fig.addEventListener(&#39;pointerup&#39;,function(){drag=false;});
-    fig.addEventListener(&#39;pointercancel&#39;,function(){drag=false;});
-    fig.addEventListener(&#39;dblclick&#39;,function(){scale=1;tx=0;ty=0;apply();});
-  });
-})();
-&lt;/script&gt;
-&lt;/body&gt;
-&lt;/html&gt;
-" sandbox="allow-scripts" loading="lazy" style="height:700px"></iframe></figure>
+<p>四川银行的信创迁移常被概括成一句“48 小时切换 133 套系统”，但这句话省略了最难的部分：它不是把数据从一台数据库搬到另一台数据库，而是把两家银行留下的异构系统、两套核心和一堆不一致的数据口径，重新建模后装进一套云原生分布式架构里。</p>
+<h2 id="sec-1">为什么这不是一次简单的“换库”</h2>
+<p>四川银行于 2020 年 11 月由攀枝花市商业银行和凉山州商业银行新设合并成立。开业时为了尽快营业，采用了“桥”方案：在成都建一个统一出入口做路由分发，原有的两套核心继续跑。系统一度超过 400 套，两套核心都基于传统集中式架构——IBM 小机、Oracle、国外商业中间件。</p>
+<p>所以这次迁移其实是三层叠加：</p>
+<ul><li>合并带来的两套数据要归一；</li><li>老架构到新架构要做模型重构；</li><li>国产化技术栈要整体替换。</li></ul>
+<p>换句话说，数据不是原样搬过去，而是要重新建模后再落进去。这也是它被反复强调“复杂”的根本原因。</p>
+<h2 id="sec-2">时间线：三年工程，52 小时攻坚</h2>
+<ul><li>2022 年 4 月，启动“新一代信息科技工程”，规划历时 1 年，编制 3000 余页规划；工程建设历时 2 年，建设 14 大项目群、近 200 套系统。</li><li>2023 年 11 月，基础底座与支付、核心、渠道信投三大业务项目群同步建设。</li><li>2024 年 8 月，完成云平台与分布式数据库的生产部署；43 个技术平台类、数据平台类、安全工具类系统作为提前投产批次，其中集中查控系统于 8 月 28 日率先投产，是第一个真正跑在 OceanBase 上的生产系统。</li><li>2025 年 1 月，开发测试基本完成，随后开展两轮技术演练、三轮容灾演练和五轮投产演练。</li><li>2025 年 5 月 23 日至 25 日，开展 52 小时极限攻坚，完成投产准备、投产启动、数据迁移、业务核对、试营业、日终批量、正式营业 7 大环节、3477 条指令，134 个系统一次性集中投产“零差错”。截至 2025 年底共投产 170 个系统。</li></ul>
+<p>关于窗口时长，公开材料有三种口径：媒体常引用“48 小时内 133 套系统完成切换”，行方新闻稿写“52 小时极限攻坚”，核心系统群案例则说“12 小时内完成应用部署、数据迁移和应用启动”。三者统计范围不同，分别是全行窗口、攻坚总时长和单环节耗时，不宜混用。</p>
+<h2 id="sec-3">数据迁移的七道工序</h2>
+<p>四川银行金融科技部副总经理万柯辰把“数据转换复杂”列为五大难点之一，并给出过明确拆解：</p>
+<table><thead><tr><th>环节</th><th>实际要解决的问题</th></tr></thead><tbody><tr><td>数据迁出</td><td>从两套核心及周边系统抽数，涉及异构库、加密字段</td></tr><tr><td>数据检核</td><td>检查抽取的完整性与有效性，暴露脏数据</td></tr><tr><td>映射转换</td><td>老模型到新模型的字段级、规则级转换，工作量最大</td></tr><tr><td>数据加载</td><td>灌入新库，同时处理分库分表路由</td></tr><tr><td>数据落标</td><td>按全行统一数据标准规范字段</td></tr><tr><td>数据补录</td><td>补齐老系统没有、但新系统必需的数据</td></tr><tr><td>数据验证</td><td>与源端比对，做业务核对，确保总分账平衡</td></tr></tbody></table>
+<p>此外，新一代系统实现了交易与核算分离，投产还需要完成总账初始化。也就是说，迁移链条里既有技术比对，也有业务口径核对，两者是独立环节。</p>
+<h2 id="sec-4">信创带来的三个特有变量</h2>
+<h3 id="sec-5">单元化分库：数据要“按规则散列”落库</h3>
+<p>核心系统群以客户为切分维度，划分全局单元（GDU）和标准单元（SDU）。标准单元数据按客户号以 16 取模，水平划分为 16 个分片库（00~15）。存款、客户信息管理、合约管理等系统单元化部署，产品管理、机构管理、会计引擎等则非单元化部署。</p>
+<p>这意味着迁移程序必须内置与生产一致的分片路由逻辑，不能整库直搬。</p>
+<h3 id="sec-6">多数据库并存：工具链不止一套</h3>
+<p>OceanBase 在 POC 中从四家厂商里胜出，占系统比例约 50%；技术栈中还有 TDSQL 等多模分布式数据库，并构建了 160 个分布式数据库租户。多库并存意味着迁移工具、校验方案都不能只准备一套。</p>
+<h3 id="sec-7">数据落标：迁移即治数</h3>
+<p>该行数据治理团队只有约 5 人。早年请咨询公司做过数据标准，但落不了地，原因是前端系统不配合改造。这次改为在招标阶段就明确落标要求，强制厂商配专职落标工程师，从需求到投产全流程管控：对 67 个业务系统实施落标，累计落标字段约 1.3 万个，整体落标率约 99.7%。</p>
+<p>还有一个容易被忽视的死角：加密数据。2024 年 2 月公示的“新一代支付密码系统数据迁移项目”预算 17.92 万元，采用单一来源采购，理由是数据加密存储，迁移必须解密并做格式转换，而解密算法为原厂商独有。加密存储加私有算法，往往是信创迁移里最难绕开的点。</p>
+<h2 id="sec-8">准确性不靠双轨：四川银行的单轨切换</h2>
+<p>有人问“双轨并行后怎么保证新系统数据准确”，前提其实不成立。从公开材料看，四川银行走的是一次性集中投产、单轨切换，并没有长期双轨并行。同业贵州农商联合银行也明确放弃双系统并行，理由包括新旧架构数据模型不兼容、增量同步难保一致性、双跑会让对账成本翻倍。</p>
+<p>在全栈信创场景下，数据库、中间件、应用全换，两套模型对不上，“并行比对”本身可能就是伪命题。四川银行把准确性保障放在另外几处：</p>
+<ul><li>切换前：用两轮技术演练、三轮容灾演练、五轮投产演练代替并行比对；43 个低风险系统提前投产，先把迁移链路走通。</li><li>测试侧：核心系统测试实践明确写了“交易与核算实时分离模式下精准对账验证”，使用全局流水号匹配、混沌工程、智能精准比对和全链路核对拓扑。</li><li>迁移过程：七道工序层层收口，技术验证与业务核对分列。</li><li>切换窗口：试营业做受控验证，日终批量则是最强的一道校验——账务能否平衡、总分账能否对上，批量跑完就会暴露。兜底靠容灾能力，RTO 小于 15 分钟，RPO 趋近于零。</li></ul>
+<p>如果确实做双轨，业界通用方法包括分块哈希、CDC 增量校验、业务语义层规则校验等。但那不是川行披露的做法，只能作为参考框架。</p>
+<h2 id="sec-9">那 52 小时真的停了生产业务吗</h2>
+<p>本质上是的，但更准确的说法是：提前一周多分批停服，窗口内集中切换，窗口后分批恢复。</p>
+<p>四川银行在投产前发过多期暂停服务公告。5 月 13 日起陆续暂停信用卡固定额度调整；5 月 20 日起暂停信用卡补换卡、个人消费贷、企业网银批量转账与工资代发、银企直联；5 月 22 日起暂停自营收单 POS、借记卡境外交易、信用卡交易；5 月 23 日起暂停现金管理平台、川银智惠通、投标保证金业务，电话银行仅保留咨询。数字人民币业务则暂停到 7 月底左右。</p>
+<p>窗口内并不是空转，但跑的不是正常对外业务。官方 7 大环节里，与业务相关的是业务核对、试营业、日终批量和正式营业。试营业属于正式营业前的受控验证，行方没有公开是否放开真实客户交易，因此不能断言“窗口内完全没有交易”。</p>
+<p>停法可以分成三类：完全暂停型、延迟补处理型（例如 ETC 在 5 月 25 日开始补扣）、长期下线型。之所以必须停机，是因为这次是从“桥架构”两套异构核心整体换成云原生加分布式微服务架构，133 套系统同时切换，交易与核算分离还要做总账初始化，新旧模型对不上，没法双写、没法增量比对，只能“静默—迁移—核对—切换”。</p>
+<p>对比江西银行靠“存量预迁 + 增量补迁”把停机压到 9 小时，四川银行因为体量大、系统多、耦合度高，窗口是 48 至 52 小时量级。停机窗口的长度，往往不取决于数据量，而取决于能不能把存量迁移挪到窗口外。</p>
+<h2 id="sec-10">演练到底练了什么</h2>
+<p>“两轮技术演练、三轮容灾演练、五轮投产演练”这句话广为流传，但原始报道只有这一句，没有逐轮日期、脚本和场景清单。细节要从该行其他公开文章里拼。</p>
+<ul><li>独立演练环境：2025 年 3 月，该行采购投产演练环境基础设施，中科软以 580.88 万元中选服务器配件、网络设备、存储虚拟化，云南南天以 1267.547 万元中选服务器。测试侧明确采用 1:1 生产仿真环境结合真实流量注入。</li><li>技术演练：银企直联案例给出 2025 年 3—4 月的四类动作——数据迁移预演、接口连通性测试、业务切换演练、应急预案验证。</li><li>容灾演练：模拟同城双活中心间 50ms 网络延迟，支付类业务成功率须高于 99.5%；切断单元间数据同步通道，验证“本地读优先”降级与数据修复一致性；单元宕机自动切流，要求路由准确率 100%、单元隔离不超过 30 秒。</li><li>投产演练：5 轮全流程投产演练，配套 7 轮 SIT、5 轮 UAT、4 轮非功能测试、4 轮数据应用测试、14 轮数迁测试，设计 80 万条案例、执行 200 万条、识别 7 万个有效缺陷，处置率 99.9%。</li><li>回退演练：新一代对账系统案例明确提到“技术演练、投产演练、容灾演练、回退演练”多轮验证系统部署耗时、数据准确性和灾备接管能力。</li></ul>
+<p>需要注意的是，欧阳光的文章正文写“5 轮全流程投产演练”，结尾经验总结却写“11 轮投产演练”。公开材料没有解释差异，引用时建议以正文的 5 轮为准并注明另有 11 轮口径。</p>
+<h2 id="sec-11">公开资料没有告诉我们的</h2>
+<ul><li>具体迁移工具与版本，例如是否使用 OceanBase 的 OMS/OMA；</li><li>迁移数据总量、表数量，以及割接当日数据迁移环节实际耗时；</li><li>回退方案细则、双轨并行时长、增量同步与追平策略；</li><li>各系统迁移的先后编排与依赖拓扑；</li><li>每轮演练的日期、数据量、是否使用真实客户数据；</li><li>试营业的具体范围与时长，以及各业务精确恢复时刻表。</li></ul>
+<p>网上流传的一些“某银行 XX 亿条数据零中断迁移”类数字，多出自厂商营销材料，与四川银行没有直接对应关系，引用时要谨慎。</p>
+<h2 id="sec-12">值得借鉴的三点</h2>
+<p>第一，分批加多轮演练是零差错的前提。先用 43 个非核心系统把链路跑通，再做多轮演练，最后才一次性切换。</p>
+<p>第二，把数据标准写进合同。落标要求前置到招标阶段，强制厂商配专职人员，比事后治理有效得多。</p>
+<p>第三，提前排查“不可迁移”的数据。像加密存储且算法私有的系统，必须早识别、早走单一来源或专项方案。</p>
+<p>本文整理自一份 WorkBuddy 分享对话，其原始调研基于公开报道与行方文章，不构成对四川银行完整技术方案的官方披露。</p>
   </div>
 </article>
-<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">先分清两大类</a></div><div class="toc-group"><a href="#sec-2" class="">七种图各自解决什么</a></div><div class="toc-group"><a href="#sec-3" class="">怎么选：一张速查表</a></div><div class="toc-group"><a href="#sec-4" class="">三个取舍原则</a></div><div class="toc-group"><a href="#sec-embeds" class="">七种图的样例速览</a></div></nav>
+<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">为什么这不是一次简单的“换库”</a></div><div class="toc-group"><a href="#sec-2" class="">时间线：三年工程，52 小时攻坚</a></div><div class="toc-group"><a href="#sec-3" class="">数据迁移的七道工序</a></div><div class="toc-group"><a href="#sec-4" class="">信创带来的三个特有变量</a><a href="#sec-5" class="lv3">单元化分库：数据要“按规则散列”落库</a><a href="#sec-6" class="lv3">多数据库并存：工具链不止一套</a><a href="#sec-7" class="lv3">数据落标：迁移即治数</a></div><div class="toc-group"><a href="#sec-8" class="">准确性不靠双轨：四川银行的单轨切换</a></div><div class="toc-group"><a href="#sec-9" class="">那 52 小时真的停了生产业务吗</a></div><div class="toc-group"><a href="#sec-10" class="">演练到底练了什么</a></div><div class="toc-group"><a href="#sec-11" class="">公开资料没有告诉我们的</a></div><div class="toc-group"><a href="#sec-12" class="">值得借鉴的三点</a></div></nav>
 </div>
 </main>
 <button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button>
 <div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
   <div class="toc-backdrop" data-toc-close></div>
   <div class="toc-panel">
-    <div class="toc-panel-head"><span>本页目录 · 5 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
-    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先分清两大类</a></div><div class="toc-group"><a href="#sec-2" class="">七种图各自解决什么</a></div><div class="toc-group"><a href="#sec-3" class="">怎么选：一张速查表</a></div><div class="toc-group"><a href="#sec-4" class="">三个取舍原则</a></div><div class="toc-group"><a href="#sec-embeds" class="">七种图的样例速览</a></div></nav>
+    <div class="toc-panel-head"><span>本页目录 · 12 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">为什么这不是一次简单的“换库”</a></div><div class="toc-group"><a href="#sec-2" class="">时间线：三年工程，52 小时攻坚</a></div><div class="toc-group"><a href="#sec-3" class="">数据迁移的七道工序</a></div><div class="toc-group"><a href="#sec-4" class="">信创带来的三个特有变量</a><a href="#sec-5" class="lv3">单元化分库：数据要“按规则散列”落库</a><a href="#sec-6" class="lv3">多数据库并存：工具链不止一套</a><a href="#sec-7" class="lv3">数据落标：迁移即治数</a></div><div class="toc-group"><a href="#sec-8" class="">准确性不靠双轨：四川银行的单轨切换</a></div><div class="toc-group"><a href="#sec-9" class="">那 52 小时真的停了生产业务吗</a></div><div class="toc-group"><a href="#sec-10" class="">演练到底练了什么</a></div><div class="toc-group"><a href="#sec-11" class="">公开资料没有告诉我们的</a></div><div class="toc-group"><a href="#sec-12" class="">值得借鉴的三点</a></div></nav>
   </div>
 </div>
 

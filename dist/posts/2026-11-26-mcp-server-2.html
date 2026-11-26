@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MCP Server 是干什么的？用一只桌宠讲明白 · 札记</title>
+<style>
+
+/* ============ 主题变量（支持浅色/深色） ============ */
+:root{
+  --bg:#ffffff; --fg:#1c1c1e; --fg2:#6e6e73; --fg3:#a1a1a6;
+  --border:#e5e5ea; --card:#fafafa; --hover:#f2f2f7;
+  --accent:#007aff; --accent-soft:#eaf3ff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#141416; --fg:#f2f2f7; --fg2:#a1a1a6; --fg3:#6e6e73;
+    --border:#333337; --card:#1d1d20; --hover:#262629;
+    --accent:#0a84ff; --accent-soft:#1c2b40;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--fg);line-height:1.6;-webkit-font-smoothing:antialiased;
+  max-width:1120px;margin:0 auto;padding:32px 20px 64px;
+  transition:background .2s ease,color .2s ease;
+}
+a{color:inherit}
+
+/* ============ 头部 ============ */
+.site-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.site-title{font-size:24px;font-weight:650;letter-spacing:-.4px}
+.site-title span{font-weight:400;color:var(--fg3);font-size:14px;margin-left:8px;letter-spacing:0}
+.site-sub{font-size:13px;color:var(--fg3);margin-top:2px}
+.site-stats{display:flex;gap:14px;font-size:12px;color:var(--fg3);white-space:nowrap;align-items:center}
+.site-stats b{font-weight:600;color:var(--fg2);font-variant-numeric:tabular-nums}
+
+/* 搜索 */
+.search{position:relative;width:220px;flex:none}
+.search .si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--fg3);pointer-events:none}
+.search input{width:100%;height:34px;border:1px solid var(--border);background:var(--card);border-radius:9px;padding:0 30px 0 32px;font-size:13px;outline:none;color:var(--fg)}
+.search input::placeholder{color:var(--fg3)}
+.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,122,255,.12)}
+.search .clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:18px;height:18px;border:0;border-radius:50%;background:var(--fg3);color:var(--bg);font-size:12px;line-height:18px;text-align:center;cursor:pointer;padding:0}
+
+/* ============ 树舞台 ============ */
+.stage-scroll{position:relative;overflow-x:auto;border:1px solid var(--border);border-radius:16px;
+  background:radial-gradient(ellipse at 50% 118%,rgba(0,122,255,.07),transparent 68%);}
+.stage{position:relative;min-width:760px}
+#tree-svg{display:block;width:100%;height:auto}
+#tip{
+  position:absolute;opacity:0;pointer-events:none;z-index:3;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:9px 12px;font-size:12px;color:var(--fg2);width:236px;
+  box-shadow:0 8px 28px rgba(0,0,0,.12);transition:opacity .14s ease;
+}
+#tip .tt{font-weight:600;color:var(--fg);font-size:13px;line-height:1.4;margin-bottom:5px}
+#tip .tm{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg3);margin-bottom:5px}
+#tip .te{font-size:11.5px;color:var(--fg2);line-height:1.5}
+.swipe-hint{display:none;text-align:center;font-size:11px;color:var(--fg3);padding:6px 0 0}
+
+/* 图例筛选 */
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0;align-items:center}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  border:1px solid var(--border);border-radius:999px;padding:5px 13px;
+  background:transparent;color:var(--fg2);font-size:12.5px;font-family:inherit;
+  transition:color .15s ease,border-color .15s ease,background .15s ease;
+}
+.chip:hover{color:var(--fg);border-color:var(--fg3)}
+.chip.on{color:var(--fg);border-color:var(--fg);background:var(--hover)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.chip-all{margin-left:auto;border:0;background:none;color:var(--fg3);font-size:12px;padding:5px 2px}
+.chip-all:hover{color:var(--accent)}
+
+/* 树上元素 */
+.leaf,.lbl{cursor:pointer}
+.leaf-scale{transition:transform .18s cubic-bezier(.2,.8,.2,1);transform-box:fill-box;transform-origin:center}
+.leaf:hover .leaf-scale,.leaf.sel .leaf-scale{transform:scale(1.32)}
+.leaf .halo{fill:none;stroke-width:1.5;opacity:0;transition:opacity .2s ease}
+.leaf:hover .halo,.leaf.sel .halo{opacity:.6}
+.leaf:focus{outline:none}
+.leaf:focus-visible .halo{opacity:.95;stroke:var(--fg)}
+.lbl{transition:fill .15s ease,opacity .25s ease;font-size:11.5px;fill:var(--fg2);font-family:inherit}
+.lbl:hover,.lbl.sel{fill:var(--fg);font-weight:600}
+.dim{opacity:.08;pointer-events:none}
+.branch-main{stroke-linecap:round;opacity:.62}
+.branch-twig{stroke-linecap:round;opacity:.5}
+
+/* 选中文章卡片 */
+.post-card{
+  border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:13px;background:var(--card);
+  padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:18px;
+  min-height:104px;transition:border-color .2s ease;
+}
+.pc-main{min-width:0}
+.pc-meta{display:flex;gap:11px;align-items:center;font-size:11.5px;color:var(--fg3);margin-bottom:5px;flex-wrap:wrap}
+.pc-meta .tag{display:inline-flex;align-items:center;gap:5px}
+.pc-title{font-size:17px;font-weight:650;line-height:1.4;letter-spacing:-.2px}
+.pc-ex{font-size:13px;color:var(--fg2);margin-top:5px;line-height:1.55}
+.pc-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+.pc-embed{font-size:11px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:3px 8px}
+.pc-read{text-decoration:none;background:var(--fg);color:var(--bg);border-radius:9px;padding:8px 15px;font-size:13px;transition:opacity .15s ease;white-space:nowrap}
+.pc-read:hover{opacity:.82}
+.pc-empty{font-size:13px;color:var(--fg3)}
+
+/* 文章列表（按年月分组，SEO / 无脚本回退 / 移动端正文共用） */
+.list-head{margin-top:30px;font-size:13px;color:var(--fg3);display:flex;justify-content:space-between;align-items:baseline}
+.group{margin-top:14px}
+.month{font-size:12px;font-weight:600;color:var(--fg3);margin-bottom:5px;letter-spacing:.3px}
+.post-list{list-style:none;border-top:1px solid var(--border)}
+.post-item{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s ease}
+.post-item:hover{background:var(--hover)}
+.post-item.sel .pl-title{color:var(--accent);font-weight:600}
+.pl-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.pl-date{font-size:12px;color:var(--fg3);flex:none;font-variant-numeric:tabular-nums;width:42px}
+.pl-title{font-size:14px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;color:inherit}
+.pl-cat{font-size:11.5px;color:var(--fg3);flex:none}
+.pl-em{font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;line-height:15px;flex:none}
+.empty{padding:40px 20px;text-align:center;color:var(--fg3);font-size:13px}
+
+.foot{margin-top:34px;font-size:11px;color:var(--fg3);text-align:center}
+
+/* 窄屏：树保留为可横向滚动的紧凑视图 */
+@media (max-width:760px){
+  body{padding:22px 14px 48px}
+  .site-head{align-items:flex-start}
+  .search{width:100%}
+  .site-stats{width:100%;justify-content:flex-start}
+  .stage{min-width:700px}
+  .swipe-hint{display:block}
+  .post-card{padding:14px;gap:12px}
+  .pc-side{gap:6px}
+  .pl-cat{display:none}
+}
+
+
+/* 详情页用到的语义色此前未定义（首页模板只提供 --fg/--border/--accent 一套），
+   这里补一层别名，避免目录、表格、弹层等元素出现透明背景或丢边框。 */
+:root{
+  --surface:#ffffff; --surface-3:#f2f2f7; --line:#e5e5ea;
+  --text:#1c1c1e; --muted:#6e6e73; --faint:#a1a1a6;
+  --blue:#007aff; --blue-soft:#eaf3ff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --surface:#1d1d20; --surface-3:#262629; --line:#333337;
+    --text:#f2f2f7; --muted:#a1a1a6; --faint:#6e6e73;
+    --blue:#0a84ff; --blue-soft:#1c2b40;
+  }
+}
+.back{font-size:13px;color:var(--blue);text-decoration:none}
+.detail-wrap{display:flex;gap:40px;align-items:flex-start;max-width:1240px;margin:0 auto;padding:28px 0 64px}
+.article{flex:1;min-width:0;max-width:820px;margin:0;padding:0}
+.article-meta-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.article-title{font-size:29px;line-height:1.3;letter-spacing:-.6px;margin:12px 0 10px}
+.article-meta{font-size:12px;color:var(--faint);margin-bottom:26px;padding-bottom:20px;border-bottom:.5px solid var(--line)}
+.article-body{font-size:15px;line-height:1.85;color:#2b2b2e}
+.article-body h2{font-size:20px;line-height:1.4;letter-spacing:-.3px;margin:34px 0 12px;color:var(--text);scroll-margin-top:72px}
+.article-body h3{font-size:17px;margin:26px 0 10px;color:var(--text);scroll-margin-top:72px}
+.article-body p{margin:0 0 16px}
+.article-body ul,.article-body ol{margin:0 0 18px;padding-left:22px}
+.article-body li{margin:6px 0}
+.article-body a{color:var(--blue)}
+.article-body strong{font-weight:600;color:var(--text)}
+.article-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-3);padding:2px 5px;border-radius:5px;font-size:13px}
+.article-body pre{background:var(--surface-3);padding:14px;border-radius:10px;overflow:auto;margin:0 0 18px}
+.article-body pre code{background:transparent;padding:0}
+.article-body table{border-collapse:collapse;width:100%;margin:0 0 20px;font-size:14px}
+.article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
+.article-body th{background:var(--surface-3);font-weight:600}
+.article-body blockquote{margin:0 0 18px;padding:10px 14px;border-left:3px solid var(--blue);background:var(--blue-soft);border-radius:0 8px 8px 0}
+.article-embeds{margin-top:38px;padding-top:24px;border-top:.5px solid var(--line)}
+.article-embeds h2{font-size:20px;line-height:1.4;letter-spacing:-.3px;margin:0 0 14px;color:var(--text);scroll-margin-top:72px}
+.embed-figure{margin:0 0 20px;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.embed-figure figcaption{padding:10px 13px;background:var(--surface-3);font-size:12px;color:var(--muted)}
+.embed-figure iframe{display:block;width:100%;border:0;background:#fff}
+/* 右侧子标题导航：按二级标题分组，三级标题缩进并从属于最近的二级标题 */
+.toc{position:sticky;top:78px;width:190px;flex:0 0 190px;max-height:calc(100vh - 110px);overflow:auto;padding:6px 4px 6px 16px;border-left:.5px solid var(--line)}
+.toc-title{font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--faint);margin:0 0 10px;padding-left:10px}
+.toc a{display:block;font-size:12.5px;line-height:1.45;color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:7px;border-left:2px solid transparent;transition:background .15s,color .15s}
+.toc a:hover{color:var(--blue);background:var(--surface-3)}
+.toc-group{margin:0 0 4px}
+.toc-group > a{color:var(--text);font-weight:600}
+.toc a.lv3{position:relative;padding-left:26px;font-size:12px;color:var(--faint);font-weight:400}
+.toc a.lv3::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:1px;background:var(--line)}
+.toc a.lv3::after{content:"";position:absolute;left:15px;top:50%;width:6px;border-top:1px solid var(--line)}
+.toc a.active{color:var(--blue);background:var(--blue-soft);border-left-color:var(--blue);font-weight:600}
+.toc a.lv3.active{border-left-color:transparent}
+/* 移动端目录：右下角悬浮按钮 + 底部弹层，桌面端完全隐藏 */
+.toc-fab{display:none}
+.toc-sheet{display:none}
+@media(max-width:980px){
+  .detail-wrap{display:block;padding:20px 0 64px}
+  .article{max-width:820px;margin:0 auto}
+  .toc{display:none}
+  .toc-fab{display:inline-flex;align-items:center;gap:6px;position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;height:38px;padding:0 15px 0 12px;border:.5px solid var(--line);border-radius:999px;background:var(--surface);color:var(--text);font:inherit;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.14);cursor:pointer}
+  .toc-fab:active{transform:scale(.97)}
+  .toc-sheet{display:none;position:fixed;inset:0;z-index:80}
+  .toc-sheet.on{display:block}
+  .toc-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.3)}
+  .toc-panel{position:absolute;left:0;right:0;bottom:0;max-height:72vh;overflow:auto;background:var(--surface);border-radius:16px 16px 0 0;padding:6px 10px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 34px rgba(0,0,0,.16);animation:tocUp .2s ease}
+  .toc-panel-head{display:flex;align-items:center;justify-content:space-between;padding:8px 6px 2px}
+  .toc-panel-head span{font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--faint)}
+  .toc-close{width:28px;height:28px;border:0;border-radius:50%;background:var(--surface-3);color:var(--muted);font-size:15px;line-height:1;cursor:pointer}
+  .toc-sheet .toc{display:block;position:static;width:auto;max-height:none;overflow:visible;padding:0;border-left:0}
+}
+@keyframes tocUp{from{transform:translateY(14px);opacity:.5}to{transform:none;opacity:1}}
+@media(max-width:700px){
+  .article-title{font-size:23px}
+  .article-body{font-size:14.5px}
+}
+
+/* 嵌入图弹窗查看器 */
+.embed-strip{display:flex;align-items:center;gap:8px}
+.strip-label{flex:1;min-width:0}
+.embed-open{display:inline-flex;align-items:center;gap:4px;flex:none;border:0;background:var(--blue-soft,#e5f1ff);color:var(--blue,#007aff);font-size:11px;line-height:1;padding:6px 9px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.embed-open:hover{background:#d5e8ff}
+.embed-figure figcaption{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.modal-overlay{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.modal-overlay.open{display:flex}
+.modal{width:min(1400px,100%);height:min(94vh,1100px);display:flex;flex-direction:column;background:var(--surface,#fff);border-radius:16px;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.35)}
+.modal-head{flex:none;display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:.5px solid var(--line,#e5e5ea);background:var(--surface,#fff)}
+.modal-title{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text,#1d1d1f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal-btn{border:0;background:var(--surface-3,#f2f2f7);color:var(--blue,#007aff);font-size:12px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.modal-btn:hover{background:var(--blue-soft,#e5f1ff)}
+.modal-close{width:30px;height:30px;flex:none;border:0;border-radius:50%;background:var(--surface-3,#f2f2f7);color:var(--muted,#6e6e73);font-size:19px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.modal-close:hover{background:#e5e5ea;color:var(--text,#1d1d1f)}
+.modal-body{flex:1;min-height:0;background:#fff}
+.modal-body iframe{display:block;width:100%;height:100%;border:0;background:#fff}
+/* 横屏查看：全屏/旋转引导（仅手机端显示入口） */
+.modal-landscape{display:none}
+.land-tools{display:none;position:absolute;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:4;gap:8px}
+.land-tools button{border:0;border-radius:8px;padding:7px 11px;font-size:12px;background:rgba(255,255,255,.9);color:#007aff;box-shadow:0 2px 10px rgba(0,0,0,.12);cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.rotate-hint{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(280px,80vw);padding:20px;border-radius:16px;background:rgba(28,28,30,.92);color:#fff;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.rotate-hint.show{display:block}
+.rotate-hint .rh-icon{font-size:34px;line-height:1;margin-bottom:10px}
+.rotate-hint .rh-title{font-size:14px;font-weight:600;margin-bottom:6px}
+.rotate-hint .rh-sub{font-size:12px;color:rgba(255,255,255,.72);line-height:1.5}
+.modal-overlay.landscape-mode{padding:0;background:#fff}
+.modal-overlay.landscape-mode .modal{width:100vw;height:100vh;height:100dvh;border-radius:0}
+.modal-overlay.landscape-mode .modal-head{display:none}
+.modal-overlay.landscape-mode .land-tools{display:flex}
+.modal-overlay:fullscreen{background:#fff}
+.modal-overlay:fullscreen .modal{width:100vw;height:100vh}
+@media(max-width:700px){
+  .modal-overlay{padding:0}
+  .modal{width:100%;height:100%;border-radius:0}
+  .modal-head{padding:9px 11px}
+  .modal-landscape{display:inline-flex}
+}
+</style>
+</head>
+<body>
+<header class="topbar"><div class="top-inner pad"><a class="back" href="../index.html">← 返回列表</a></div></header>
+<main class="pad">
+<div class="detail-wrap">
+<article class="article">
+  <div class="article-meta-top"><span class="dot" style="background:#1d9e75"></span>技术</div>
+  <h1 class="article-title">MCP Server 是干什么的？用一只桌宠讲明白</h1>
+  <div class="article-meta">2026-11-26 · 9 分钟阅读</div>
+  <div class="article-body">
+<p>你让 AI&quot;把桌宠换成我家猫的花色&quot;，它回你一段操作说明——因为它只能说话，没有手。MCP Server 就是给 AI 装上的那只手：一个让对话里的请求真正落到程序上的标准接口。</p>
+<h2 id="sec-1">一个先能懂的类比</h2>
+<p>把 AI 客户端想成一台电脑，把文件、数据库、桌宠这些程序想成外设。以前每种外设都要配自己的驱动，电脑还得认识每个牌子；后来有了 USB-C，形状统一了，谁都能插。</p>
+<p>MCP（Model Context Protocol）就是这个统一形状的插头：</p>
+<ul><li><strong>Host</strong>：你用的 AI 应用，比如 Claude Desktop、Cursor、WorkBuddy；</li><li><strong>MCP Client</strong>：嵌在 Host 里的那部分，负责把模型的话翻译成标准请求；</li><li><strong>MCP Server</strong>：某个程序暴露出来的接口，声明&quot;我能做这几件事&quot;；</li><li><strong>工具（tool）</strong>：Server 开放的具体动作，比如&quot;列出猫咪皮肤&quot;&quot;修改设置&quot;。</li></ul>
+<p>模型不需要知道 KuroCat 的窗口长什么样，KuroCat 也不需要知道你用的是哪家模型。两边都只认 MCP 这套说法。</p>
+<h2 id="sec-2">它到底解决了什么问题</h2>
+<p>没有 MCP 的时候，三个 AI 想操作四个工具，就要写十二套适配——每家 AI 都要为每个工具单独做一遍。有 MCP 之后变成三加四：AI 只实现一次客户端，工具只实现一次服务端，谁都可以接谁。</p>
+<p>这才是 MCP 真正的价值：不是让模型更聪明，而是让模型的能力可以外接，而且一次接入处处可用。</p>
+<h2 id="sec-3">拿 KuroCat 当例子</h2>
+<p>KuroCat 是一只开源桌宠：透明的、置顶的，你敲键盘它就做对应的按键动作，还带摸头呼噜、密码输入时自动捂眼、OBS 透明直播源。项目用 Rust 和 Tauri 做，安装包只有 2 MB 出头。</p>
+<p>它比较特别的地方是把 <strong>MCP Server 直接编译进了同一个可执行文件</strong>。你不用另装 Node.js 或 Python，也不用单独部署一个服务。右键小猫，打开&quot;开启 MCP 扩展&quot;，复制配置贴进 AI 客户端，就能用对话捏猫。</p>
+<p>两种连法，对应两种使用场景：</p>
+<table><thead><tr><th>方式</th><th>怎么连</th><th>什么时候用</th></tr></thead><tbody><tr><td>stdio</td><td>AI 客户端启动 <code>KuroCat.exe --mcp</code>，通过标准输入输出通信</td><td>最通用，Claude / Cursor / Cline 等都能用，桌宠不必先打开</td></tr><tr><td>本机 HTTP</td><td>连接 <code>http://127.0.0.1:27420/mcp</code></td><td>桌宠已经在跑，多个客户端可以连同一只猫</td></tr></tbody></table>
+<p>Stdio 配置长这样：</p>
+<pre><code>{
+  &quot;mcpServers&quot;: {
+    &quot;kurocat&quot;: {
+      &quot;command&quot;: &quot;C:\\Users\\&lt;你的用户名&gt;\\AppData\\Local\\KuroCat\\KuroCat.exe&quot;,
+      &quot;args&quot;: [&quot;--mcp&quot;]
+    }
+  }
+}</code></pre>
+<p>HTTP 方式更短：</p>
+<pre><code>{
+  &quot;mcpServers&quot;: {
+    &quot;kurocat&quot;: {
+      &quot;url&quot;: &quot;http://127.0.0.1:27420/mcp&quot;
+    }
+  }
+}</code></pre>
+<p>注意地址是 <code>127.0.0.1</code>，也就是本机回环地址。它只在这台电脑上监听，不等于把服务暴露到公网。</p>
+<h2 id="sec-4">一次&quot;捏猫&quot;请求发生了什么</h2>
+<p>假设你发一张三花猫照片，说&quot;照它的花色、耳型和斑点捏一只 3D 桌宠并切过去&quot;。底下大概走六步：</p>
+<ol><li>AI 识别出意图：这不是聊天，是要调用工具。</li><li>先调 <code>get_cat_schema</code>，问清楚配置文件有哪些字段、16 处斑点坐标怎么填、7 项脸型耳型规范是什么。</li><li>Server 返回规范——<strong>先看说明书再动手</strong>，避免瞎猜参数名。</li><li>AI 按规范组装参数，调用 <code>upsert_cat</code> 提交新猫配置。</li><li>Server 写入 <code>cats.json</code>，桌宠热更新，大约 0.4 秒后新猫上屏。</li><li>Server 返回结果，AI 再告诉你&quot;已经换好了&quot;。</li></ol>
+<p>整套流程里，真正改变电脑状态的只有第 5 步，而且发生在本机。如果还要切换身份，再调一次 <code>switch_cat</code>，按 ID 切过去即可。</p>
+<h2 id="sec-5">能力边界就写在工具清单里</h2>
+<p>KuroCat 一共暴露 10 个工具，分成四类：</p>
+<table><thead><tr><th>类别</th><th>工具</th><th>能做什么</th></tr></thead><tbody><tr><td>读</td><td><code>list_cats</code>、<code>get_cat_schema</code>、<code>get_settings</code></td><td>列皮肤、取规范、读缩放/键盘/气泡/呼噜声/穿透/自启等设置</td></tr><tr><td>写</td><td><code>upsert_cat</code>、<code>patch_cat</code>、<code>update_settings</code></td><td>新建或覆盖猫、局部微调、改设置，例如缩放到 85%、切 108 键面向观众</td></tr><tr><td>切换与清理</td><td><code>switch_cat</code>、<code>delete_cat</code></td><td>按 ID 切换、删除自定义猫或重置被改过的内置皮肤</td></tr><tr><td>联动与互动</td><td><code>set_agent_status</code>、<code>trigger_action</code></td><td>同步 AI 代理状态（思考/编码/执行/待确认/出错/完工），触发摸头、开心、生气、打瞌睡</td></tr></tbody></table>
+<p>这份清单很重要：<strong>接入一个 MCP Server 之前先看它暴露了什么工具，你立刻就知道 AI 最多能做什么、改动范围多大</strong>。这也是评估权限和安全边界最直接的办法。</p>
+<p>自定义猫保存在 <code>%APPDATA%\kuro-cat-pet\cats.json</code>（Windows）或 <code>~/Library/Application Support/kuro-cat-pet/cats.json</code>（macOS），也可以手动编辑后热重载。</p>
+<h2 id="sec-6">几个容易搞错的地方</h2>
+<p><strong>MCP 不是模型能力。</strong> 它不提升推理水平，只是把模型的决定传给外部程序。模型判断错了，工具照样老实执行。</p>
+<p><strong>不等于&quot;装了就能改一切&quot;。</strong> 服务端只暴露声明过的工具，工具没开放的操作做不了。这既是限制，也是保护。</p>
+<p><strong>stdio 和 HTTP 不是两套功能。</strong> 它们只是两条传输通道，通向同一个 Server，工具清单完全一样。</p>
+<p><strong>本地监听不等于绝对安全。</strong> <code>127.0.0.1</code> 只对本机开放，但本机上的其他程序一般也能访问。真正要留意的是工具本身的权限范围，以及 AI 客户端是否会在你不知情时自动调用。</p>
+<h2 id="sec-7">你可以怎么试</h2>
+<p>最简单的路径：装上 KuroCat → 右键开启 MCP 扩展 → 复制配置 → 贴到你已经在用的 AI 客户端 → 试着说&quot;把桌宠缩到 85%，切 108 键面向观众，关掉按键气泡&quot;。</p>
+<p>这一步没有涉及捏猫，但足够让你感受到区别：以前你要自己右键点三下，现在只需要说一句话，AI 去调用对应的工具。</p>
+<p>如果你只是想理解 MCP 是什么，记住一句话就够了：<strong>MCP Server 是把一个程序的能力，用标准方式介绍给 AI 的说明书兼遥控器。</strong></p>
+  </div>
+  <div class="article-embeds">
+    <h2 id="sec-embeds">MCP 与 KuroCat 交互图解</h2>
+<figure class="embed-figure"><figcaption><span>图 1 · 五张图看懂 MCP（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-title="MCP Server 是干什么的？用一只桌宠讲明白 · 图 1 · 五张图看懂 MCP（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 五张图看懂 MCP（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;UTF-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
+&lt;title&gt;MCP Server 是什么 · 用 KuroCat 桌宠讲清楚&lt;/title&gt;
+&lt;style&gt;
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 40px}
+  .hero{background:linear-gradient(135deg,#1d9e75,#0a84ff 60%,#5856d6);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.6;opacity:.93}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;margin-left:6px;font-weight:500}
+  .fig{overflow:hidden;background:#fcfcfd;touch-action:none;cursor:grab}
+  .fig:active{cursor:grabbing}
+  .fig svg{display:block;width:100%;height:auto;transform-origin:0 0;user-select:none}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.6}
+  .foot b{color:var(--ink)}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div class=&quot;hero&quot;&gt;
+  &lt;h1&gt;用一只桌宠讲清楚 MCP Server&lt;/h1&gt;
+  &lt;p&gt;AI 客户端只负责「想」，MCP Server 负责「做」。下面五张图分别说明：它是什么、解决什么问题、怎么连、一次请求怎么走、有哪些工具。滚轮缩放、拖拽平移、双击复位。&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;滚轮&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;span&gt;博客弹窗里可放大查看细节&lt;/span&gt;&lt;/div&gt;
+&lt;div class=&quot;nav&quot;&gt;
+  &lt;a href=&quot;#m1&quot;&gt;通用插座&lt;/a&gt;&lt;a href=&quot;#m2&quot;&gt;N×M 变 N+M&lt;/a&gt;&lt;a href=&quot;#m3&quot;&gt;两种连接方式&lt;/a&gt;&lt;a href=&quot;#m4&quot;&gt;一次捏猫请求&lt;/a&gt;&lt;a href=&quot;#m5&quot;&gt;10 个工具&lt;/a&gt;
+&lt;/div&gt;
+
+&lt;!-- 1 通用插座 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m1&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;通用插座：谁想用，就按同一个标准接 &lt;span class=&quot;tag&quot;&gt;是什么&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;MCP 定义了一套统一说法：客户端说「我要调用哪个工具、参数是什么」，服务端照做并返回结果。AI 客户端不必认识每个应用，应用也不必为每个 AI 写插件。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;fig&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 300&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;ar1&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;13&quot;&gt;
+        &lt;g fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;&gt;
+          &lt;rect x=&quot;24&quot; y=&quot;42&quot; width=&quot;188&quot; height=&quot;46&quot; rx=&quot;10&quot;/&gt;
+          &lt;rect x=&quot;24&quot; y=&quot;126&quot; width=&quot;188&quot; height=&quot;46&quot; rx=&quot;10&quot;/&gt;
+          &lt;rect x=&quot;24&quot; y=&quot;210&quot; width=&quot;188&quot; height=&quot;46&quot; rx=&quot;10&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot; font-weight=&quot;600&quot;&gt;
+          &lt;text x=&quot;118&quot; y=&quot;71&quot;&gt;Claude / Cursor&lt;/text&gt;
+          &lt;text x=&quot;118&quot; y=&quot;155&quot;&gt;WorkBuddy / Cline&lt;/text&gt;
+          &lt;text x=&quot;118&quot; y=&quot;239&quot;&gt;其它 MCP 客户端&lt;/text&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;118&quot; y=&quot;288&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;Host · 负责「想」&lt;/text&gt;
+
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ar1)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M212 65 L300 128&quot;/&gt;&lt;path d=&quot;M212 149 L300 149&quot;/&gt;&lt;path d=&quot;M212 233 L300 170&quot;/&gt;
+        &lt;/g&gt;
+
+        &lt;rect x=&quot;302&quot; y=&quot;86&quot; width=&quot;196&quot; height=&quot;126&quot; rx=&quot;14&quot; fill=&quot;#efeaff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;400&quot; y=&quot;122&quot; text-anchor=&quot;middle&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;MCP Client&lt;/text&gt;
+        &lt;text x=&quot;400&quot; y=&quot;151&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#5b4bb5&quot;&gt;统一协议 · JSON-RPC&lt;/text&gt;
+        &lt;text x=&quot;400&quot; y=&quot;177&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#5b4bb5&quot;&gt;发现工具 / 调用 / 取结果&lt;/text&gt;
+        &lt;text x=&quot;400&quot; y=&quot;238&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;嵌在 AI 客户端里&lt;/text&gt;
+
+        &lt;path d=&quot;M498 149 L558 149&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; marker-end=&quot;url(#ar1)&quot; fill=&quot;none&quot;/&gt;
+        &lt;text x=&quot;528&quot; y=&quot;136&quot; text-anchor=&quot;middle&quot; font-size=&quot;11&quot; fill=&quot;#ff9500&quot;&gt;标准接口&lt;/text&gt;
+
+        &lt;rect x=&quot;560&quot; y=&quot;22&quot; width=&quot;456&quot; height=&quot;254&quot; rx=&quot;16&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bde6cd&quot;/&gt;
+        &lt;text x=&quot;788&quot; y=&quot;52&quot; text-anchor=&quot;middle&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1b6642&quot;&gt;MCP Server · 负责「做」&lt;/text&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#a9dfc0&quot;&gt;
+          &lt;rect x=&quot;584&quot; y=&quot;72&quot; width=&quot;408&quot; height=&quot;52&quot; rx=&quot;10&quot;/&gt;
+          &lt;rect x=&quot;584&quot; y=&quot;140&quot; width=&quot;408&quot; height=&quot;52&quot; rx=&quot;10&quot;/&gt;
+          &lt;rect x=&quot;584&quot; y=&quot;208&quot; width=&quot;408&quot; height=&quot;52&quot; rx=&quot;10&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g fill=&quot;#1d1d1f&quot; font-weight=&quot;600&quot;&gt;
+          &lt;text x=&quot;602&quot; y=&quot;104&quot;&gt;🐈 KuroCat 桌宠&lt;/text&gt;
+          &lt;text x=&quot;602&quot; y=&quot;172&quot;&gt;本地文件系统&lt;/text&gt;
+          &lt;text x=&quot;602&quot; y=&quot;240&quot;&gt;数据库 / 浏览器 / 任意程序&lt;/text&gt;
+        &lt;/g&gt;
+        &lt;g font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;
+          &lt;text x=&quot;602&quot; y=&quot;120&quot;&gt;捏猫、切换、改设置&lt;/text&gt;
+          &lt;text x=&quot;602&quot; y=&quot;188&quot;&gt;读文件、写文件&lt;/text&gt;
+          &lt;text x=&quot;602&quot; y=&quot;256&quot;&gt;查数据、打开页面&lt;/text&gt;
+        &lt;/g&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;类比：&lt;/b&gt;MCP 就像 USB-C。AI 客户端是电脑，MCP Server 是外设，协议是那个统一形状的插头。插头一样，谁都能接。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 2 N×M --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m2&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;它解决的真正问题：N×M 变成 N+M &lt;span class=&quot;tag&quot;&gt;为什么需要&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;没有统一协议时，每个 AI 要为每个工具单独适配；有了 MCP，每个 AI 只实现一次客户端，每个工具只实现一次服务端。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;fig&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 330&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;ar2&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;7&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L7,3 L0,6 Z&quot; fill=&quot;#b0b0b5&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;13&quot;&gt;
+        &lt;rect x=&quot;20&quot; y=&quot;18&quot; width=&quot;480&quot; height=&quot;294&quot; rx=&quot;14&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffd6d6&quot;/&gt;
+        &lt;text x=&quot;260&quot; y=&quot;47&quot; text-anchor=&quot;middle&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#a11&quot;&gt;没有 MCP：每对都要单独适配&lt;/text&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#ffb3b3&quot;&gt;
+          &lt;rect x=&quot;42&quot; y=&quot;68&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;42&quot; y=&quot;126&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;42&quot; y=&quot;184&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#333&quot;&gt;&lt;text x=&quot;94&quot; y=&quot;90&quot;&gt;AI 甲&lt;/text&gt;&lt;text x=&quot;94&quot; y=&quot;148&quot;&gt;AI 乙&lt;/text&gt;&lt;text x=&quot;94&quot; y=&quot;206&quot;&gt;AI 丙&lt;/text&gt;&lt;/g&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#ffb3b3&quot;&gt;
+          &lt;rect x=&quot;374&quot; y=&quot;62&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;374&quot; y=&quot;120&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;374&quot; y=&quot;178&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;374&quot; y=&quot;236&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#333&quot;&gt;&lt;text x=&quot;426&quot; y=&quot;84&quot;&gt;桌宠&lt;/text&gt;&lt;text x=&quot;426&quot; y=&quot;142&quot;&gt;文件&lt;/text&gt;&lt;text x=&quot;426&quot; y=&quot;200&quot;&gt;数据库&lt;/text&gt;&lt;text x=&quot;426&quot; y=&quot;258&quot;&gt;浏览器&lt;/text&gt;&lt;/g&gt;
+        &lt;g stroke=&quot;#ff6b6b&quot; stroke-width=&quot;1.3&quot; fill=&quot;none&quot; opacity=&quot;.75&quot;&gt;
+          &lt;path d=&quot;M146 85 L374 79&quot;/&gt;&lt;path d=&quot;M146 85 L374 137&quot;/&gt;&lt;path d=&quot;M146 85 L374 195&quot;/&gt;&lt;path d=&quot;M146 85 L374 253&quot;/&gt;
+          &lt;path d=&quot;M146 143 L374 79&quot;/&gt;&lt;path d=&quot;M146 143 L374 137&quot;/&gt;&lt;path d=&quot;M146 143 L374 195&quot;/&gt;&lt;path d=&quot;M146 143 L374 253&quot;/&gt;
+          &lt;path d=&quot;M146 201 L374 79&quot;/&gt;&lt;path d=&quot;M146 201 L374 137&quot;/&gt;&lt;path d=&quot;M146 201 L374 195&quot;/&gt;&lt;path d=&quot;M146 201 L374 253&quot;/&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;260&quot; y=&quot;300&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#a11&quot; font-weight=&quot;600&quot;&gt;3 × 4 = 12 套适配&lt;/text&gt;
+
+        &lt;rect x=&quot;540&quot; y=&quot;18&quot; width=&quot;480&quot; height=&quot;294&quot; rx=&quot;14&quot; fill=&quot;#f2fbf6&quot; stroke=&quot;#bde6cd&quot;/&gt;
+        &lt;text x=&quot;780&quot; y=&quot;47&quot; text-anchor=&quot;middle&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1b6642&quot;&gt;有 MCP：大家都接同一根总线&lt;/text&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#a9dfc0&quot;&gt;
+          &lt;rect x=&quot;562&quot; y=&quot;68&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;562&quot; y=&quot;126&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;562&quot; y=&quot;184&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#333&quot;&gt;&lt;text x=&quot;614&quot; y=&quot;90&quot;&gt;AI 甲&lt;/text&gt;&lt;text x=&quot;614&quot; y=&quot;148&quot;&gt;AI 乙&lt;/text&gt;&lt;text x=&quot;614&quot; y=&quot;206&quot;&gt;AI 丙&lt;/text&gt;&lt;/g&gt;
+        &lt;rect x=&quot;704&quot; y=&quot;104&quot; width=&quot;152&quot; height=&quot;88&quot; rx=&quot;12&quot; fill=&quot;#34c759&quot; stroke=&quot;#28a745&quot;/&gt;
+        &lt;text x=&quot;780&quot; y=&quot;140&quot; text-anchor=&quot;middle&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;MCP 协议&lt;/text&gt;
+        &lt;text x=&quot;780&quot; y=&quot;166&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#fff&quot;&gt;统一总线&lt;/text&gt;
+        &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar2)&quot;&gt;
+          &lt;path d=&quot;M666 85 L704 126&quot;/&gt;&lt;path d=&quot;M666 143 L704 148&quot;/&gt;&lt;path d=&quot;M666 201 L704 170&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#a9dfc0&quot;&gt;
+          &lt;rect x=&quot;894&quot; y=&quot;62&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;894&quot; y=&quot;120&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;894&quot; y=&quot;178&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;894&quot; y=&quot;236&quot; width=&quot;104&quot; height=&quot;34&quot; rx=&quot;8&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#333&quot;&gt;&lt;text x=&quot;946&quot; y=&quot;84&quot;&gt;桌宠&lt;/text&gt;&lt;text x=&quot;946&quot; y=&quot;142&quot;&gt;文件&lt;/text&gt;&lt;text x=&quot;946&quot; y=&quot;200&quot;&gt;数据库&lt;/text&gt;&lt;text x=&quot;946&quot; y=&quot;258&quot;&gt;浏览器&lt;/text&gt;&lt;/g&gt;
+        &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar2)&quot;&gt;
+          &lt;path d=&quot;M856 126 L894 79&quot;/&gt;&lt;path d=&quot;M856 140 L894 137&quot;/&gt;&lt;path d=&quot;M856 156 L894 195&quot;/&gt;&lt;path d=&quot;M856 170 L894 253&quot;/&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;780&quot; y=&quot;300&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#1b6642&quot; font-weight=&quot;600&quot;&gt;3 + 4 = 7 套实现&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;关键点：&lt;/b&gt;MCP 不是让 AI 更聪明，而是让 AI 的能力可以「外接」。工具越多，这个乘法效应越明显。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 3 两种连接方式 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m3&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;KuroCat 的两种接法：stdio 与本机 HTTP &lt;span class=&quot;tag&quot;&gt;怎么连&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;两条路都通向同一个 MCP Server。左边由 AI 客户端启动一个子进程，通过标准输入输出通信；右边直接连接桌宠已经在跑的本机服务。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;fig&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 350&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;ar3&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;13&quot;&gt;
+        &lt;rect x=&quot;20&quot; y=&quot;20&quot; width=&quot;246&quot; height=&quot;310&quot; rx=&quot;14&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;143&quot; y=&quot;52&quot; text-anchor=&quot;middle&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1a4d99&quot;&gt;你&lt;/text&gt;
+        &lt;rect x=&quot;42&quot; y=&quot;72&quot; width=&quot;202&quot; height=&quot;62&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;/&gt;
+        &lt;text x=&quot;143&quot; y=&quot;100&quot; text-anchor=&quot;middle&quot; font-weight=&quot;600&quot;&gt;发一张猫的照片&lt;/text&gt;
+        &lt;text x=&quot;143&quot; y=&quot;121&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;「照这个捏一只桌宠」&lt;/text&gt;
+        &lt;rect x=&quot;42&quot; y=&quot;166&quot; width=&quot;202&quot; height=&quot;62&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;/&gt;
+        &lt;text x=&quot;143&quot; y=&quot;194&quot; text-anchor=&quot;middle&quot; font-weight=&quot;600&quot;&gt;右键桌宠&lt;/text&gt;
+        &lt;text x=&quot;143&quot; y=&quot;215&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#6e6e73&quot;&gt;开启 MCP 扩展 · 复制配置&lt;/text&gt;
+        &lt;text x=&quot;143&quot; y=&quot;274&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#1a4d99&quot;&gt;粘贴到 Claude / Cursor / WorkBuddy&lt;/text&gt;
+        &lt;text x=&quot;143&quot; y=&quot;300&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;之后就不用管了&lt;/text&gt;
+
+        &lt;rect x=&quot;300&quot; y=&quot;36&quot; width=&quot;212&quot; height=&quot;132&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d9d2ff&quot;/&gt;
+        &lt;text x=&quot;406&quot; y=&quot;66&quot; text-anchor=&quot;middle&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;方式 A · stdio&lt;/text&gt;
+        &lt;text x=&quot;406&quot; y=&quot;96&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#5b4bb5&quot;&gt;客户端启动 KuroCat.exe --mcp&lt;/text&gt;
+        &lt;text x=&quot;406&quot; y=&quot;120&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#5b4bb5&quot;&gt;通过标准输入 / 输出说话&lt;/text&gt;
+        &lt;text x=&quot;406&quot; y=&quot;148&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#5b4bb5&quot;&gt;桌宠不必先在桌面上运行&lt;/text&gt;
+
+        &lt;rect x=&quot;300&quot; y=&quot;192&quot; width=&quot;212&quot; height=&quot;132&quot; rx=&quot;12&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;406&quot; y=&quot;222&quot; text-anchor=&quot;middle&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;方式 B · 本机 HTTP&lt;/text&gt;
+        &lt;text x=&quot;406&quot; y=&quot;252&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#8a5a00&quot;&gt;连接 127.0.0.1:27420/mcp&lt;/text&gt;
+        &lt;text x=&quot;406&quot; y=&quot;276&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#8a5a00&quot;&gt;桌宠必须正在运行&lt;/text&gt;
+        &lt;text x=&quot;406&quot; y=&quot;304&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#8a5a00&quot;&gt;Streamable HTTP · 只监听本机&lt;/text&gt;
+
+        &lt;path d=&quot;M266 102 L300 102&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ar3)&quot; fill=&quot;none&quot;/&gt;
+        &lt;path d=&quot;M266 258 L300 258&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ar3)&quot; fill=&quot;none&quot;/&gt;
+        &lt;path d=&quot;M512 102 L570 160&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ar3)&quot; fill=&quot;none&quot;/&gt;
+        &lt;path d=&quot;M512 258 L570 200&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ar3)&quot; fill=&quot;none&quot;/&gt;
+
+        &lt;rect x=&quot;572&quot; y=&quot;120&quot; width=&quot;238&quot; height=&quot;122&quot; rx=&quot;14&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bde6cd&quot;/&gt;
+        &lt;text x=&quot;691&quot; y=&quot;156&quot; text-anchor=&quot;middle&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1b6642&quot;&gt;KuroCat MCP Server&lt;/text&gt;
+        &lt;text x=&quot;691&quot; y=&quot;184&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#3a7d59&quot;&gt;同一个可执行文件内置&lt;/text&gt;
+        &lt;text x=&quot;691&quot; y=&quot;208&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#3a7d59&quot;&gt;不需要 Node.js / Python&lt;/text&gt;
+        &lt;text x=&quot;691&quot; y=&quot;230&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#3a7d59&quot;&gt;10 个工具 · 本地执行&lt;/text&gt;
+
+        &lt;path d=&quot;M810 181 L854 181&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.8&quot; marker-end=&quot;url(#ar3)&quot; fill=&quot;none&quot;/&gt;
+        &lt;text x=&quot;832&quot; y=&quot;168&quot; text-anchor=&quot;middle&quot; font-size=&quot;11&quot; fill=&quot;#ff9500&quot;&gt;调用&lt;/text&gt;
+
+        &lt;g&gt;
+          &lt;rect x=&quot;856&quot; y=&quot;42&quot; width=&quot;164&quot; height=&quot;52&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9dfc0&quot;/&gt;
+          &lt;text x=&quot;938&quot; y=&quot;74&quot; text-anchor=&quot;middle&quot; font-size=&quot;12.5&quot; font-weight=&quot;600&quot;&gt;cats.json&lt;/text&gt;
+          &lt;rect x=&quot;856&quot; y=&quot;126&quot; width=&quot;164&quot; height=&quot;52&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9dfc0&quot;/&gt;
+          &lt;text x=&quot;938&quot; y=&quot;158&quot; text-anchor=&quot;middle&quot; font-size=&quot;12.5&quot; font-weight=&quot;600&quot;&gt;桌宠画面 · 0.4s 上屏&lt;/text&gt;
+          &lt;rect x=&quot;856&quot; y=&quot;210&quot; width=&quot;164&quot; height=&quot;52&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9dfc0&quot;/&gt;
+          &lt;text x=&quot;938&quot; y=&quot;242&quot; text-anchor=&quot;middle&quot; font-size=&quot;12.5&quot; font-weight=&quot;600&quot;&gt;设置 / 状态 / 动作&lt;/text&gt;
+          &lt;rect x=&quot;856&quot; y=&quot;288&quot; width=&quot;164&quot; height=&quot;42&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d5d5da&quot;/&gt;
+          &lt;text x=&quot;938&quot; y=&quot;314&quot; text-anchor=&quot;middle&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;全部在本机完成&lt;/text&gt;
+        &lt;/g&gt;
+        &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.6&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar3)&quot;&gt;
+          &lt;path d=&quot;M810 168 L856 68&quot;/&gt;&lt;path d=&quot;M810 181 L856 152&quot;/&gt;&lt;path d=&quot;M810 194 L856 236&quot;/&gt;
+        &lt;/g&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;为什么给两种：&lt;/b&gt;stdio 最通用，任何 MCP 客户端都能用；本机 HTTP 更适合桌宠已经开着的场景，多个客户端可以连同一个桌宠。两者都只在本机通信。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 4 一次捏猫请求 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m4&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;一次「捏猫」请求是怎么走完的 &lt;span class=&quot;tag&quot;&gt;时序&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;纵轴是时间。你看不到 JSON，但它确实在底下按这套顺序跑了一遍：先看懂规范，再提交配置，落盘后热更新，最后切到新猫。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;fig&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 470&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;ar4&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#5856d6&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;12.5&quot;&gt;
+        &lt;g fill=&quot;#f0edff&quot; stroke=&quot;#d9d2ff&quot;&gt;
+          &lt;rect x=&quot;24&quot; y=&quot;20&quot; width=&quot;160&quot; height=&quot;42&quot; rx=&quot;10&quot;/&gt;&lt;rect x=&quot;272&quot; y=&quot;20&quot; width=&quot;200&quot; height=&quot;42&quot; rx=&quot;10&quot;/&gt;&lt;rect x=&quot;560&quot; y=&quot;20&quot; width=&quot;200&quot; height=&quot;42&quot; rx=&quot;10&quot;/&gt;&lt;rect x=&quot;848&quot; y=&quot;20&quot; width=&quot;168&quot; height=&quot;42&quot; rx=&quot;10&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g text-anchor=&quot;middle&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;
+          &lt;text x=&quot;104&quot; y=&quot;47&quot;&gt;你&lt;/text&gt;&lt;text x=&quot;372&quot; y=&quot;47&quot;&gt;AI 客户端&lt;/text&gt;&lt;text x=&quot;660&quot; y=&quot;47&quot;&gt;MCP Server&lt;/text&gt;&lt;text x=&quot;932&quot; y=&quot;47&quot;&gt;桌宠 / 文件&lt;/text&gt;
+        &lt;/g&gt;
+        &lt;g stroke=&quot;#d9d2ff&quot; stroke-width=&quot;1&quot; stroke-dasharray=&quot;4 5&quot;&gt;
+          &lt;path d=&quot;M104 70 L104 460&quot;/&gt;&lt;path d=&quot;M372 70 L372 460&quot;/&gt;&lt;path d=&quot;M660 70 L660 460&quot;/&gt;&lt;path d=&quot;M932 70 L932 460&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g stroke=&quot;#5856d6&quot; stroke-width=&quot;1.7&quot; fill=&quot;none&quot; marker-end=&quot;url(#ar4)&quot;&gt;
+          &lt;path d=&quot;M104 106 L372 106&quot;/&gt;
+          &lt;path d=&quot;M372 166 L660 166&quot;/&gt;
+          &lt;path d=&quot;M660 226 L372 226&quot;/&gt;
+          &lt;path d=&quot;M372 286 L660 286&quot;/&gt;
+          &lt;path d=&quot;M660 346 L932 346&quot;/&gt;
+          &lt;path d=&quot;M660 410 L372 410&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g font-size=&quot;12&quot; fill=&quot;#1d1d1f&quot;&gt;
+          &lt;text x=&quot;238&quot; y=&quot;98&quot; text-anchor=&quot;middle&quot;&gt;① 发照片 +「照这个捏一只」&lt;/text&gt;
+          &lt;text x=&quot;516&quot; y=&quot;158&quot; text-anchor=&quot;middle&quot;&gt;② get_cat_schema：先问有哪些字段&lt;/text&gt;
+          &lt;text x=&quot;516&quot; y=&quot;218&quot; text-anchor=&quot;middle&quot;&gt;③ 返回花纹 / 16 斑点 / 脸型耳型规范&lt;/text&gt;
+          &lt;text x=&quot;516&quot; y=&quot;278&quot; text-anchor=&quot;middle&quot;&gt;④ upsert_cat：提交新猫配置&lt;/text&gt;
+          &lt;text x=&quot;796&quot; y=&quot;338&quot; text-anchor=&quot;middle&quot;&gt;⑤ 写 cats.json → 0.4s 热更新上屏&lt;/text&gt;
+          &lt;text x=&quot;516&quot; y=&quot;402&quot; text-anchor=&quot;middle&quot;&gt;⑥ 返回结果，AI 告诉你「已经换好」&lt;/text&gt;
+        &lt;/g&gt;
+        &lt;g font-size=&quot;11&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;
+          &lt;text x=&quot;238&quot; y=&quot;123&quot;&gt;自然语言&lt;/text&gt;
+          &lt;text x=&quot;516&quot; y=&quot;183&quot;&gt;工具调用&lt;/text&gt;
+          &lt;text x=&quot;516&quot; y=&quot;243&quot;&gt;工具返回&lt;/text&gt;
+          &lt;text x=&quot;516&quot; y=&quot;303&quot;&gt;工具调用&lt;/text&gt;
+          &lt;text x=&quot;796&quot; y=&quot;363&quot;&gt;本地副作用&lt;/text&gt;
+          &lt;text x=&quot;516&quot; y=&quot;427&quot;&gt;对话收尾&lt;/text&gt;
+        &lt;/g&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;要点：&lt;/b&gt;第 ②③ 步是「先看说明书再动手」，避免瞎猜参数名。第 ⑤ 步是唯一真正改变电脑状态的一步，而且发生在你自己的机器上。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 5 10 个工具 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m5&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;KuroCat 暴露的 10 个工具，其实分四类 &lt;span class=&quot;tag&quot;&gt;能力边界&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;MCP Server 的能力不是无限的：它只能暴露自己声明过的工具。KuroCat 这 10 个工具，正好定义了 AI 能对桌宠做的事的上限。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;fig&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 370&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot; font-size=&quot;12.5&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;20&quot; width=&quot;488&quot; height=&quot;152&quot; rx=&quot;14&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;48&quot; y=&quot;52&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1a4d99&quot;&gt;读 · 先看清楚&lt;/text&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#b8d2ff&quot;&gt;
+          &lt;rect x=&quot;48&quot; y=&quot;70&quot; width=&quot;208&quot; height=&quot;38&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;270&quot; y=&quot;70&quot; width=&quot;222&quot; height=&quot;38&quot; rx=&quot;8&quot;/&gt;
+          &lt;rect x=&quot;48&quot; y=&quot;118&quot; width=&quot;444&quot; height=&quot;38&quot; rx=&quot;8&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g fill=&quot;#1d1d1f&quot; font-size=&quot;12&quot;&gt;
+          &lt;text x=&quot;62&quot; y=&quot;94&quot;&gt;list_cats · 列出皮肤&lt;/text&gt;
+          &lt;text x=&quot;284&quot; y=&quot;94&quot;&gt;get_cat_schema · 取规范&lt;/text&gt;
+          &lt;text x=&quot;62&quot; y=&quot;142&quot;&gt;get_settings · 读缩放 / 键盘 / 气泡 / 呼噜声 / 穿透 / 自启&lt;/text&gt;
+        &lt;/g&gt;
+
+        &lt;rect x=&quot;528&quot; y=&quot;20&quot; width=&quot;488&quot; height=&quot;152&quot; rx=&quot;14&quot; fill=&quot;#eaf8f0&quot; stroke=&quot;#bde6cd&quot;/&gt;
+        &lt;text x=&quot;552&quot; y=&quot;52&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1b6642&quot;&gt;写 · 真正改动&lt;/text&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#a9dfc0&quot;&gt;
+          &lt;rect x=&quot;552&quot; y=&quot;70&quot; width=&quot;208&quot; height=&quot;38&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;774&quot; y=&quot;70&quot; width=&quot;220&quot; height=&quot;38&quot; rx=&quot;8&quot;/&gt;
+          &lt;rect x=&quot;552&quot; y=&quot;118&quot; width=&quot;442&quot; height=&quot;38&quot; rx=&quot;8&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g fill=&quot;#1d1d1f&quot; font-size=&quot;12&quot;&gt;
+          &lt;text x=&quot;566&quot; y=&quot;94&quot;&gt;upsert_cat · 新建 / 覆盖&lt;/text&gt;
+          &lt;text x=&quot;788&quot; y=&quot;94&quot;&gt;patch_cat · 局部微调&lt;/text&gt;
+          &lt;text x=&quot;566&quot; y=&quot;142&quot;&gt;update_settings · 改设置（缩到 85%、切 108 键…）&lt;/text&gt;
+        &lt;/g&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;190&quot; width=&quot;488&quot; height=&quot;152&quot; rx=&quot;14&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;48&quot; y=&quot;222&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;切换与清理&lt;/text&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#f0cf9a&quot;&gt;
+          &lt;rect x=&quot;48&quot; y=&quot;240&quot; width=&quot;208&quot; height=&quot;42&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;270&quot; y=&quot;240&quot; width=&quot;222&quot; height=&quot;42&quot; rx=&quot;8&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g fill=&quot;#1d1d1f&quot; font-size=&quot;12&quot;&gt;
+          &lt;text x=&quot;62&quot; y=&quot;266&quot;&gt;switch_cat · 按 ID 切换&lt;/text&gt;
+          &lt;text x=&quot;284&quot; y=&quot;266&quot;&gt;delete_cat · 删除 / 重置&lt;/text&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;48&quot; y=&quot;315&quot; font-size=&quot;11.5&quot; fill=&quot;#8a5a00&quot;&gt;自定义猫保存在 cats.json，支持手动编辑热重载&lt;/text&gt;
+
+        &lt;rect x=&quot;528&quot; y=&quot;190&quot; width=&quot;488&quot; height=&quot;152&quot; rx=&quot;14&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d9d2ff&quot;/&gt;
+        &lt;text x=&quot;552&quot; y=&quot;222&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;联动与互动&lt;/text&gt;
+        &lt;g fill=&quot;#fff&quot; stroke=&quot;#d2c8ff&quot;&gt;
+          &lt;rect x=&quot;552&quot; y=&quot;240&quot; width=&quot;208&quot; height=&quot;42&quot; rx=&quot;8&quot;/&gt;&lt;rect x=&quot;774&quot; y=&quot;240&quot; width=&quot;220&quot; height=&quot;42&quot; rx=&quot;8&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g fill=&quot;#1d1d1f&quot; font-size=&quot;12&quot;&gt;
+          &lt;text x=&quot;566&quot; y=&quot;266&quot;&gt;set_agent_status · 同步代理状态&lt;/text&gt;
+          &lt;text x=&quot;788&quot; y=&quot;266&quot;&gt;trigger_action · 摸头 / 开心…&lt;/text&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;552&quot; y=&quot;315&quot; font-size=&quot;11.5&quot; fill=&quot;#3a2a7a&quot;&gt;状态：思考 / 编码 / 执行 / 待确认 / 出错 / 完工&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;看工具清单的价值：&lt;/b&gt;接入一个 MCP Server 前先看它暴露了什么工具，就知道 AI 最多能做什么、改动范围有多大——这是评估权限和安全边界最直接的方式。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;script&gt;
+(function(){
+  document.querySelectorAll(&#39;.fig&#39;).forEach(function(fig){
+    var svg=fig.querySelector(&#39;svg&#39;);
+    var scale=1,tx=0,ty=0;
+    function apply(){svg.style.transform=&#39;translate(&#39;+tx+&#39;px,&#39;+ty+&#39;px) scale(&#39;+scale+&#39;)&#39;;}
+    function zoom(f,x,y){
+      var r=fig.getBoundingClientRect();
+      var mx=x-r.left,my=y-r.top,ns=Math.min(5,Math.max(.6,scale*f));
+      tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;apply();
+    }
+    fig.addEventListener(&#39;wheel&#39;,function(e){e.preventDefault();zoom(e.deltaY&lt;0?1.12:1/1.12,e.clientX,e.clientY);},{passive:false});
+    var drag=false,lx=0,ly=0;
+    fig.addEventListener(&#39;pointerdown&#39;,function(e){drag=true;lx=e.clientX;ly=e.clientY;fig.setPointerCapture(e.pointerId);});
+    fig.addEventListener(&#39;pointermove&#39;,function(e){if(!drag)return;tx+=e.clientX-lx;ty+=e.clientY-ly;lx=e.clientX;ly=e.clientY;apply();});
+    function up(e){drag=false;try{fig.releasePointerCapture(e.pointerId);}catch(x){}}
+    fig.addEventListener(&#39;pointerup&#39;,up);fig.addEventListener(&#39;pointercancel&#39;,up);
+    fig.addEventListener(&#39;dblclick&#39;,function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+" sandbox="allow-scripts" loading="lazy" style="height:780px"></iframe></figure>
+  </div>
+</article>
+<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">一个先能懂的类比</a></div><div class="toc-group"><a href="#sec-2" class="">它到底解决了什么问题</a></div><div class="toc-group"><a href="#sec-3" class="">拿 KuroCat 当例子</a></div><div class="toc-group"><a href="#sec-4" class="">一次&quot;捏猫&quot;请求发生了什么</a></div><div class="toc-group"><a href="#sec-5" class="">能力边界就写在工具清单里</a></div><div class="toc-group"><a href="#sec-6" class="">几个容易搞错的地方</a></div><div class="toc-group"><a href="#sec-7" class="">你可以怎么试</a></div><div class="toc-group"><a href="#sec-embeds" class="">MCP 与 KuroCat 交互图解</a></div></nav>
+</div>
+</main>
+<button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button>
+<div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
+  <div class="toc-backdrop" data-toc-close></div>
+  <div class="toc-panel">
+    <div class="toc-panel-head"><span>本页目录 · 8 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">一个先能懂的类比</a></div><div class="toc-group"><a href="#sec-2" class="">它到底解决了什么问题</a></div><div class="toc-group"><a href="#sec-3" class="">拿 KuroCat 当例子</a></div><div class="toc-group"><a href="#sec-4" class="">一次&quot;捏猫&quot;请求发生了什么</a></div><div class="toc-group"><a href="#sec-5" class="">能力边界就写在工具清单里</a></div><div class="toc-group"><a href="#sec-6" class="">几个容易搞错的地方</a></div><div class="toc-group"><a href="#sec-7" class="">你可以怎么试</a></div><div class="toc-group"><a href="#sec-embeds" class="">MCP 与 KuroCat 交互图解</a></div></nav>
+  </div>
+</div>
+
+<script>
+(function(){
+  var fab = document.getElementById('toc-fab');
+  var sheet = document.getElementById('toc-sheet');
+
+  function openSheet(){
+    if (!sheet) return;
+    sheet.classList.add('on');
+    fab.setAttribute('aria-expanded','true');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSheet(){
+    if (!sheet || !sheet.classList.contains('on')) return;
+    sheet.classList.remove('on');
+    fab.setAttribute('aria-expanded','false');
+    document.body.style.overflow = '';
+  }
+
+  if (fab && sheet) {
+    fab.addEventListener('click', openSheet);
+    sheet.addEventListener('click', function(e){
+      if (e.target.closest('[data-toc-close]') || e.target.closest('a')) closeSheet();
+    });
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') closeSheet();
+    });
+  }
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  if (!links.length) return;
+  var targets = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); });
+  links.forEach(function(a){
+    a.addEventListener('click', function(e){
+      var el = document.getElementById(a.getAttribute('href').slice(1));
+      if (!el) return;
+      e.preventDefault();
+      closeSheet();
+      el.scrollIntoView({behavior:'smooth', block:'start'});
+      if (history.replaceState) history.replaceState(null, '', a.getAttribute('href'));
+    });
+  });
+  function update(){
+    var y = window.scrollY + 90, idx = 0;
+    for (var i=0;i<targets.length;i++){ if (targets[i] && targets[i].getBoundingClientRect().top + window.scrollY <= y) idx = i; }
+    links.forEach(function(a,i){ a.classList.toggle('active', i===idx); });
+  }
+  window.addEventListener('scroll', update, {passive:true});
+  window.addEventListener('resize', update);
+  update();
+})();
+</script>
+
+<div class="modal-overlay" id="imgModal" role="dialog" aria-modal="true" aria-label="嵌入内容预览">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">嵌入内容</span>
+      <button type="button" class="modal-btn modal-landscape" data-modal-landscape>横屏查看</button>
+      <button type="button" class="modal-btn" data-modal-newtab>新标签页打开</button>
+      <button type="button" class="modal-close" data-modal-close aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body"><iframe title="嵌入内容预览" sandbox="allow-scripts" loading="lazy"></iframe></div>
+  </div>
+  <div class="land-tools">
+    <button type="button" data-modal-landscape>退出横屏</button>
+    <button type="button" data-modal-close aria-label="关闭">×</button>
+  </div>
+  <div class="rotate-hint" data-rotate-hint aria-hidden="true">
+    <div class="rh-icon">▭↻</div>
+    <div class="rh-title">请旋转手机至横屏</div>
+    <div class="rh-sub">图会自动铺满屏幕，看得更清楚</div>
+  </div>
+</div>
+<script>
+
+(function(){
+  var overlay = document.getElementById('imgModal');
+  if (!overlay) return;
+  var frame = overlay.querySelector('iframe');
+  var titleEl = overlay.querySelector('.modal-title');
+  var landBtn = overlay.querySelector('.modal-head [data-modal-landscape]');
+  var hint = overlay.querySelector('[data-rotate-hint]');
+  var currentUrl = '';
+  var hintTimer = null;
+
+  function showHint(){
+    if (!hint) return;
+    hint.classList.add('show');
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(hideHint, 4000);
+  }
+  function hideHint(){
+    if (hint) hint.classList.remove('show');
+  }
+  function isFullscreen(){
+    return document.fullscreenElement === overlay || document.webkitFullscreenElement === overlay;
+  }
+  function orient(){
+    return window.screen && (window.screen.orientation || window.screen.mozOrientation);
+  }
+  function enterLandscape(){
+    overlay.classList.add('landscape-mode');
+    if (landBtn) landBtn.textContent = '退出横屏';
+    /* 真全屏：Android Chrome / Edge 支持，iPhone Safari 会静默失败 */
+    var req = overlay.requestFullscreen || overlay.webkitRequestFullscreen;
+    if (req) {
+      try { Promise.resolve(req.call(overlay)).catch(function(){}); } catch(e){}
+    }
+    /* 旋转锁定：需要全屏 + 浏览器支持，失败则提示用户自己转 */
+    var o = orient(), locked = false;
+    if (o && o.lock) {
+      try {
+        var p = o.lock('landscape');
+        if (p && typeof p.then === 'function') {
+          p.then(function(){ locked = true; hideHint(); }).catch(function(){ showHint(); });
+        } else { locked = true; }
+      } catch(e){}
+    }
+    if (!locked) setTimeout(function(){
+      if (overlay.classList.contains('landscape-mode') && window.innerWidth < window.innerHeight) showHint();
+    }, 350);
+  }
+  function exitLandscape(){
+    if (!overlay.classList.contains('landscape-mode')) return;
+    overlay.classList.remove('landscape-mode');
+    hideHint();
+    if (landBtn) landBtn.textContent = '横屏查看';
+    var o = orient();
+    if (o && o.unlock) { try { o.unlock(); } catch(e){} }
+    if (isFullscreen()) {
+      var ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) { try { Promise.resolve(ex.call(document)).catch(function(){}); } catch(e){} }
+    }
+  }
+  window.addEventListener('resize', function(){
+    if (overlay.classList.contains('landscape-mode') && window.innerWidth > window.innerHeight) hideHint();
+  });
+
+  function open(src, doc, title){
+    titleEl.textContent = title || '嵌入内容';
+    currentUrl = src || '';
+    frame.removeAttribute('srcdoc');
+    if (doc !== null && doc !== undefined && doc !== '') frame.srcdoc = doc;
+    else frame.src = src || 'about:blank';
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function close(){
+    exitLandscape();
+    overlay.classList.remove('open');
+    frame.removeAttribute('srcdoc');
+    frame.src = 'about:blank';
+    currentUrl = '';
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('.embed-open');
+    if (btn){
+      e.preventDefault();
+      var fig = btn.closest('.embed-figure');
+      var srcFrame = fig ? fig.querySelector('iframe') : null;
+      if (btn.hasAttribute('data-modal-idx') && srcFrame && srcFrame.hasAttribute('srcdoc')){
+        open('', srcFrame.getAttribute('srcdoc'), btn.getAttribute('data-modal-title'));
+      } else {
+        open(btn.getAttribute('data-modal-src'), null, btn.getAttribute('data-modal-title'));
+      }
+      return;
+    }
+    if (e.target.closest('[data-modal-landscape]')){
+      e.preventDefault();
+      if (overlay.classList.contains('landscape-mode')) exitLandscape(); else enterLandscape();
+      return;
+    }
+    if (e.target.closest('[data-modal-newtab]')){
+      if (frame.hasAttribute('srcdoc')){
+        var blob = new Blob([frame.getAttribute('srcdoc')], {type:'text/html'});
+        window.open(URL.createObjectURL(blob), '_blank');
+      } else if (currentUrl){ window.open(currentUrl, '_blank'); }
+      return;
+    }
+    if (e.target.closest('[data-modal-close]') || e.target === overlay) close();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') { if (overlay.classList.contains('landscape-mode')) exitLandscape(); else close(); }
+  });
+})();
+</script>
+</body>
+</html>
