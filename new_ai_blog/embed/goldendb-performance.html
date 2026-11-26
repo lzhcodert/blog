@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoldenDB 效率低怎么办 · 官方优化套路图解</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#0a84ff,#5856d6 58%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.94}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;height:min(62vh,530px);min-height:330px;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  .pz-tip{position:absolute;left:12px;bottom:10px;z-index:5;background:rgba(255,255,255,.9);color:#64748b;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;pointer-events:none}
+  @media(max-width:600px){.pz-viewport{height:56vh;min-height:300px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>GoldenDB 效率低？先看官方这套顺序</h1>
+  <p>六张图讲清官方通用套路：开发期压测与分片键推荐、生产期慢 SQL 治理、执行计划定位、下推与重分布、内核索引推荐，以及读写分离、并行、流式、批量协议和限流兜底。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#c1">排查路线</a><a href="#c2">慢 SQL 三宗罪</a><a href="#c3">算子下推</a><a href="#c4">分片与重分布</a><a href="#c5">执行计划与索引</a><a href="#c6">兜底组合</a>
+</div>
+
+<!-- 1 路线 -->
+<div class="card" id="c1">
+  <div class="card-head">
+    <h2><span class="num">1</span>官方思路：不是先加机器，而是按顺序排雷 <span class="tag">路线</span></h2>
+    <p>白皮书和《中兴通讯技术》金篆数据库专题里反复出现的顺序：开发/迁移前先评估与压测，生产中先揪出慢 SQL，再看计划、分片、索引，最后用并行、读写分离和限流把稳定性兜住。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 300" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m1" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#m1)" fill="none">
+          <path d="M196,112 L208,112"/><path d="M414,112 L426,112"/><path d="M632,112 L644,112"/><path d="M850,112 L862,112"/>
+        </g>
+        <g font-size="11.5" fill="#1d1d1f">
+          <rect x="22" y="62" width="174" height="100" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+          <text x="38" y="88" font-size="13" font-weight="700" fill="#0a58ca">① 开发 / 迁移前</text>
+          <text x="38" y="114" fill="#6e6e73">CAC 评估兼容性</text>
+          <text x="38" y="136" fill="#6e6e73">推荐分片键</text>
+
+          <rect x="208" y="62" width="206" height="100" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+          <text x="224" y="88" font-size="13" font-weight="700" fill="#3a2a7a">② 上线前压测</text>
+          <text x="224" y="114" fill="#6e6e73">DBReplay 回放真实负载</text>
+          <text x="224" y="136" fill="#6e6e73">看兼容性和执行效率</text>
+
+          <rect x="426" y="62" width="206" height="100" rx="11" fill="#fff5e8" stroke="#f7ddb6"/>
+          <text x="442" y="88" font-size="13" font-weight="700" fill="#8a5a00">③ 生产中监测</text>
+          <text x="442" y="114" fill="#6e6e73">Insight 看慢 SQL</text>
+          <text x="442" y="136" fill="#6e6e73">内核 SQL 治理拦截</text>
+
+          <rect x="644" y="62" width="206" height="100" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <text x="660" y="88" font-size="13" font-weight="700" fill="#1d7a45">④ 定位根因</text>
+          <text x="660" y="114" fill="#6e6e73">EXPLAIN 看执行计划</text>
+          <text x="660" y="136" fill="#6e6e73">分片 / 索引 / 下推</text>
+
+          <rect x="862" y="62" width="156" height="100" rx="11" fill="#f2f2f7" stroke="#d1d1d6"/>
+          <text x="878" y="88" font-size="13" font-weight="700" fill="#1d1d1f">⑤ 优化兜底</text>
+          <text x="878" y="114" fill="#6e6e73">改写 / 绑定计划</text>
+          <text x="878" y="136" fill="#6e6e73">并行 / 分流 / 限流</text>
+        </g>
+        <rect x="22" y="194" width="996" height="76" rx="12" fill="#fff" stroke="#e5e5ea"/>
+        <text x="42" y="220" font-size="12.5" font-weight="700" fill="#1d1d1f">一句话：先把「哪条 SQL 慢、慢在哪一步」找出来，再决定改分片、加索引还是分流。</text>
+        <text x="42" y="246" font-size="11.5" fill="#6e6e73">官方强调：生产上直接终止请求会影响成功率，更均衡的做法是采集慢 SQL，纳入后续版本迭代整改。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>别一上来就说「数据库慢」。先像医生一样问诊：什么时候慢、哪条语句慢、扫描了多少数据、有没有跨节点搬货。证据齐了再开药。</div>
+</div>
+
+<!-- 2 慢SQL -->
+<div class="card" id="c2">
+  <div class="card-head">
+    <h2><span class="num">2</span>慢 SQL 常见的三宗罪 <span class="tag">定位</span></h2>
+    <p>官方文章指出：缺索引会生成低效计划，慢 SQL 会挤占 CPU、内存和 I/O；分布式下还要额外看「数据是不是被跨节点搬运」和「执行计划是不是选错了」。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 320" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="28" width="316" height="210" rx="14" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="44" y="58" font-size="15" font-weight="700" fill="#c62828">① 没有合适索引</text>
+        <text x="44" y="86" font-size="12.5" fill="#1d1d1f">症状：全表扫描</text>
+        <text x="44" y="114" font-size="11.5" fill="#6e6e73">一条 SQL 把整张表翻一遍</text>
+        <text x="44" y="138" font-size="11.5" fill="#6e6e73">CPU / 内存 / I/O 被持续占用</text>
+        <rect x="44" y="166" width="276" height="50" rx="9" fill="#fff" stroke="#ffc9c4"/>
+        <text x="56" y="188" font-size="11.5" font-weight="700" fill="#c62828">官方解法</text>
+        <text x="56" y="206" font-size="11" fill="#6e6e73">内核索引推荐 + 新增索引</text>
+
+        <rect x="362" y="28" width="316" height="210" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="382" y="58" font-size="15" font-weight="700" fill="#0a58ca">② 跨节点搬太多数据</text>
+        <text x="382" y="86" font-size="12.5" fill="#1d1d1f">症状：网络与 CN 忙</text>
+        <text x="382" y="114" font-size="11.5" fill="#6e6e73">JOIN / 聚合没下推到 DN</text>
+        <text x="382" y="138" font-size="11.5" fill="#6e6e73">大量无关行被拉到计算节点</text>
+        <rect x="382" y="166" width="276" height="50" rx="9" fill="#fff" stroke="#c9dcff"/>
+        <text x="394" y="188" font-size="11.5" font-weight="700" fill="#0a58ca">官方解法</text>
+        <text x="394" y="206" font-size="11" fill="#6e6e73">算子下推 + 小表驱动大表</text>
+
+        <rect x="700" y="28" width="316" height="210" rx="14" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="720" y="58" font-size="15" font-weight="700" fill="#3a2a7a">③ 执行计划选错</text>
+        <text x="720" y="86" font-size="12.5" fill="#1d1d1f">症状：同样 SQL 忽快忽慢</text>
+        <text x="720" y="114" font-size="11.5" fill="#6e6e73">统计信息 / 代价估算不准</text>
+        <text x="720" y="138" font-size="11.5" fill="#6e6e73">连接顺序、索引选择不合理</text>
+        <rect x="720" y="166" width="276" height="50" rx="9" fill="#fff" stroke="#d2c8ff"/>
+        <text x="732" y="188" font-size="11.5" font-weight="700" fill="#3a2a7a">官方解法</text>
+        <text x="732" y="206" font-size="11" fill="#6e6e73">EXPLAIN + hint / outline 绑定</text>
+
+        <rect x="24" y="262" width="992" height="38" rx="10" fill="#fff6e8" stroke="#f2d9ae"/>
+        <text x="44" y="287" font-size="12.5" fill="#8a5a00"><tspan font-weight="700">内核 SQL 治理：</tspan>限制最大执行时间、最大结果集、关联行数、读取数据块数；黑名单拦截无索引查询、笛卡尔积等高危 SQL。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>术语：</b>全表扫描 = 没按目录找书，把整本书逐页翻；笛卡尔积 = 两张表没写关联条件，行数被乘成爆炸式增长；DML = 增删改，DQL = 查。</div>
+</div>
+
+<!-- 3 下推 -->
+<div class="card" id="c3">
+  <div class="card-head">
+    <h2><span class="num">3</span>让计算靠近数据：下推与代价优化 <span class="tag">优化器</span></h2>
+    <p>官方优化器分两层：逻辑优化用 RBO（基于规则的优化），物理优化既有 RBO 也有 CBO（基于代价的优化）。目标都是少搬数据、少做无用计算。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 360" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="28" width="466" height="248" rx="14" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="44" y="56" font-size="14" font-weight="700" fill="#c62828">没下推：数据全往 CN 搬</text>
+        <rect x="44" y="76" width="160" height="46" rx="9" fill="#fff" stroke="#ffc9c4"/>
+        <text x="60" y="104" font-size="12" fill="#1d1d1f">DN1 全部行</text>
+        <rect x="44" y="132" width="160" height="46" rx="9" fill="#fff" stroke="#ffc9c4"/>
+        <text x="60" y="160" font-size="12" fill="#1d1d1f">DN2 全部行</text>
+        <rect x="296" y="100" width="166" height="72" rx="10" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="312" y="126" font-size="12.5" font-weight="700" fill="#3a2a7a">CN 计算节点</text>
+        <text x="312" y="150" font-size="11.5" fill="#6e6e73">过滤 / JOIN / 聚合</text>
+        <g stroke="#c62828" stroke-width="3" marker-end="url(#m3)" fill="none">
+          <path d="M204,100 L296,126"/><path d="M204,155 L296,148"/>
+        </g>
+        <text x="44" y="206" font-size="11.5" fill="#c62828">结果：网络传输量大，CN 成瓶颈</text>
+        <text x="44" y="234" font-size="11.5" fill="#6e6e73">很多行本来就不满足条件，却被拉上来再丢掉</text>
+
+        <rect x="550" y="28" width="466" height="248" rx="14" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="570" y="56" font-size="14" font-weight="700" fill="#1d7a45">下推后：DN 先算，CN 只归并</text>
+        <rect x="570" y="76" width="180" height="46" rx="9" fill="#fff" stroke="#bfe8cf"/>
+        <text x="586" y="104" font-size="11.5" fill="#1d1d1f">DN1 先过滤 / 聚合</text>
+        <rect x="570" y="132" width="180" height="46" rx="9" fill="#fff" stroke="#bfe8cf"/>
+        <text x="586" y="160" font-size="11.5" fill="#1d1d1f">DN2 先过滤 / 聚合</text>
+        <rect x="822" y="100" width="166" height="72" rx="10" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="838" y="126" font-size="12.5" font-weight="700" fill="#3a2a7a">CN 计算节点</text>
+        <text x="838" y="150" font-size="11.5" fill="#6e6e73">只做二次归并</text>
+        <g stroke="#1d7a45" stroke-width="1.8" marker-end="url(#m3)" fill="none">
+          <path d="M750,100 L822,126"/><path d="M750,155 L822,148"/>
+        </g>
+        <text x="570" y="206" font-size="11.5" fill="#1d7a45">结果：搬运的数据少，网络压力小</text>
+        <text x="570" y="234" font-size="11.5" fill="#6e6e73">聚合分组列带分片键时，连二次归并都可省</text>
+
+        <rect x="24" y="300" width="992" height="40" rx="10" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="44" y="325" font-size="11.5" fill="#3a2a7a"><tspan font-weight="700">RBO 规则：</tspan>rownum→limit、not exists→left join、avg→sum/count、过滤与 JOIN 下推。<tspan font-weight="700">CBO：</tspan>按 COST 选连接顺序，小表驱动大表减少拉取。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>别把一车货拉到前台再挑，直接在每个仓库先挑好、称好，只把结果报给前台。COST 就是优化器给每条路算的「过路费」。</div>
+</div>
+
+<!-- 4 分片重分布 -->
+<div class="card" id="c4">
+  <div class="card-head">
+    <h2><span class="num">4</span>分片键选错，关联查询就累 <span class="tag">分片</span></h2>
+    <p>官方建议把业务关系密切的多张表采用相同分片，避免跨节点请求；无法同分片时用全局索引做分片键转换；不常改的小表用复制策略（广播表）复制到每个分片。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 340" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m4" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="28" width="300" height="232" rx="14" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="44" y="56" font-size="14" font-weight="700" fill="#c62828">关联表分片不一致</text>
+        <rect x="44" y="78" width="260" height="44" rx="9" fill="#fff" stroke="#ffc9c4"/>
+        <text x="60" y="105" font-size="12" fill="#1d1d1f">订单表：按 order_id 分片</text>
+        <rect x="44" y="132" width="260" height="44" rx="9" fill="#fff" stroke="#ffc9c4"/>
+        <text x="60" y="159" font-size="12" fill="#1d1d1f">客户表：按 cust_id 分片</text>
+        <text x="44" y="202" font-size="11.5" fill="#c62828">JOIN 要跨多个 DN 拉数据</text>
+        <text x="44" y="226" font-size="11.5" fill="#6e6e73">网络开销大，CN 还要归并</text>
+
+        <g stroke="#8e8e93" stroke-width="1.6" marker-end="url(#m4)" fill="none">
+          <path d="M324,144 L360,144"/>
+        </g>
+        <text x="326" y="134" font-size="10.5" fill="#6e6e73">官方调整</text>
+
+        <rect x="360" y="28" width="656" height="232" rx="14" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="380" y="56" font-size="14" font-weight="700" fill="#1d7a45">三种官方办法</text>
+
+        <rect x="380" y="76" width="196" height="164" rx="11" fill="#fff" stroke="#bfe8cf"/>
+        <text x="396" y="102" font-size="12.5" font-weight="700" fill="#1d7a45">① 数据重分布</text>
+        <text x="396" y="128" font-size="11" fill="#6e6e73">在线调整分片键</text>
+        <text x="396" y="150" font-size="11" fill="#6e6e73">关联表分发策略调一致</text>
+        <text x="396" y="172" font-size="11" fill="#6e6e73">多表可并发重分布</text>
+        <text x="396" y="200" font-size="11" fill="#1d7a45">→ 关联可在本地完成</text>
+        <text x="396" y="222" font-size="10.5" fill="#6e6e73">官方：在线、对业务影响秒级</text>
+
+        <rect x="592" y="76" width="196" height="164" rx="11" fill="#fff" stroke="#bfe8cf"/>
+        <text x="608" y="102" font-size="12.5" font-weight="700" fill="#1d7a45">② 全局索引</text>
+        <text x="608" y="128" font-size="11" fill="#6e6e73">给非分片字段一个「第二查找键」</text>
+        <text x="608" y="150" font-size="11" fill="#6e6e73">先查索引表拿到分发键</text>
+        <text x="608" y="172" font-size="11" fill="#6e6e73">再定位目标分片</text>
+        <text x="608" y="200" font-size="11" fill="#1d7a45">→ 避免全节点群发</text>
+        <text x="608" y="222" font-size="10.5" fill="#6e6e73">官方：提升 where 等值过滤效率</text>
+
+        <rect x="804" y="76" width="196" height="164" rx="11" fill="#fff" stroke="#bfe8cf"/>
+        <text x="820" y="102" font-size="12.5" font-weight="700" fill="#1d7a45">③ 广播表</text>
+        <text x="820" y="128" font-size="11" fill="#6e6e73">不常改的小表</text>
+        <text x="820" y="150" font-size="11" fill="#6e6e73">复制到每个分片节点</text>
+        <text x="820" y="172" font-size="11" fill="#6e6e73">JOIN 时本地就有数据</text>
+        <text x="820" y="200" font-size="11" fill="#1d7a45">→ 减少网络传输</text>
+        <text x="820" y="222" font-size="10.5" fill="#6e6e73">官方：适合频繁关联的小表</text>
+
+        <rect x="24" y="282" width="992" height="38" rx="10" fill="#fff6e8" stroke="#f2d9ae"/>
+        <text x="44" y="307" font-size="11.5" fill="#8a5a00"><tspan font-weight="700">大白话：</tspan>分片键就是「仓库地址」。常一起查的表放同一个仓库；查不到地址时，用全局索引先查地址；小手册每个仓库放一本。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>注意：</b>官方也提醒，SKIP SCAN 这类索引跳跃扫描要满足「前导列基数低、非前导列选择性高」，乱用反而有性能风险。</div>
+</div>
+
+<!-- 5 执行计划与索引 -->
+<div class="card" id="c5">
+  <div class="card-head">
+    <h2><span class="num">5</span>看图开药：EXPLAIN → 索引推荐 → 绑定计划 <span class="tag">诊断</span></h2>
+    <p>官方支持查看 CN 计划、DN 计划或两者同时输出；支持 hint 和 outline 在线绑定执行计划；索引推荐是内核原生能力，用直方图采样，亿级大表 10 秒内出报告。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 340" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="m5" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <g stroke="#007aff" stroke-width="1.6" marker-end="url(#m5)" fill="none">
+          <path d="M186,108 L198,108"/><path d="M414,108 L426,108"/><path d="M642,108 L654,108"/><path d="M870,108 L882,108"/>
+        </g>
+        <g font-size="11.5" fill="#1d1d1f">
+          <rect x="22" y="58" width="164" height="100" rx="10" fill="#eef4ff" stroke="#c9dcff"/>
+          <text x="38" y="84" font-size="12.5" font-weight="700" fill="#0a58ca">① EXPLAIN</text>
+          <text x="38" y="108" fill="#6e6e73">看 CN / DN 计划</text>
+          <text x="38" y="130" fill="#6e6e73">找执行瓶颈</text>
+
+          <rect x="198" y="58" width="216" height="100" rx="10" fill="#f0edff" stroke="#d2c8ff"/>
+          <text x="214" y="84" font-size="12.5" font-weight="700" fill="#3a2a7a">② 内核索引推荐</text>
+          <text x="214" y="108" fill="#6e6e73">直方图采样，不扫全表</text>
+          <text x="214" y="130" fill="#6e6e73">亿级大表 10 秒内分析</text>
+
+          <rect x="426" y="58" width="216" height="100" rx="10" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <text x="442" y="84" font-size="12.5" font-weight="700" fill="#1d7a45">③ 优化器协同</text>
+          <text x="442" y="108" fill="#6e6e73">模拟不同索引的执行计划</text>
+          <text x="442" y="130" fill="#6e6e73">按 COST 评估收益</text>
+
+          <rect x="654" y="58" width="216" height="100" rx="10" fill="#fff5e8" stroke="#f7ddb6"/>
+          <text x="670" y="84" font-size="12.5" font-weight="700" fill="#8a5a00">④ 改写 / 建索引</text>
+          <text x="670" y="108" fill="#6e6e73">SQL 自动优化工具建议</text>
+          <text x="670" y="130" fill="#6e6e73">索引创建、语句改写</text>
+
+          <rect x="882" y="58" width="134" height="100" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+          <text x="898" y="84" font-size="12.5" font-weight="700" fill="#1d1d1f">⑤ 绑定计划</text>
+          <text x="898" y="108" fill="#6e6e73">hint / outline</text>
+          <text x="898" y="130" fill="#6e6e73">无需改应用</text>
+        </g>
+        <rect x="22" y="188" width="996" height="62" rx="12" fill="#fff" stroke="#e5e5ea"/>
+        <text x="42" y="214" font-size="12.5" font-weight="700" fill="#1d1d1f">执行计划是什么？</text>
+        <text x="42" y="238" font-size="11.5" fill="#6e6e73">数据库准备怎么执行这条 SQL 的「路线图」：先查哪张表、用哪个索引、在哪里过滤、怎么 JOIN、在哪里聚合。</text>
+        <rect x="22" y="268" width="996" height="50" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="42" y="294" font-size="11.5" fill="#3a2a7a"><tspan font-weight="700">官方使用方式：</tspan>只需在 SQL 前加简单前缀语句，即可一键获取详细推荐报告；生产紧急问题可在数据库侧绑定执行计划或限流，无需应用变更启停。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>术语：</b>hint 是给优化器的小纸条，提示它走某条路；outline / SQL Profile 是把好计划「钉住」，以后都按这条路走；COST 是优化器算出来的代价估算。</div>
+</div>
+
+<!-- 6 兜底 -->
+<div class="card" id="c6">
+  <div class="card-head">
+    <h2><span class="num">6</span>兜底组合：分流、并行、批量、限流 <span class="tag">稳定性</span></h2>
+    <p>当 SQL 和结构都调过，官方还会用读写分离、自动并行、流式查询、批量协议、SQL 限流和 TP/AP 异步隔离，把高并发下的响应时间与稳定性兜住。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 380" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="28" width="486" height="150" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="44" y="56" font-size="14" font-weight="700" fill="#0a58ca">读写分离 · 写主读备</text>
+        <text x="44" y="84" font-size="11.5" fill="#6e6e73">实时性高的 SQL → 主节点</text>
+        <text x="44" y="108" font-size="11.5" fill="#6e6e73">分析聚合类 SQL → 备用节点</text>
+        <text x="44" y="136" font-size="11.5" fill="#0a58ca">服务端口 / SQL 语句 / 事务 / 会话四级粒度</text>
+
+        <rect x="530" y="28" width="486" height="150" rx="14" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="550" y="56" font-size="14" font-weight="700" fill="#1d7a45">并行与流式 · 别让结果集堵住</text>
+        <text x="550" y="84" font-size="11.5" fill="#6e6e73">Auto-DOP 按复杂度、数据分布、负载动态调并行度</text>
+        <text x="550" y="108" font-size="11.5" fill="#6e6e73">流式查询分批回响应，结果集不落盘</text>
+        <text x="550" y="136" font-size="11.5" fill="#1d7a45">大结果集场景降低等待与 CPU/内存占用</text>
+
+        <rect x="24" y="198" width="486" height="150" rx="14" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="44" y="226" font-size="14" font-weight="700" fill="#8a5a00">批量协议 · 大批量装载</text>
+        <text x="44" y="254" font-size="11.5" fill="#6e6e73">batch Prepare 新协议，支持分布式全流程 Prepare</text>
+        <text x="44" y="278" font-size="11.5" fill="#6e6e73">官方证券案例：批量插入性能提升 60% 以上</text>
+        <text x="44" y="306" font-size="11.5" fill="#8a5a00">回放侧：内存资源池 + 按事务分发减少系统调用</text>
+
+        <rect x="530" y="198" width="486" height="150" rx="14" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="550" y="226" font-size="14" font-weight="700" fill="#3a2a7a">限流与隔离 · 不让一颗老鼠屎坏汤</text>
+        <text x="550" y="254" font-size="11.5" fill="#6e6e73">限连接数、限最大结果集、SQL 黑名单、绑定计划</text>
+        <text x="550" y="278" font-size="11.5" fill="#6e6e73">按 COST 识别计算密集型任务，AP 走独立线程组</text>
+        <text x="550" y="306" font-size="11.5" fill="#3a2a7a">TP 与 AP 隔离，消除复杂查询造成的「毛刺」</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>术语：</b>TP（OLTP）= 一笔笔短平快的交易；AP（OLAP）= 复杂统计分析；HTAP = 一套系统同时干这两件事。Auto-DOP 就是自动决定「这事派几个人并行干」。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    var tip=document.createElement('div');tip.className='pz-tip';tip.textContent='\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+    vp.appendChild(bar);vp.appendChild(tip);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+      tip.textContent=zoomMode?'\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u518d\u5355\u51fb\u9000\u51fa':'\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6a21\u5f0f\u5185\u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
