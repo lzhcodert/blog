@@ -32,11 +32,11 @@
 <body>
 <div class="hero">
   <h1>用一只桌宠讲清楚 MCP Server</h1>
-  <p>AI 客户端只负责「想」，MCP Server 负责「做」。下面五张图分别说明：它是什么、解决什么问题、怎么连、一次请求怎么走、有哪些工具。滚轮缩放、拖拽平移、双击复位。</p>
+  <p>AI 客户端只负责「想」，MCP Server 负责「做」。下面六张图分别说明：它是什么、解决什么问题、怎么连、一次请求怎么走、有哪些工具，以及怎么用 WorkBuddy 实际接入。滚轮缩放、拖拽平移、双击复位。</p>
 </div>
 <div class="hint"><span><b>滚轮</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span><span>博客弹窗里可放大查看细节</span></div>
 <div class="nav">
-  <a href="#m1">通用插座</a><a href="#m2">N×M 变 N+M</a><a href="#m3">两种连接方式</a><a href="#m4">一次捏猫请求</a><a href="#m5">10 个工具</a>
+  <a href="#m1">通用插座</a><a href="#m2">N×M 变 N+M</a><a href="#m3">两种连接方式</a><a href="#m4">一次捏猫请求</a><a href="#m5">10 个工具</a><a href="#m6">WorkBuddy 接入实战</a>
 </div>
 
 <!-- 1 通用插座 -->
@@ -323,6 +323,57 @@
     </svg>
   </div>
   <div class="foot"><b>看工具清单的价值：</b>接入一个 MCP Server 前先看它暴露了什么工具，就知道 AI 最多能做什么、改动范围有多大——这是评估权限和安全边界最直接的方式。</div>
+</div>
+
+<!-- 6 WorkBuddy 接入实战 -->
+<div class="card" id="m6">
+  <div class="card-head">
+    <h2><span class="num">6</span>实战：用 WorkBuddy 接入 KuroCat <span class="tag">动手做</span></h2>
+    <p>桌宠右键开启 MCP 扩展并复制配置，在 WorkBuddy 的「插件 → MCP 服务器 → 配置 MCP」里粘贴，看到绿灯后用一句话验收。stdio 与本机 HTTP 两条路，通向同一个 Server。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 330" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar6" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="13">
+        <text x="24" y="30" font-size="15" font-weight="700" fill="#1d1d1f">接入五步走</text>
+        <g>
+          <rect x="24" y="48" width="180" height="70" rx="12" fill="#eef4ff" stroke="#c9dcff"/>
+          <rect x="230" y="48" width="180" height="70" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+          <rect x="436" y="48" width="180" height="70" rx="12" fill="#fff5e8" stroke="#f7ddb6"/>
+          <rect x="642" y="48" width="180" height="70" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+          <rect x="848" y="48" width="168" height="70" rx="12" fill="#eef9fb" stroke="#bde6ef"/>
+        </g>
+        <g fill="#1d1d1f" font-weight="700" text-anchor="middle">
+          <text x="114" y="76">① 桌宠开启扩展</text><text x="320" y="76">② 打开配置入口</text>
+          <text x="526" y="76">③ 粘贴配置</text><text x="732" y="76">④ 看状态灯</text><text x="932" y="76">⑤ 一句话验收</text>
+        </g>
+        <g fill="#6e6e73" font-size="11.5" text-anchor="middle">
+          <text x="114" y="98">右键 → 开启 MCP 扩展</text><text x="320" y="98">插件 → MCP 服务器</text>
+          <text x="526" y="98">填 stdio / HTTP 配置</text><text x="732" y="98">绿灯即可用</text><text x="932" y="98">「缩到 85%」</text>
+        </g>
+        <g stroke="#8e8e93" stroke-width="1.4" marker-end="url(#ar6)">
+          <path d="M206,83 L226,83" fill="none"/><path d="M412,83 L432,83" fill="none"/>
+          <path d="M618,83 L638,83" fill="none"/><path d="M824,83 L844,83" fill="none"/>
+        </g>
+
+        <text x="24" y="158" font-size="15" font-weight="700" fill="#1d1d1f">两条路，同一个 Server</text>
+        <rect x="24" y="174" width="488" height="130" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="48" y="204" font-size="14" font-weight="700" fill="#0a58ca">方式 A · stdio（推荐先试）</text>
+        <g fill="#fff" stroke="#c9dcff"><rect x="48" y="218" width="440" height="34" rx="8"/><rect x="48" y="260" width="440" height="30" rx="8"/></g>
+        <text x="60" y="240" font-size="11.5" fill="#1d1d1f" font-family="monospace">"command": "...\\KuroCat.exe", "args": ["--mcp"]</text>
+        <text x="60" y="280" font-size="11.5" fill="#6e6e73">WorkBuddy 自己拉起进程，桌宠不必先打开</text>
+
+        <rect x="528" y="174" width="488" height="130" rx="14" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="552" y="204" font-size="14" font-weight="700" fill="#1d7a45">方式 B · 本机 HTTP</text>
+        <g fill="#fff" stroke="#bfe8cf"><rect x="552" y="218" width="440" height="34" rx="8"/><rect x="552" y="260" width="440" height="30" rx="8"/></g>
+        <text x="564" y="240" font-size="11.5" fill="#1d1d1f" font-family="monospace">"url": "http://127.0.0.1:27420/mcp"</text>
+        <text x="564" y="280" font-size="11.5" fill="#6e6e73">桌宠需在运行，多个客户端可连同一只猫</text>
+
+        <text x="24" y="330" font-size="11" fill="#6e6e73">配置位置：用户级 ~/.workbuddy/mcp.json · 项目级 &lt;项目目录&gt;/.workbuddy/mcp.json　｜　只在本机监听，注意工具权限</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>验收标准：</b>界面状态灯变绿，且能说一句话让桌宠缩到 85%。连不上按顺序查：桌宠是否运行 → MCP 扩展是否开启 → exe 路径是否真实存在 → JSON 括号引号是否完整。</div>
 </div>
 
 <script>
