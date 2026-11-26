@@ -609,6 +609,7 @@ function renderDetail(post, baseCss) {
       return '<figure class="embed-figure">' +
         '<figcaption><span>' + escapeHtml(label) + '</span>' +
         '<button type="button" class="embed-open" data-modal-idx="' + i + '"' +
+        ' data-modal-src="' + escapeHtml(src) + '"' +
         ' data-modal-title="' + escapeHtml(post.title + ' · ' + label) + '">⤢ 弹窗查看</button></figcaption>' +
         '<iframe title="' + escapeHtml(label) + '"' + frameAttrs +
         ' sandbox="allow-scripts" loading="lazy" style="height:' + h + 'px"></iframe>' +

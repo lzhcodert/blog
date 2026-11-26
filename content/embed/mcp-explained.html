@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MCP Server 是什么 · 用 KuroCat 桌宠讲清楚</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 40px}
+  .hero{background:linear-gradient(135deg,#1d9e75,#0a84ff 60%,#5856d6);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.6;opacity:.93}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;margin-left:6px;font-weight:500}
+  .fig{overflow:hidden;background:#fcfcfd;touch-action:none;cursor:grab}
+  .fig:active{cursor:grabbing}
+  .fig svg{display:block;width:100%;height:auto;transform-origin:0 0;user-select:none}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.6}
+  .foot b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>用一只桌宠讲清楚 MCP Server</h1>
+  <p>AI 客户端只负责「想」，MCP Server 负责「做」。下面五张图分别说明：它是什么、解决什么问题、怎么连、一次请求怎么走、有哪些工具。滚轮缩放、拖拽平移、双击复位。</p>
+</div>
+<div class="hint"><span><b>滚轮</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span><span>博客弹窗里可放大查看细节</span></div>
+<div class="nav">
+  <a href="#m1">通用插座</a><a href="#m2">N×M 变 N+M</a><a href="#m3">两种连接方式</a><a href="#m4">一次捏猫请求</a><a href="#m5">10 个工具</a>
+</div>
+
+<!-- 1 通用插座 -->
+<div class="card" id="m1">
+  <div class="card-head">
+    <h2><span class="num">1</span>通用插座：谁想用，就按同一个标准接 <span class="tag">是什么</span></h2>
+    <p>MCP 定义了一套统一说法：客户端说「我要调用哪个工具、参数是什么」，服务端照做并返回结果。AI 客户端不必认识每个应用，应用也不必为每个 AI 写插件。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 300" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar1" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="13">
+        <g fill="#eef4ff" stroke="#c9dcff">
+          <rect x="24" y="42" width="188" height="46" rx="10"/>
+          <rect x="24" y="126" width="188" height="46" rx="10"/>
+          <rect x="24" y="210" width="188" height="46" rx="10"/>
+        </g>
+        <g fill="#1d1d1f" text-anchor="middle" font-weight="600">
+          <text x="118" y="71">Claude / Cursor</text>
+          <text x="118" y="155">WorkBuddy / Cline</text>
+          <text x="118" y="239">其它 MCP 客户端</text>
+        </g>
+        <text x="118" y="288" text-anchor="middle" font-size="12" fill="#6e6e73">Host · 负责「想」</text>
+
+        <g stroke="#8e8e93" stroke-width="1.6" marker-end="url(#ar1)" fill="none">
+          <path d="M212 65 L300 128"/><path d="M212 149 L300 149"/><path d="M212 233 L300 170"/>
+        </g>
+
+        <rect x="302" y="86" width="196" height="126" rx="14" fill="#efeaff" stroke="#d2c8ff"/>
+        <text x="400" y="122" text-anchor="middle" font-size="15" font-weight="700" fill="#3a2a7a">MCP Client</text>
+        <text x="400" y="151" text-anchor="middle" font-size="12" fill="#5b4bb5">统一协议 · JSON-RPC</text>
+        <text x="400" y="177" text-anchor="middle" font-size="12" fill="#5b4bb5">发现工具 / 调用 / 取结果</text>
+        <text x="400" y="238" text-anchor="middle" font-size="12" fill="#6e6e73">嵌在 AI 客户端里</text>
+
+        <path d="M498 149 L558 149" stroke="#8e8e93" stroke-width="2" marker-end="url(#ar1)" fill="none"/>
+        <text x="528" y="136" text-anchor="middle" font-size="11" fill="#ff9500">标准接口</text>
+
+        <rect x="560" y="22" width="456" height="254" rx="16" fill="#eaf8f0" stroke="#bde6cd"/>
+        <text x="788" y="52" text-anchor="middle" font-size="15" font-weight="700" fill="#1b6642">MCP Server · 负责「做」</text>
+        <g fill="#fff" stroke="#a9dfc0">
+          <rect x="584" y="72" width="408" height="52" rx="10"/>
+          <rect x="584" y="140" width="408" height="52" rx="10"/>
+          <rect x="584" y="208" width="408" height="52" rx="10"/>
+        </g>
+        <g fill="#1d1d1f" font-weight="600">
+          <text x="602" y="104">🐈 KuroCat 桌宠</text>
+          <text x="602" y="172">本地文件系统</text>
+          <text x="602" y="240">数据库 / 浏览器 / 任意程序</text>
+        </g>
+        <g font-size="11.5" fill="#6e6e73">
+          <text x="602" y="120">捏猫、切换、改设置</text>
+          <text x="602" y="188">读文件、写文件</text>
+          <text x="602" y="256">查数据、打开页面</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>类比：</b>MCP 就像 USB-C。AI 客户端是电脑，MCP Server 是外设，协议是那个统一形状的插头。插头一样，谁都能接。</div>
+</div>
+
+<!-- 2 N×M -->
+<div class="card" id="m2">
+  <div class="card-head">
+    <h2><span class="num">2</span>它解决的真正问题：N×M 变成 N+M <span class="tag">为什么需要</span></h2>
+    <p>没有统一协议时，每个 AI 要为每个工具单独适配；有了 MCP，每个 AI 只实现一次客户端，每个工具只实现一次服务端。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 330" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#b0b0b5"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="13">
+        <rect x="20" y="18" width="480" height="294" rx="14" fill="#fff5f5" stroke="#ffd6d6"/>
+        <text x="260" y="47" text-anchor="middle" font-size="15" font-weight="700" fill="#a11">没有 MCP：每对都要单独适配</text>
+        <g fill="#fff" stroke="#ffb3b3">
+          <rect x="42" y="68" width="104" height="34" rx="8"/><rect x="42" y="126" width="104" height="34" rx="8"/><rect x="42" y="184" width="104" height="34" rx="8"/>
+        </g>
+        <g font-size="11.5" text-anchor="middle" fill="#333"><text x="94" y="90">AI 甲</text><text x="94" y="148">AI 乙</text><text x="94" y="206">AI 丙</text></g>
+        <g fill="#fff" stroke="#ffb3b3">
+          <rect x="374" y="62" width="104" height="34" rx="8"/><rect x="374" y="120" width="104" height="34" rx="8"/><rect x="374" y="178" width="104" height="34" rx="8"/><rect x="374" y="236" width="104" height="34" rx="8"/>
+        </g>
+        <g font-size="11.5" text-anchor="middle" fill="#333"><text x="426" y="84">桌宠</text><text x="426" y="142">文件</text><text x="426" y="200">数据库</text><text x="426" y="258">浏览器</text></g>
+        <g stroke="#ff6b6b" stroke-width="1.3" fill="none" opacity=".75">
+          <path d="M146 85 L374 79"/><path d="M146 85 L374 137"/><path d="M146 85 L374 195"/><path d="M146 85 L374 253"/>
+          <path d="M146 143 L374 79"/><path d="M146 143 L374 137"/><path d="M146 143 L374 195"/><path d="M146 143 L374 253"/>
+          <path d="M146 201 L374 79"/><path d="M146 201 L374 137"/><path d="M146 201 L374 195"/><path d="M146 201 L374 253"/>
+        </g>
+        <text x="260" y="300" text-anchor="middle" font-size="12" fill="#a11" font-weight="600">3 × 4 = 12 套适配</text>
+
+        <rect x="540" y="18" width="480" height="294" rx="14" fill="#f2fbf6" stroke="#bde6cd"/>
+        <text x="780" y="47" text-anchor="middle" font-size="15" font-weight="700" fill="#1b6642">有 MCP：大家都接同一根总线</text>
+        <g fill="#fff" stroke="#a9dfc0">
+          <rect x="562" y="68" width="104" height="34" rx="8"/><rect x="562" y="126" width="104" height="34" rx="8"/><rect x="562" y="184" width="104" height="34" rx="8"/>
+        </g>
+        <g font-size="11.5" text-anchor="middle" fill="#333"><text x="614" y="90">AI 甲</text><text x="614" y="148">AI 乙</text><text x="614" y="206">AI 丙</text></g>
+        <rect x="704" y="104" width="152" height="88" rx="12" fill="#34c759" stroke="#28a745"/>
+        <text x="780" y="140" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">MCP 协议</text>
+        <text x="780" y="166" text-anchor="middle" font-size="11.5" fill="#fff">统一总线</text>
+        <g stroke="#34c759" stroke-width="1.8" fill="none" marker-end="url(#ar2)">
+          <path d="M666 85 L704 126"/><path d="M666 143 L704 148"/><path d="M666 201 L704 170"/>
+        </g>
+        <g fill="#fff" stroke="#a9dfc0">
+          <rect x="894" y="62" width="104" height="34" rx="8"/><rect x="894" y="120" width="104" height="34" rx="8"/><rect x="894" y="178" width="104" height="34" rx="8"/><rect x="894" y="236" width="104" height="34" rx="8"/>
+        </g>
+        <g font-size="11.5" text-anchor="middle" fill="#333"><text x="946" y="84">桌宠</text><text x="946" y="142">文件</text><text x="946" y="200">数据库</text><text x="946" y="258">浏览器</text></g>
+        <g stroke="#34c759" stroke-width="1.8" fill="none" marker-end="url(#ar2)">
+          <path d="M856 126 L894 79"/><path d="M856 140 L894 137"/><path d="M856 156 L894 195"/><path d="M856 170 L894 253"/>
+        </g>
+        <text x="780" y="300" text-anchor="middle" font-size="12" fill="#1b6642" font-weight="600">3 + 4 = 7 套实现</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>关键点：</b>MCP 不是让 AI 更聪明，而是让 AI 的能力可以「外接」。工具越多，这个乘法效应越明显。</div>
+</div>
+
+<!-- 3 两种连接方式 -->
+<div class="card" id="m3">
+  <div class="card-head">
+    <h2><span class="num">3</span>KuroCat 的两种接法：stdio 与本机 HTTP <span class="tag">怎么连</span></h2>
+    <p>两条路都通向同一个 MCP Server。左边由 AI 客户端启动一个子进程，通过标准输入输出通信；右边直接连接桌宠已经在跑的本机服务。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 350" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="13">
+        <rect x="20" y="20" width="246" height="310" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="143" y="52" text-anchor="middle" font-size="15" font-weight="700" fill="#1a4d99">你</text>
+        <rect x="42" y="72" width="202" height="62" rx="10" fill="#fff" stroke="#b8d2ff"/>
+        <text x="143" y="100" text-anchor="middle" font-weight="600">发一张猫的照片</text>
+        <text x="143" y="121" text-anchor="middle" font-size="12" fill="#6e6e73">「照这个捏一只桌宠」</text>
+        <rect x="42" y="166" width="202" height="62" rx="10" fill="#fff" stroke="#b8d2ff"/>
+        <text x="143" y="194" text-anchor="middle" font-weight="600">右键桌宠</text>
+        <text x="143" y="215" text-anchor="middle" font-size="12" fill="#6e6e73">开启 MCP 扩展 · 复制配置</text>
+        <text x="143" y="274" text-anchor="middle" font-size="12" fill="#1a4d99">粘贴到 Claude / Cursor / WorkBuddy</text>
+        <text x="143" y="300" text-anchor="middle" font-size="11.5" fill="#6e6e73">之后就不用管了</text>
+
+        <rect x="300" y="36" width="212" height="132" rx="12" fill="#f0edff" stroke="#d9d2ff"/>
+        <text x="406" y="66" text-anchor="middle" font-size="14" font-weight="700" fill="#3a2a7a">方式 A · stdio</text>
+        <text x="406" y="96" text-anchor="middle" font-size="11.5" fill="#5b4bb5">客户端启动 KuroCat.exe --mcp</text>
+        <text x="406" y="120" text-anchor="middle" font-size="11.5" fill="#5b4bb5">通过标准输入 / 输出说话</text>
+        <text x="406" y="148" text-anchor="middle" font-size="11.5" fill="#5b4bb5">桌宠不必先在桌面上运行</text>
+
+        <rect x="300" y="192" width="212" height="132" rx="12" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="406" y="222" text-anchor="middle" font-size="14" font-weight="700" fill="#8a5a00">方式 B · 本机 HTTP</text>
+        <text x="406" y="252" text-anchor="middle" font-size="11.5" fill="#8a5a00">连接 127.0.0.1:27420/mcp</text>
+        <text x="406" y="276" text-anchor="middle" font-size="11.5" fill="#8a5a00">桌宠必须正在运行</text>
+        <text x="406" y="304" text-anchor="middle" font-size="11.5" fill="#8a5a00">Streamable HTTP · 只监听本机</text>
+
+        <path d="M266 102 L300 102" stroke="#8e8e93" stroke-width="1.6" marker-end="url(#ar3)" fill="none"/>
+        <path d="M266 258 L300 258" stroke="#8e8e93" stroke-width="1.6" marker-end="url(#ar3)" fill="none"/>
+        <path d="M512 102 L570 160" stroke="#8e8e93" stroke-width="1.6" marker-end="url(#ar3)" fill="none"/>
+        <path d="M512 258 L570 200" stroke="#8e8e93" stroke-width="1.6" marker-end="url(#ar3)" fill="none"/>
+
+        <rect x="572" y="120" width="238" height="122" rx="14" fill="#eaf8f0" stroke="#bde6cd"/>
+        <text x="691" y="156" text-anchor="middle" font-size="15" font-weight="700" fill="#1b6642">KuroCat MCP Server</text>
+        <text x="691" y="184" text-anchor="middle" font-size="11.5" fill="#3a7d59">同一个可执行文件内置</text>
+        <text x="691" y="208" text-anchor="middle" font-size="11.5" fill="#3a7d59">不需要 Node.js / Python</text>
+        <text x="691" y="230" text-anchor="middle" font-size="11.5" fill="#3a7d59">10 个工具 · 本地执行</text>
+
+        <path d="M810 181 L854 181" stroke="#8e8e93" stroke-width="1.8" marker-end="url(#ar3)" fill="none"/>
+        <text x="832" y="168" text-anchor="middle" font-size="11" fill="#ff9500">调用</text>
+
+        <g>
+          <rect x="856" y="42" width="164" height="52" rx="10" fill="#fff" stroke="#a9dfc0"/>
+          <text x="938" y="74" text-anchor="middle" font-size="12.5" font-weight="600">cats.json</text>
+          <rect x="856" y="126" width="164" height="52" rx="10" fill="#fff" stroke="#a9dfc0"/>
+          <text x="938" y="158" text-anchor="middle" font-size="12.5" font-weight="600">桌宠画面 · 0.4s 上屏</text>
+          <rect x="856" y="210" width="164" height="52" rx="10" fill="#fff" stroke="#a9dfc0"/>
+          <text x="938" y="242" text-anchor="middle" font-size="12.5" font-weight="600">设置 / 状态 / 动作</text>
+          <rect x="856" y="288" width="164" height="42" rx="10" fill="#f2f2f7" stroke="#d5d5da"/>
+          <text x="938" y="314" text-anchor="middle" font-size="11.5" fill="#6e6e73">全部在本机完成</text>
+        </g>
+        <g stroke="#34c759" stroke-width="1.6" fill="none" marker-end="url(#ar3)">
+          <path d="M810 168 L856 68"/><path d="M810 181 L856 152"/><path d="M810 194 L856 236"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>为什么给两种：</b>stdio 最通用，任何 MCP 客户端都能用；本机 HTTP 更适合桌宠已经开着的场景，多个客户端可以连同一个桌宠。两者都只在本机通信。</div>
+</div>
+
+<!-- 4 一次捏猫请求 -->
+<div class="card" id="m4">
+  <div class="card-head">
+    <h2><span class="num">4</span>一次「捏猫」请求是怎么走完的 <span class="tag">时序</span></h2>
+    <p>纵轴是时间。你看不到 JSON，但它确实在底下按这套顺序跑了一遍：先看懂规范，再提交配置，落盘后热更新，最后切到新猫。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 470" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5856d6"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="12.5">
+        <g fill="#f0edff" stroke="#d9d2ff">
+          <rect x="24" y="20" width="160" height="42" rx="10"/><rect x="272" y="20" width="200" height="42" rx="10"/><rect x="560" y="20" width="200" height="42" rx="10"/><rect x="848" y="20" width="168" height="42" rx="10"/>
+        </g>
+        <g text-anchor="middle" font-weight="700" fill="#3a2a7a">
+          <text x="104" y="47">你</text><text x="372" y="47">AI 客户端</text><text x="660" y="47">MCP Server</text><text x="932" y="47">桌宠 / 文件</text>
+        </g>
+        <g stroke="#d9d2ff" stroke-width="1" stroke-dasharray="4 5">
+          <path d="M104 70 L104 460"/><path d="M372 70 L372 460"/><path d="M660 70 L660 460"/><path d="M932 70 L932 460"/>
+        </g>
+        <g stroke="#5856d6" stroke-width="1.7" fill="none" marker-end="url(#ar4)">
+          <path d="M104 106 L372 106"/>
+          <path d="M372 166 L660 166"/>
+          <path d="M660 226 L372 226"/>
+          <path d="M372 286 L660 286"/>
+          <path d="M660 346 L932 346"/>
+          <path d="M660 410 L372 410"/>
+        </g>
+        <g font-size="12" fill="#1d1d1f">
+          <text x="238" y="98" text-anchor="middle">① 发照片 +「照这个捏一只」</text>
+          <text x="516" y="158" text-anchor="middle">② get_cat_schema：先问有哪些字段</text>
+          <text x="516" y="218" text-anchor="middle">③ 返回花纹 / 16 斑点 / 脸型耳型规范</text>
+          <text x="516" y="278" text-anchor="middle">④ upsert_cat：提交新猫配置</text>
+          <text x="796" y="338" text-anchor="middle">⑤ 写 cats.json → 0.4s 热更新上屏</text>
+          <text x="516" y="402" text-anchor="middle">⑥ 返回结果，AI 告诉你「已经换好」</text>
+        </g>
+        <g font-size="11" fill="#6e6e73" text-anchor="middle">
+          <text x="238" y="123">自然语言</text>
+          <text x="516" y="183">工具调用</text>
+          <text x="516" y="243">工具返回</text>
+          <text x="516" y="303">工具调用</text>
+          <text x="796" y="363">本地副作用</text>
+          <text x="516" y="427">对话收尾</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>要点：</b>第 ②③ 步是「先看说明书再动手」，避免瞎猜参数名。第 ⑤ 步是唯一真正改变电脑状态的一步，而且发生在你自己的机器上。</div>
+</div>
+
+<!-- 5 10 个工具 -->
+<div class="card" id="m5">
+  <div class="card-head">
+    <h2><span class="num">5</span>KuroCat 暴露的 10 个工具，其实分四类 <span class="tag">能力边界</span></h2>
+    <p>MCP Server 的能力不是无限的：它只能暴露自己声明过的工具。KuroCat 这 10 个工具，正好定义了 AI 能对桌宠做的事的上限。</p>
+  </div>
+  <div class="fig">
+    <svg viewBox="0 0 1040 370" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif" font-size="12.5">
+        <rect x="24" y="20" width="488" height="152" rx="14" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="48" y="52" font-size="15" font-weight="700" fill="#1a4d99">读 · 先看清楚</text>
+        <g fill="#fff" stroke="#b8d2ff">
+          <rect x="48" y="70" width="208" height="38" rx="8"/><rect x="270" y="70" width="222" height="38" rx="8"/>
+          <rect x="48" y="118" width="444" height="38" rx="8"/>
+        </g>
+        <g fill="#1d1d1f" font-size="12">
+          <text x="62" y="94">list_cats · 列出皮肤</text>
+          <text x="284" y="94">get_cat_schema · 取规范</text>
+          <text x="62" y="142">get_settings · 读缩放 / 键盘 / 气泡 / 呼噜声 / 穿透 / 自启</text>
+        </g>
+
+        <rect x="528" y="20" width="488" height="152" rx="14" fill="#eaf8f0" stroke="#bde6cd"/>
+        <text x="552" y="52" font-size="15" font-weight="700" fill="#1b6642">写 · 真正改动</text>
+        <g fill="#fff" stroke="#a9dfc0">
+          <rect x="552" y="70" width="208" height="38" rx="8"/><rect x="774" y="70" width="220" height="38" rx="8"/>
+          <rect x="552" y="118" width="442" height="38" rx="8"/>
+        </g>
+        <g fill="#1d1d1f" font-size="12">
+          <text x="566" y="94">upsert_cat · 新建 / 覆盖</text>
+          <text x="788" y="94">patch_cat · 局部微调</text>
+          <text x="566" y="142">update_settings · 改设置（缩到 85%、切 108 键…）</text>
+        </g>
+
+        <rect x="24" y="190" width="488" height="152" rx="14" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="48" y="222" font-size="15" font-weight="700" fill="#8a5a00">切换与清理</text>
+        <g fill="#fff" stroke="#f0cf9a">
+          <rect x="48" y="240" width="208" height="42" rx="8"/><rect x="270" y="240" width="222" height="42" rx="8"/>
+        </g>
+        <g fill="#1d1d1f" font-size="12">
+          <text x="62" y="266">switch_cat · 按 ID 切换</text>
+          <text x="284" y="266">delete_cat · 删除 / 重置</text>
+        </g>
+        <text x="48" y="315" font-size="11.5" fill="#8a5a00">自定义猫保存在 cats.json，支持手动编辑热重载</text>
+
+        <rect x="528" y="190" width="488" height="152" rx="14" fill="#f0edff" stroke="#d9d2ff"/>
+        <text x="552" y="222" font-size="15" font-weight="700" fill="#3a2a7a">联动与互动</text>
+        <g fill="#fff" stroke="#d2c8ff">
+          <rect x="552" y="240" width="208" height="42" rx="8"/><rect x="774" y="240" width="220" height="42" rx="8"/>
+        </g>
+        <g fill="#1d1d1f" font-size="12">
+          <text x="566" y="266">set_agent_status · 同步代理状态</text>
+          <text x="788" y="266">trigger_action · 摸头 / 开心…</text>
+        </g>
+        <text x="552" y="315" font-size="11.5" fill="#3a2a7a">状态：思考 / 编码 / 执行 / 待确认 / 出错 / 完工</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>看工具清单的价值：</b>接入一个 MCP Server 前先看它暴露了什么工具，就知道 AI 最多能做什么、改动范围有多大——这是评估权限和安全边界最直接的方式。</div>
+</div>
+
+<script>
+(function(){
+  document.querySelectorAll('.fig').forEach(function(fig){
+    var svg=fig.querySelector('svg');
+    var scale=1,tx=0,ty=0;
+    function apply(){svg.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')';}
+    function zoom(f,x,y){
+      var r=fig.getBoundingClientRect();
+      var mx=x-r.left,my=y-r.top,ns=Math.min(5,Math.max(.6,scale*f));
+      tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;apply();
+    }
+    fig.addEventListener('wheel',function(e){e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);},{passive:false});
+    var drag=false,lx=0,ly=0;
+    fig.addEventListener('pointerdown',function(e){drag=true;lx=e.clientX;ly=e.clientY;fig.setPointerCapture(e.pointerId);});
+    fig.addEventListener('pointermove',function(e){if(!drag)return;tx+=e.clientX-lx;ty+=e.clientY-ly;lx=e.clientX;ly=e.clientY;apply();});
+    function up(e){drag=false;try{fig.releasePointerCapture(e.pointerId);}catch(x){}}
+    fig.addEventListener('pointerup',up);fig.addEventListener('pointercancel',up);
+    fig.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
