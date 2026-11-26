@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoldenDB 排查思路问诊图 · 三问定位 → 对症下药 → 复查</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#0a84ff,#5856d6 58%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.94}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;height:min(62vh,530px);min-height:330px;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  .pz-tip{position:absolute;left:12px;bottom:10px;z-index:5;background:rgba(255,255,255,.9);color:#64748b;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;pointer-events:none}
+  @media(max-width:600px){.pz-viewport{height:56vh;min-height:300px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>排查思路问诊图：别再说「数据库慢」</h1>
+  <p>把官方排查套路翻译成医生看病的流程：先问三句话拿证据，再对号入座找病因，最后对症下药并复查。缩略图看不清时单击进入缩放，手机可双指捏合。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#t1">三问定位</a><a href="#t2">对症开药</a>
+</div>
+
+<!-- 1 三问定位 -->
+<div class="card" id="t1">
+  <div class="card-head">
+    <h2><span class="num">1</span>先像医生一样问诊：三句话拿到证据 <span class="tag">分诊</span></h2>
+    <p>症状只是「慢」，病因藏在细节里。先问清楚哪条 SQL 慢、慢在哪一步、有没有让一群机器做无用功，再谈优化。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 320" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="q1" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="992" height="56" rx="12" fill="#fff6e8" stroke="#f2d9ae"/>
+        <text x="44" y="49" font-size="13" font-weight="700" fill="#8a5a00">病人来了：接口慢 / 批跑慢 / 高峰期卡顿</text>
+        <text x="44" y="69" font-size="11.5" fill="#6e6e73">这些只是症状，不能直接开药；就像发烧不能只说「生病了」，要先量体温、验血。</text>
+
+        <g stroke="#8e8e93" stroke-width="1.6" marker-end="url(#q1)" fill="none">
+          <path d="M196,108 L208,108"/><path d="M424,108 L436,108"/><path d="M652,108 L664,108"/>
+        </g>
+
+        <rect x="24" y="94" width="172" height="118" rx="12" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="40" y="120" font-size="12.5" font-weight="700" fill="#0a58ca">问 ① 哪条慢？</text>
+        <text x="40" y="146" font-size="11" fill="#1d1d1f">Insight 慢 SQL 列表</text>
+        <text x="40" y="168" font-size="11" fill="#6e6e73">内核 SQL 治理采集</text>
+        <text x="40" y="194" font-size="10.5" fill="#0a58ca">证据：SQL 文本 + 耗时</text>
+
+        <rect x="208" y="94" width="216" height="118" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="224" y="120" font-size="12.5" font-weight="700" fill="#3a2a7a">问 ② 慢在哪一步？</text>
+        <text x="224" y="146" font-size="11" fill="#1d1d1f">EXPLAIN 看 CN / DN 计划</text>
+        <text x="224" y="168" font-size="11" fill="#6e6e73">先查哪张表、用哪个索引</text>
+        <text x="224" y="194" font-size="10.5" fill="#3a2a7a">证据：执行路线图</text>
+
+        <rect x="436" y="94" width="216" height="118" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="452" y="120" font-size="12.5" font-weight="700" fill="#1d7a45">问 ③ 有没有白搬货？</text>
+        <text x="452" y="146" font-size="11" fill="#1d1d1f">全表扫描？跨 DN 关联？</text>
+        <text x="452" y="168" font-size="11" fill="#6e6e73">过滤 / 聚合没下推？</text>
+        <text x="452" y="194" font-size="10.5" fill="#1d7a45">证据：数据搬运量</text>
+
+        <rect x="664" y="94" width="352" height="118" rx="12" fill="#fff" stroke="#e5e5ea"/>
+        <text x="680" y="120" font-size="12.5" font-weight="700" fill="#1d1d1f">大白话：三个问题就是三张检查单</text>
+        <text x="680" y="146" font-size="11" fill="#6e6e73">慢 SQL 列表 = 挂号单，锁定「谁」；</text>
+        <text x="680" y="168" font-size="11" fill="#6e6e73">执行计划 = 检查报告，锁定「哪一步」；</text>
+        <text x="680" y="194" font-size="11" fill="#6e6e73">下推与分片 = 病因分析，锁定「为什么」。</text>
+
+        <rect x="24" y="238" width="992" height="62" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="44" y="264" font-size="12.5" font-weight="700" fill="#3a2a7a">问诊纪律：采集慢 SQL 列表，交给应用团队后续版本整改。</text>
+        <text x="44" y="288" font-size="11.5" fill="#6e6e73">官方提醒：生产上直接终止请求会影响业务成功率；先取证，再开药，别把「止血」当「治病」。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>先说清楚「谁慢、慢在哪步、是不是在白干活」，答案清楚了，后面四种诊断才有意义；否则就是凭感觉乱加机器。</div>
+</div>
+
+<!-- 2 对症开药 -->
+<div class="card" id="t2">
+  <div class="card-head">
+    <h2><span class="num">2</span>对号入座：四种病因，四张药方 <span class="tag">开药</span></h2>
+    <p>问诊结束后，把证据对应到四类常见病因。官方的解法各有明确分工，不是互相替代：索引治「翻表」，分片治「搬货」，计划治「选错路」，兜底治「高并发」。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 400" xmlns="http://www.w3.org/2000/svg">
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="992" height="40" rx="10" fill="#fff" stroke="#e5e5ea"/>
+        <text x="44" y="49" font-size="12.5" font-weight="700" fill="#1d1d1f">诊断 → 药方对照表：先看症状属于哪一列，再看对应手段</text>
+
+        <rect x="24" y="82" width="236" height="230" rx="13" fill="#fff1f0" stroke="#ffc9c4"/>
+        <rect x="36" y="94" width="66" height="24" rx="7" fill="#ff3b30"/>
+        <text x="49" y="111" font-size="11.5" font-weight="700" fill="#fff">病因 A</text>
+        <text x="36" y="141" font-size="13.5" font-weight="700" fill="#c62828">没合适索引</text>
+        <text x="36" y="167" font-size="11" fill="#1d1d1f">症状：全表扫描</text>
+        <text x="36" y="189" font-size="11" fill="#6e6e73">翻完整张表找几行</text>
+        <text x="36" y="211" font-size="11" fill="#6e6e73">CPU / 内存 / I/O 被占</text>
+        <line x1="36" y1="226" x2="248" y2="226" stroke="#ffc9c4"/>
+        <text x="36" y="248" font-size="11.5" font-weight="700" fill="#c62828">药方</text>
+        <text x="36" y="268" font-size="11" fill="#1d1d1f">内核索引推荐 + 建索引</text>
+        <text x="36" y="290" font-size="10.5" fill="#6e6e73">亿级大表 10 秒出报告</text>
+
+        <rect x="276" y="82" width="236" height="230" rx="13" fill="#eef4ff" stroke="#c9dcff"/>
+        <rect x="288" y="94" width="66" height="24" rx="7" fill="#007aff"/>
+        <text x="301" y="111" font-size="11.5" font-weight="700" fill="#fff">病因 B</text>
+        <text x="288" y="141" font-size="13.5" font-weight="700" fill="#0a58ca">分片不合理</text>
+        <text x="288" y="167" font-size="11" fill="#1d1d1f">症状：跨节点搬货</text>
+        <text x="288" y="189" font-size="11" fill="#6e6e73">JOIN / 聚合没下推</text>
+        <text x="288" y="211" font-size="11" fill="#6e6e73">SQL 群发到所有 DN</text>
+        <line x1="288" y1="226" x2="500" y2="226" stroke="#c9dcff"/>
+        <text x="288" y="248" font-size="11.5" font-weight="700" fill="#0a58ca">药方</text>
+        <text x="288" y="268" font-size="11" fill="#1d1d1f">同分片 / 数据重分布</text>
+        <text x="288" y="290" font-size="10.5" fill="#6e6e73">广播表 / 全局索引</text>
+
+        <rect x="528" y="82" width="236" height="230" rx="13" fill="#f0edff" stroke="#d2c8ff"/>
+        <rect x="540" y="94" width="66" height="24" rx="7" fill="#5856d6"/>
+        <text x="553" y="111" font-size="11.5" font-weight="700" fill="#fff">病因 C</text>
+        <text x="540" y="141" font-size="13.5" font-weight="700" fill="#3a2a7a">执行计划选错</text>
+        <text x="540" y="167" font-size="11" fill="#1d1d1f">症状：忽快忽慢</text>
+        <text x="540" y="189" font-size="11" fill="#6e6e73">COST 估算不准</text>
+        <text x="540" y="211" font-size="11" fill="#6e6e73">连接顺序不合理</text>
+        <line x1="540" y1="226" x2="752" y2="226" stroke="#d2c8ff"/>
+        <text x="540" y="248" font-size="11.5" font-weight="700" fill="#3a2a7a">药方</text>
+        <text x="540" y="268" font-size="11" fill="#1d1d1f">hint / outline 绑定</text>
+        <text x="540" y="290" font-size="10.5" fill="#6e6e73">SQL 改写，不改应用也能修</text>
+
+        <rect x="780" y="82" width="236" height="230" rx="13" fill="#fff5e8" stroke="#f7ddb6"/>
+        <rect x="792" y="94" width="66" height="24" rx="7" fill="#ff9500"/>
+        <text x="805" y="111" font-size="11.5" font-weight="700" fill="#fff">病因 D</text>
+        <text x="792" y="141" font-size="13.5" font-weight="700" fill="#8a5a00">高并发资源争抢</text>
+        <text x="792" y="167" font-size="11" fill="#1d1d1f">症状：高峰卡顿 / 毛刺</text>
+        <text x="792" y="189" font-size="11" fill="#6e6e73">复杂 AP 阻塞短平快 TP</text>
+        <text x="792" y="211" font-size="11" fill="#6e6e73">大结果集堵住内存</text>
+        <line x1="792" y1="226" x2="1004" y2="226" stroke="#f7ddb6"/>
+        <text x="792" y="248" font-size="11.5" font-weight="700" fill="#8a5a00">药方</text>
+        <text x="792" y="268" font-size="11" fill="#1d1d1f">读写分离 / 并行 / 流式</text>
+        <text x="792" y="290" font-size="10.5" fill="#6e6e73">批量协议 / 限流 / TP·AP 隔离</text>
+
+        <rect x="24" y="330" width="992" height="50" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="44" y="352" font-size="12.5" font-weight="700" fill="#1d7a45">最后是复查：DBReplay 回放真实流量 / 压测对比。</text>
+        <text x="44" y="372" font-size="11.5" fill="#6e6e73">确认慢 SQL 消失、响应时间回落，再算优化完成；加机器通常是所有路都走过之后的最后一步。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>A 治「没目录就翻书」，B 治「仓库之间来回搬货」，C 治「导航带错路」，D 治「高峰期大家抢一条道」。四种病可以同时存在，按证据逐条排除，不要一上来就换更大的服务器。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    var tip=document.createElement('div');tip.className='pz-tip';tip.textContent='\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+    vp.appendChild(bar);vp.appendChild(tip);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+      tip.textContent=zoomMode?'\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u518d\u5355\u51fb\u9000\u51fa':'\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6a21\u5f0f\u5185\u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d';
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>

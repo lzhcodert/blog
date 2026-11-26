@@ -327,6 +327,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <h2 id="sec-1">官方的排查顺序：先取证，再开药</h2>
 <ol><li><strong>开发 / 迁移前</strong>：用 CAC 做兼容性评估、分片键推荐；开发阶段用模拟数据压测，收集设计不合理的 SQL。</li><li><strong>上线前</strong>：用 DBReplay 从 GoldenDB / MySQL / Oracle 录制负载并回放，评估语句兼容性和执行效率。</li><li><strong>生产监测</strong>：用 Insight 看 QPS、TPS、慢 SQL、会话数、CPU、内存、磁盘、I/O 延迟；用内核 SQL 治理识别和拦截高危语句。</li><li><strong>定位根因</strong>：用 <code>EXPLAIN</code> 看执行计划，判断是没索引、分片不对，还是数据被跨节点乱搬。</li><li><strong>对症优化</strong>：改分片、加索引、SQL 改写、绑定执行计划、让算子下推。</li><li><strong>稳定性兜底</strong>：读写分离、自动并行、流式查询、批量协议、SQL 限流、TP/AP 隔离。</li></ol>
 <blockquote>大白话：别上来就说「数据库慢」。先问三件事：哪条 SQL 慢？它慢在哪一步？它是不是让一群机器做了无用功？答案清楚了，优化才有方向。</blockquote>
+<blockquote>看这套顺序觉得抽象？文末新增的<strong>排查思路问诊图</strong>把它画成了医生看病的流程：<strong>三问定位 → 四种诊断 → 对症下药 → 复查验证</strong>。先扫一眼图，再往下读会轻松很多。</blockquote>
 <h2 id="sec-2">第 1 步：先把慢 SQL 揪出来</h2>
 <p>官方在某大型国有银行的实践里，把 SQL 治理做进了<strong>数据库内核</strong>，不是只在应用代码里查字符串。它能按三类规则识别慢 SQL：</p>
 <ul><li><strong>按真实开销</strong>：DML（增删改）和 DQL（查询）允许的最大执行时间、单次返回的最大结果集行数、多表关联的最大关联行数、单次执行和单会话允许读的最大数据块数；</li><li><strong>按高危语法</strong>：SQL 黑名单、禁止不带索引的查询（全表扫描）、禁止笛卡尔积、禁止随意 DROP / TRUNCATE；</li><li><strong>按资源占用</strong>：用户最大会话数、单会话和单条 SQL 的最大 CPU 时间、SQL 最大代价。</li></ul>
@@ -366,7 +367,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <p>先在数据库里找出慢 SQL，再让数据少搬家、让计划走对路；实在扛不住，就分流、并行、批量、限流。加机器通常是最后一步，不是第一步。</p>
   </div>
   <div class="article-embeds">
-    <h2 id="sec-embeds">GoldenDB 效率优化图解（六张图）</h2>
+    <h2 id="sec-embeds">GoldenDB 效率优化图解（八张图）</h2>
 <figure class="embed-figure"><figcaption><span>图 1 · 排查路线 / 慢SQL三宗罪 / 算子下推 / 分片重分布 / 执行计划与索引 / 兜底组合（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/goldendb-performance.html" data-modal-title="GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版） · 图 1 · 排查路线 / 慢SQL三宗罪 / 算子下推 / 分片重分布 / 执行计划与索引 / 兜底组合（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 排查路线 / 慢SQL三宗罪 / 算子下推 / 分片重分布 / 执行计划与索引 / 兜底组合（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
@@ -785,9 +786,260 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 &lt;/body&gt;
 &lt;/html&gt;
 " sandbox="allow-scripts" loading="lazy" style="height:1080px"></iframe></figure>
+<figure class="embed-figure"><figcaption><span>图 2 · 排查思路问诊图：三问定位 → 四种诊断 → 对症开药（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="1" data-modal-src="../embed/goldendb-troubleshooting.html" data-modal-title="GoldenDB 效率低怎么办？官方的排查与优化套路（大白话版） · 图 2 · 排查思路问诊图：三问定位 → 四种诊断 → 对症开药（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 2 · 排查思路问诊图：三问定位 → 四种诊断 → 对症开药（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;UTF-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
+&lt;title&gt;GoldenDB 排查思路问诊图 · 三问定位 → 对症下药 → 复查&lt;/title&gt;
+&lt;style&gt;
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#0a84ff,#5856d6 58%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.94}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;height:min(62vh,530px);min-height:330px;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport&gt;svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming&gt;svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging&gt;svg,.pz-viewport.dragging&gt;svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  .pz-tip{position:absolute;left:12px;bottom:10px;z-index:5;background:rgba(255,255,255,.9);color:#64748b;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;pointer-events:none}
+  @media(max-width:600px){.pz-viewport{height:56vh;min-height:300px}}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div class=&quot;hero&quot;&gt;
+  &lt;h1&gt;排查思路问诊图：别再说「数据库慢」&lt;/h1&gt;
+  &lt;p&gt;把官方排查套路翻译成医生看病的流程：先问三句话拿证据，再对号入座找病因，最后对症下药并复查。缩略图看不清时单击进入缩放，手机可双指捏合。&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
+&lt;div class=&quot;nav&quot;&gt;
+  &lt;a href=&quot;#t1&quot;&gt;三问定位&lt;/a&gt;&lt;a href=&quot;#t2&quot;&gt;对症开药&lt;/a&gt;
+&lt;/div&gt;
+
+&lt;!-- 1 三问定位 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;t1&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;先像医生一样问诊：三句话拿到证据 &lt;span class=&quot;tag&quot;&gt;分诊&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;症状只是「慢」，病因藏在细节里。先问清楚哪条 SQL 慢、慢在哪一步、有没有让一群机器做无用功，再谈优化。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 320&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;q1&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;992&quot; height=&quot;56&quot; rx=&quot;12&quot; fill=&quot;#fff6e8&quot; stroke=&quot;#f2d9ae&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;49&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;病人来了：接口慢 / 批跑慢 / 高峰期卡顿&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;69&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;这些只是症状，不能直接开药；就像发烧不能只说「生病了」，要先量体温、验血。&lt;/text&gt;
+
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#q1)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M196,108 L208,108&quot;/&gt;&lt;path d=&quot;M424,108 L436,108&quot;/&gt;&lt;path d=&quot;M652,108 L664,108&quot;/&gt;
+        &lt;/g&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;94&quot; width=&quot;172&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;40&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;问 ① 哪条慢？&lt;/text&gt;
+        &lt;text x=&quot;40&quot; y=&quot;146&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;Insight 慢 SQL 列表&lt;/text&gt;
+        &lt;text x=&quot;40&quot; y=&quot;168&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;内核 SQL 治理采集&lt;/text&gt;
+        &lt;text x=&quot;40&quot; y=&quot;194&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;证据：SQL 文本 + 耗时&lt;/text&gt;
+
+        &lt;rect x=&quot;208&quot; y=&quot;94&quot; width=&quot;216&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;224&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;问 ② 慢在哪一步？&lt;/text&gt;
+        &lt;text x=&quot;224&quot; y=&quot;146&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;EXPLAIN 看 CN / DN 计划&lt;/text&gt;
+        &lt;text x=&quot;224&quot; y=&quot;168&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;先查哪张表、用哪个索引&lt;/text&gt;
+        &lt;text x=&quot;224&quot; y=&quot;194&quot; font-size=&quot;10.5&quot; fill=&quot;#3a2a7a&quot;&gt;证据：执行路线图&lt;/text&gt;
+
+        &lt;rect x=&quot;436&quot; y=&quot;94&quot; width=&quot;216&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;452&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;问 ③ 有没有白搬货？&lt;/text&gt;
+        &lt;text x=&quot;452&quot; y=&quot;146&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;全表扫描？跨 DN 关联？&lt;/text&gt;
+        &lt;text x=&quot;452&quot; y=&quot;168&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;过滤 / 聚合没下推？&lt;/text&gt;
+        &lt;text x=&quot;452&quot; y=&quot;194&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;证据：数据搬运量&lt;/text&gt;
+
+        &lt;rect x=&quot;664&quot; y=&quot;94&quot; width=&quot;352&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;680&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;大白话：三个问题就是三张检查单&lt;/text&gt;
+        &lt;text x=&quot;680&quot; y=&quot;146&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;慢 SQL 列表 = 挂号单，锁定「谁」；&lt;/text&gt;
+        &lt;text x=&quot;680&quot; y=&quot;168&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;执行计划 = 检查报告，锁定「哪一步」；&lt;/text&gt;
+        &lt;text x=&quot;680&quot; y=&quot;194&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;下推与分片 = 病因分析，锁定「为什么」。&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;238&quot; width=&quot;992&quot; height=&quot;62&quot; rx=&quot;12&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;264&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;问诊纪律：采集慢 SQL 列表，交给应用团队后续版本整改。&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;288&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;官方提醒：生产上直接终止请求会影响业务成功率；先取证，再开药，别把「止血」当「治病」。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;先说清楚「谁慢、慢在哪步、是不是在白干活」，答案清楚了，后面四种诊断才有意义；否则就是凭感觉乱加机器。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 2 对症开药 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;t2&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;对号入座：四种病因，四张药方 &lt;span class=&quot;tag&quot;&gt;开药&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;问诊结束后，把证据对应到四类常见病因。官方的解法各有明确分工，不是互相替代：索引治「翻表」，分片治「搬货」，计划治「选错路」，兜底治「高并发」。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 400&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;24&quot; width=&quot;992&quot; height=&quot;40&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;49&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;诊断 → 药方对照表：先看症状属于哪一列，再看对应手段&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;82&quot; width=&quot;236&quot; height=&quot;230&quot; rx=&quot;13&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;rect x=&quot;36&quot; y=&quot;94&quot; width=&quot;66&quot; height=&quot;24&quot; rx=&quot;7&quot; fill=&quot;#ff3b30&quot;/&gt;
+        &lt;text x=&quot;49&quot; y=&quot;111&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;病因 A&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;141&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;没合适索引&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;167&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;症状：全表扫描&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;189&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;翻完整张表找几行&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;211&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;CPU / 内存 / I/O 被占&lt;/text&gt;
+        &lt;line x1=&quot;36&quot; y1=&quot;226&quot; x2=&quot;248&quot; y2=&quot;226&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;36&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;药方&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;268&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;内核索引推荐 + 建索引&lt;/text&gt;
+        &lt;text x=&quot;36&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;亿级大表 10 秒出报告&lt;/text&gt;
+
+        &lt;rect x=&quot;276&quot; y=&quot;82&quot; width=&quot;236&quot; height=&quot;230&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;rect x=&quot;288&quot; y=&quot;94&quot; width=&quot;66&quot; height=&quot;24&quot; rx=&quot;7&quot; fill=&quot;#007aff&quot;/&gt;
+        &lt;text x=&quot;301&quot; y=&quot;111&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;病因 B&lt;/text&gt;
+        &lt;text x=&quot;288&quot; y=&quot;141&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;分片不合理&lt;/text&gt;
+        &lt;text x=&quot;288&quot; y=&quot;167&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;症状：跨节点搬货&lt;/text&gt;
+        &lt;text x=&quot;288&quot; y=&quot;189&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;JOIN / 聚合没下推&lt;/text&gt;
+        &lt;text x=&quot;288&quot; y=&quot;211&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;SQL 群发到所有 DN&lt;/text&gt;
+        &lt;line x1=&quot;288&quot; y1=&quot;226&quot; x2=&quot;500&quot; y2=&quot;226&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;288&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;药方&lt;/text&gt;
+        &lt;text x=&quot;288&quot; y=&quot;268&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;同分片 / 数据重分布&lt;/text&gt;
+        &lt;text x=&quot;288&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;广播表 / 全局索引&lt;/text&gt;
+
+        &lt;rect x=&quot;528&quot; y=&quot;82&quot; width=&quot;236&quot; height=&quot;230&quot; rx=&quot;13&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;rect x=&quot;540&quot; y=&quot;94&quot; width=&quot;66&quot; height=&quot;24&quot; rx=&quot;7&quot; fill=&quot;#5856d6&quot;/&gt;
+        &lt;text x=&quot;553&quot; y=&quot;111&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;病因 C&lt;/text&gt;
+        &lt;text x=&quot;540&quot; y=&quot;141&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;执行计划选错&lt;/text&gt;
+        &lt;text x=&quot;540&quot; y=&quot;167&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;症状：忽快忽慢&lt;/text&gt;
+        &lt;text x=&quot;540&quot; y=&quot;189&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;COST 估算不准&lt;/text&gt;
+        &lt;text x=&quot;540&quot; y=&quot;211&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;连接顺序不合理&lt;/text&gt;
+        &lt;line x1=&quot;540&quot; y1=&quot;226&quot; x2=&quot;752&quot; y2=&quot;226&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;540&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;药方&lt;/text&gt;
+        &lt;text x=&quot;540&quot; y=&quot;268&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;hint / outline 绑定&lt;/text&gt;
+        &lt;text x=&quot;540&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;SQL 改写，不改应用也能修&lt;/text&gt;
+
+        &lt;rect x=&quot;780&quot; y=&quot;82&quot; width=&quot;236&quot; height=&quot;230&quot; rx=&quot;13&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;rect x=&quot;792&quot; y=&quot;94&quot; width=&quot;66&quot; height=&quot;24&quot; rx=&quot;7&quot; fill=&quot;#ff9500&quot;/&gt;
+        &lt;text x=&quot;805&quot; y=&quot;111&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot;&gt;病因 D&lt;/text&gt;
+        &lt;text x=&quot;792&quot; y=&quot;141&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;高并发资源争抢&lt;/text&gt;
+        &lt;text x=&quot;792&quot; y=&quot;167&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;症状：高峰卡顿 / 毛刺&lt;/text&gt;
+        &lt;text x=&quot;792&quot; y=&quot;189&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;复杂 AP 阻塞短平快 TP&lt;/text&gt;
+        &lt;text x=&quot;792&quot; y=&quot;211&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;大结果集堵住内存&lt;/text&gt;
+        &lt;line x1=&quot;792&quot; y1=&quot;226&quot; x2=&quot;1004&quot; y2=&quot;226&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;792&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;药方&lt;/text&gt;
+        &lt;text x=&quot;792&quot; y=&quot;268&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;读写分离 / 并行 / 流式&lt;/text&gt;
+        &lt;text x=&quot;792&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;批量协议 / 限流 / TP·AP 隔离&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;330&quot; width=&quot;992&quot; height=&quot;50&quot; rx=&quot;11&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;352&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;最后是复查：DBReplay 回放真实流量 / 压测对比。&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;372&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;确认慢 SQL 消失、响应时间回落，再算优化完成；加机器通常是所有路都走过之后的最后一步。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;A 治「没目录就翻书」，B 治「仓库之间来回搬货」，C 治「导航带错路」，D 治「高峰期大家抢一条道」。四种病可以同时存在，按证据逐条排除，不要一上来就换更大的服务器。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;script&gt;
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll(&#39;svg[viewBox]&#39;));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&amp;&amp;svg.parentElement.classList.contains(&#39;pz-viewport&#39;))return;
+    var vp=document.createElement(&#39;div&#39;);vp.className=&#39;pz-viewport&#39;;
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement(&#39;div&#39;);bar.className=&#39;pz-toolbar&#39;;
+    var bOut=document.createElement(&#39;button&#39;);bOut.textContent=&#39;\u2212&#39;;bOut.title=&#39;\u7f29\u5c0f&#39;;
+    var bIn=document.createElement(&#39;button&#39;);bIn.textContent=&#39;+&#39;;bIn.title=&#39;\u653e\u5927&#39;;
+    var bReset=document.createElement(&#39;button&#39;);bReset.textContent=&#39;\u21bb&#39;;bReset.title=&#39;\u590d\u4f4d&#39;;
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    var tip=document.createElement(&#39;div&#39;);tip.className=&#39;pz-tip&#39;;tip.textContent=&#39;\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d&#39;;
+    vp.appendChild(bar);vp.appendChild(tip);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType=&#39;mouse&#39;,downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+&#39;,0,0,&#39;+scale+&#39;,&#39;+tx+&#39;,&#39;+ty+&#39;)&#39;;}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length&gt;=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener(&#39;wheel&#39;,function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY&lt;0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener(&#39;pointerdown&#39;,function(e){
+      if(e.pointerType===&#39;mouse&#39;&amp;&amp;e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add(&#39;dragging&#39;);}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove(&#39;dragging&#39;);
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener(&#39;pointermove&#39;,function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)&gt;4)moved=true;
+      if(ids().length===2&amp;&amp;pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d&gt;0&amp;&amp;d&gt;0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&amp;&amp;dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length&lt;2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add(&#39;dragging&#39;);}
+      else if(k.length===0){dragging=false;vp.classList.remove(&#39;dragging&#39;);}
+    }
+    svg.addEventListener(&#39;pointerup&#39;,end);svg.addEventListener(&#39;pointercancel&#39;,end);
+    svg.addEventListener(&#39;click&#39;,function(){
+      if(lastType!==&#39;mouse&#39;||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle(&#39;zooming&#39;,zoomMode);
+      tip.textContent=zoomMode?&#39;\u7f29\u653e\u6a21\u5f0f \u00b7 \u6eda\u8f6e\u7f29\u653e \u00b7 \u518d\u5355\u51fb\u9000\u51fa&#39;:&#39;\u5355\u51fb\u56fe\u8fdb\u5165\u7f29\u653e\u6a21\u5f0f \u00b7 \u6a21\u5f0f\u5185\u6eda\u8f6e\u7f29\u653e \u00b7 \u624b\u673a\u53cc\u6307\u634f\u5408 \u00b7 \u62d6\u52a8\u5e73\u79fb \u00b7 \u53cc\u51fb\u590d\u4f4d&#39;;
+    });
+    svg.addEventListener(&#39;dblclick&#39;,function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+" sandbox="allow-scripts" loading="lazy" style="height:1080px"></iframe></figure>
   </div>
 </article>
-<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">官方的排查顺序：先取证，再开药</a></div><div class="toc-group"><a href="#sec-2" class="">第 1 步：先把慢 SQL 揪出来</a></div><div class="toc-group"><a href="#sec-3" class="">第 2 步：看执行计划，别凭感觉</a></div><div class="toc-group"><a href="#sec-4" class="">第 3 步：分片键选错，后面全白搭</a></div><div class="toc-group"><a href="#sec-5" class="">第 4 步：让计算靠近数据——下推</a></div><div class="toc-group"><a href="#sec-6" class="">第 5 步：索引和 SQL 改写，交给内核推荐</a></div><div class="toc-group"><a href="#sec-7" class="">第 6 步：分流、并行、批量、限流</a></div><div class="toc-group"><a href="#sec-8" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-9" class="">官方资料</a></div><div class="toc-group"><a href="#sec-10" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 效率优化图解（六张图）</a></div></nav>
+<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">官方的排查顺序：先取证，再开药</a></div><div class="toc-group"><a href="#sec-2" class="">第 1 步：先把慢 SQL 揪出来</a></div><div class="toc-group"><a href="#sec-3" class="">第 2 步：看执行计划，别凭感觉</a></div><div class="toc-group"><a href="#sec-4" class="">第 3 步：分片键选错，后面全白搭</a></div><div class="toc-group"><a href="#sec-5" class="">第 4 步：让计算靠近数据——下推</a></div><div class="toc-group"><a href="#sec-6" class="">第 5 步：索引和 SQL 改写，交给内核推荐</a></div><div class="toc-group"><a href="#sec-7" class="">第 6 步：分流、并行、批量、限流</a></div><div class="toc-group"><a href="#sec-8" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-9" class="">官方资料</a></div><div class="toc-group"><a href="#sec-10" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 效率优化图解（八张图）</a></div></nav>
 </div>
 </main>
 <button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button>
@@ -795,7 +1047,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
   <div class="toc-backdrop" data-toc-close></div>
   <div class="toc-panel">
     <div class="toc-panel-head"><span>本页目录 · 11 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
-    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">官方的排查顺序：先取证，再开药</a></div><div class="toc-group"><a href="#sec-2" class="">第 1 步：先把慢 SQL 揪出来</a></div><div class="toc-group"><a href="#sec-3" class="">第 2 步：看执行计划，别凭感觉</a></div><div class="toc-group"><a href="#sec-4" class="">第 3 步：分片键选错，后面全白搭</a></div><div class="toc-group"><a href="#sec-5" class="">第 4 步：让计算靠近数据——下推</a></div><div class="toc-group"><a href="#sec-6" class="">第 5 步：索引和 SQL 改写，交给内核推荐</a></div><div class="toc-group"><a href="#sec-7" class="">第 6 步：分流、并行、批量、限流</a></div><div class="toc-group"><a href="#sec-8" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-9" class="">官方资料</a></div><div class="toc-group"><a href="#sec-10" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 效率优化图解（六张图）</a></div></nav>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">官方的排查顺序：先取证，再开药</a></div><div class="toc-group"><a href="#sec-2" class="">第 1 步：先把慢 SQL 揪出来</a></div><div class="toc-group"><a href="#sec-3" class="">第 2 步：看执行计划，别凭感觉</a></div><div class="toc-group"><a href="#sec-4" class="">第 3 步：分片键选错，后面全白搭</a></div><div class="toc-group"><a href="#sec-5" class="">第 4 步：让计算靠近数据——下推</a></div><div class="toc-group"><a href="#sec-6" class="">第 5 步：索引和 SQL 改写，交给内核推荐</a></div><div class="toc-group"><a href="#sec-7" class="">第 6 步：分流、并行、批量、限流</a></div><div class="toc-group"><a href="#sec-8" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-9" class="">官方资料</a></div><div class="toc-group"><a href="#sec-10" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 效率优化图解（八张图）</a></div></nav>
   </div>
 </div>
 
