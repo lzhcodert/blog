@@ -168,6 +168,19 @@ a{color:inherit}
 .article-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-3);padding:2px 5px;border-radius:5px;font-size:13px}
 .article-body pre{background:var(--surface-3);padding:14px;border-radius:10px;overflow:auto;margin:0 0 18px}
 .article-body pre code{background:transparent;padding:0}
+/* 代码块：超过 14 行默认折叠，所有代码块都能一键复制 */
+.code-block{margin:0 0 18px;border:.5px solid var(--line);border-radius:11px;background:var(--surface-3);overflow:hidden}
+.code-bar{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 12px;border-bottom:.5px solid var(--line)}
+.code-lang{font-size:11px;letter-spacing:.4px;color:var(--faint);text-transform:lowercase}
+.code-btns{margin-left:auto;display:flex;gap:2px}
+.code-btns button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;line-height:1;padding:6px 9px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s}
+.code-btns button:hover{background:var(--line);color:var(--text)}
+.code-btns button.done{color:#34c759}
+.code-block pre{margin:0;padding:12px 14px;border-radius:0;background:transparent}
+.code-body{position:relative}
+.code-block.is-collapsed .code-body{max-height:320px;overflow:hidden}
+.code-block.is-collapsed .code-body::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to bottom,transparent,var(--surface-3));pointer-events:none}
+@media(max-width:760px){.code-block pre{padding:11px 12px}.code-btns button{font-size:11.5px;padding:5px 8px}}
 .article-body table{border-collapse:collapse;width:100%;margin:0 0 20px;font-size:14px}
 .article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
 .article-body th{background:var(--surface-3);font-weight:600}
@@ -347,11 +360,11 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <h2 id="sec-4">从 0 到 1：自己写一个 Server</h2>
 <p>下面用官方 <strong>Python SDK</strong> 走一遍。版本要求是当前值：<strong>Python 3.11+，MCP SDK 2.0+</strong>。网上很多老教程用的是旧版 <code>FastMCP</code> 写法，照抄容易踩坑，建议以官方文档为准。</p>
 <p><strong>第一步，建环境。</strong></p>
-<pre><code>uv add &quot;mcp[cli]&quot;</code></pre>
+<div class="code-block"><div class="code-bar"><span class="code-lang">bash</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>uv add &quot;mcp[cli]&quot;</code></pre></div></div>
 <p><code>[cli]</code> 会额外装上 <code>mcp</code> 命令行工具，后面调试要用。不用 uv 的话 <code>pip install &quot;mcp[cli]&quot;</code> 也行。</p>
 <p><strong>第二步到第三步，写实例和工具。</strong></p>
 <p>新建 <code>server.py</code>：</p>
-<pre><code>from mcp.server import MCPServer
+<div class="code-block is-collapsed" data-expand-label="展开全部 · 15 行"><div class="code-bar"><span class="code-lang">python</span><span class="code-btns"><button type="button" class="code-toggle" aria-expanded="false">展开全部 · 15 行</button><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>from mcp.server import MCPServer
 
 mcp = MCPServer(&quot;Demo&quot;)
 
@@ -365,35 +378,35 @@ def add(a: int, b: int) -&gt; int:
 @mcp.resource(&quot;greeting://{name}&quot;)
 def greeting(name: str) -&gt; str:
     &quot;&quot;&quot;Greet someone by name.&quot;&quot;&quot;
-    return f&quot;Hello, {name}!&quot;</code></pre>
+    return f&quot;Hello, {name}!&quot;</code></pre></div></div>
 <p>这就是一个完整的 Server：一个工具、一个带参数的资源。你会发现没写 JSON Schema、没写请求解析、没写协议处理——<strong>类型注解 <code>a: int, b: int</code> 就是入参规范，docstring 就是给模型看的工具说明</strong>，这些 SDK 会自动生成。</p>
 <p><strong>第四步，跑起来。</strong></p>
-<pre><code>if __name__ == &quot;__main__&quot;:
-    mcp.run(transport=&quot;stdio&quot;)</code></pre>
+<div class="code-block"><div class="code-bar"><span class="code-lang">python</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>if __name__ == &quot;__main__&quot;:
+    mcp.run(transport=&quot;stdio&quot;)</code></pre></div></div>
 <p>想用 HTTP，把传输换成 <code>streamable-http</code>，或者直接用命令行：</p>
-<pre><code>uv run mcp run server.py --transport streamable-http</code></pre>
+<div class="code-block"><div class="code-bar"><span class="code-lang">bash</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>uv run mcp run server.py --transport streamable-http</code></pre></div></div>
 <p><strong>这里有一个必须记住的坑</strong>：stdio 模式下，<strong>绝对不要 <code>print</code> 到标准输出</strong>。stdout 是 JSON-RPC 消息走的通道，一个 <code>print</code> 就把协议打乱了，症状是客户端连得上但调用全失败。日志要用 <code>logging</code> 写 stderr；TypeScript 版同理，用 <code>console.error()</code> 而不是 <code>console.log()</code>。</p>
 <p><strong>第五步，先调试再接入。</strong></p>
-<pre><code>uv run mcp dev server.py</code></pre>
+<div class="code-block"><div class="code-bar"><span class="code-lang">bash</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>uv run mcp dev server.py</code></pre></div></div>
 <p>这会打开官方的 MCP Inspector，能直接看到工具清单、手动填参数调用、看返回结果。别跳过这一步——在 Inspector 里能跑通，接进客户端才不会两头排查。</p>
 <p><strong>第六步，接进 AI 客户端。</strong></p>
 <p>在 WorkBuddy 的「插件 → MCP 服务器 → 配置 MCP」里加：</p>
-<pre><code>{
+<div class="code-block"><div class="code-bar"><span class="code-lang">json</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>{
   &quot;mcpServers&quot;: {
     &quot;demo&quot;: {
       &quot;command&quot;: &quot;uv&quot;,
       &quot;args&quot;: [&quot;--directory&quot;, &quot;/绝对路径/到/项目目录&quot;, &quot;run&quot;, &quot;server.py&quot;]
     }
   }
-}</code></pre>
+}</code></pre></div></div>
 <p>如果 Server 已经以 HTTP 方式跑起来了，就换成：</p>
-<pre><code>{
+<div class="code-block"><div class="code-bar"><span class="code-lang">json</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>{
   &quot;mcpServers&quot;: {
     &quot;demo&quot;: {
       &quot;url&quot;: &quot;http://localhost:8000/mcp&quot;
     }
   }
-}</code></pre>
+}</code></pre></div></div>
 <p>保存后看状态灯：绿色就能用了。到这里，Host 会为这个 Server 创建一个 Client，走完发现流程，把 <code>add</code> 这个工具交给模型——你问「3 加 5 等于几」，模型就可能自己决定去调它。</p>
 <h2 id="sec-5">一个 Server 该暴露什么</h2>
 <p>MCP 定义了三类能力，各有一对「发现 + 使用」的方法：</p>
@@ -735,6 +748,51 @@ def greeting(name: str) -&gt; str:
 })();
 </script>
 
+<script>
+(function(){
+  function fallbackCopy(text, done){
+    var ta=document.createElement('textarea');
+    ta.value=text; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='-2000px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta); done();
+  }
+  function copyText(text, done){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text, done); });
+    }else{ fallbackCopy(text, done); }
+  }
+  [].forEach.call(document.querySelectorAll('.code-block'), function(block){
+    var pre=block.querySelector('pre');
+    var toggle=block.querySelector('.code-toggle');
+    var copy=block.querySelector('.code-copy');
+    var label=block.getAttribute('data-expand-label')||'展开全部';
+    // 行数够长但实际没超高，就不必折叠，免得短代码也顶着「展开」
+    if(block.classList.contains('is-collapsed') && pre && pre.scrollHeight<=340){
+      block.classList.remove('is-collapsed');
+      if(toggle){ toggle.parentNode.removeChild(toggle); toggle=null; }
+    }
+    if(toggle){
+      toggle.addEventListener('click', function(){
+        var collapsed=block.classList.toggle('is-collapsed');
+        toggle.textContent = collapsed ? label : '收起';
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+    }
+    if(copy){
+      copy.addEventListener('click', function(){
+        var code=block.querySelector('code');
+        copyText(code ? code.textContent : '', function(){
+          copy.textContent='已复制';
+          copy.classList.add('done');
+          setTimeout(function(){ copy.textContent='复制'; copy.classList.remove('done'); }, 1600);
+        });
+      });
+    }
+  });
+})();
+</script>
 <div class="modal-overlay" id="imgModal" role="dialog" aria-modal="true" aria-label="嵌入内容预览">
   <div class="modal">
     <div class="modal-head">

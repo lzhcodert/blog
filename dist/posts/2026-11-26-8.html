@@ -168,6 +168,19 @@ a{color:inherit}
 .article-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-3);padding:2px 5px;border-radius:5px;font-size:13px}
 .article-body pre{background:var(--surface-3);padding:14px;border-radius:10px;overflow:auto;margin:0 0 18px}
 .article-body pre code{background:transparent;padding:0}
+/* 代码块：超过 14 行默认折叠，所有代码块都能一键复制 */
+.code-block{margin:0 0 18px;border:.5px solid var(--line);border-radius:11px;background:var(--surface-3);overflow:hidden}
+.code-bar{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 12px;border-bottom:.5px solid var(--line)}
+.code-lang{font-size:11px;letter-spacing:.4px;color:var(--faint);text-transform:lowercase}
+.code-btns{margin-left:auto;display:flex;gap:2px}
+.code-btns button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;line-height:1;padding:6px 9px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s}
+.code-btns button:hover{background:var(--line);color:var(--text)}
+.code-btns button.done{color:#34c759}
+.code-block pre{margin:0;padding:12px 14px;border-radius:0;background:transparent}
+.code-body{position:relative}
+.code-block.is-collapsed .code-body{max-height:320px;overflow:hidden}
+.code-block.is-collapsed .code-body::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to bottom,transparent,var(--surface-3));pointer-events:none}
+@media(max-width:760px){.code-block pre{padding:11px 12px}.code-btns button{font-size:11.5px;padding:5px 8px}}
 .article-body table{border-collapse:collapse;width:100%;margin:0 0 20px;font-size:14px}
 .article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
 .article-body th{background:var(--surface-3);font-weight:600}
@@ -329,14 +342,14 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <h2 id="sec-1">死锁到底是什么</h2>
 <p>经典定义是：两个或两个以上的线程在执行过程中，因为竞争资源或彼此通信而互相等待，没有外力就都无法推进。</p>
 <p>放到 Java 里，最常见的画面是：</p>
-<pre><code>A线程：拿着 object1，想拿 object2（在 B 手里）
+<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>A线程：拿着 object1，想拿 object2（在 B 手里）
 B线程：拿着 object2，想拿 object1（在 A 手里）
 
         ┌──────── 等待 object2 ────────┐
         │                              ▼
       A线程                          B线程
         ▲                              │
-        └──────── 等待 object1 ────────┘</code></pre>
+        └──────── 等待 object1 ────────┘</code></pre></div></div>
 <p>只要这个环闭上，两个线程就会永远停在 <code>synchronized</code> 门口。</p>
 <h2 id="sec-2">四个条件：必须同时成立</h2>
 <p>死锁有四个必要条件，缺一个都死不了。理解它们，比背定义有用得多。</p>
@@ -344,7 +357,7 @@ B线程：拿着 object2，想拿 object1（在 A 手里）
 <p>注意最后一句话：<strong>四个条件同时满足才会死锁</strong>。所以&quot;避免死锁&quot;不需要四个全改，拆掉后面三个里的任意一个就够了。</p>
 <h2 id="sec-3">用一段代码把它复现出来</h2>
 <p>下面这段代码来自韩顺平教程的死锁模拟，原文里就有，这里做了排版整理，并加了一个 100 ms 的 <code>sleep</code>——不是为了制造 bug，而是为了让&quot;各拿一把&quot;的窗口稳定出现，跑一次就能看到死锁。</p>
-<pre><code>/**
+<div class="code-block is-collapsed" data-expand-label="展开全部 · 54 行"><div class="code-bar"><span class="code-lang">java</span><span class="code-btns"><button type="button" class="code-toggle" aria-expanded="false">展开全部 · 54 行</button><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>/**
  * 模拟死锁：两个线程各持一把锁，再互相申请对方手里的锁。
  */
 public class DeadLock {
@@ -397,34 +410,34 @@ class ThreadDemo extends Thread {
             Thread.currentThread().interrupt();
         }
     }
-}</code></pre>
+}</code></pre></div></div>
 <p>典型输出只有两行，然后就安静了：</p>
-<pre><code>A线程---开始持有资源object1
-B线程---开始持有资源object2</code></pre>
+<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>A线程---开始持有资源object1
+B线程---开始持有资源object2</code></pre></div></div>
 <p>程序没退出，也没异常。因为它没有&quot;出错&quot;，只是两个线程都在等一把永远拿不到的锁。</p>
 <h3 id="sec-4">这段代码里藏着三个关键点</h3>
 <ol><li><strong><code>static</code> 让锁变成共享的。</strong> 如果写成普通成员变量，每个 <code>ThreadDemo</code> 实例都有自己的 <code>object1/object2</code>，那两把锁根本不冲突，死锁演示不出来。</li><li><strong>嵌套 <code>synchronized</code> 就是&quot;请求和保持&quot;。</strong> 进入外层 <code>synchronized</code> 后锁没放，又去申请内层锁，正好踩中第三个条件。</li><li><strong>两个线程的加锁顺序相反。</strong> A 是 <code>object1 → object2</code>，B 是 <code>object2 → object1</code>，环就来自这里。</li></ol>
 <h2 id="sec-5">怎么确认它是死锁，而不是单纯卡住</h2>
 <p>&quot;卡住&quot;不等于&quot;死锁&quot;。可能是慢 SQL、网络等超时、线程池队列满，也可能真是死锁。别猜，抓线程栈。</p>
 <h3 id="sec-6">第一步：找到进程</h3>
-<pre><code>jps -l</code></pre>
+<div class="code-block"><div class="code-bar"><span class="code-lang">bash</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>jps -l</code></pre></div></div>
 <p>输出类似：</p>
-<pre><code>107840 DeadLock
+<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>107840 DeadLock
 99504
 110052 KotlinCompileDaemon
-113212 Jps</code></pre>
+113212 Jps</code></pre></div></div>
 <p>记下 <code>DeadLock</code> 前面的 PID：<code>107840</code>。</p>
 <h3 id="sec-7">第二步：抓栈</h3>
-<pre><code>jstack -l 107840</code></pre>
+<div class="code-block"><div class="code-bar"><span class="code-lang">bash</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>jstack -l 107840</code></pre></div></div>
 <p><code>-l</code> 会额外打印关于可持有同步器的信息。真正的死锁，JVM 会主动帮你检测并在末尾给出一段：</p>
-<pre><code>Found one Java-level deadlock:
+<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>Found one Java-level deadlock:
 =============================
 &quot;B线程&quot;:
   waiting to lock monitor 0x00007f..., (object 0x000000076cda86f8, a java.lang.Object),
   which is held by &quot;A线程&quot;
 &quot;A线程&quot;:
   waiting to lock monitor 0x00007f..., (object 0x000000076cda8708, a java.lang.Object),
-  which is held by &quot;B线程&quot;</code></pre>
+  which is held by &quot;B线程&quot;</code></pre></div></div>
 <p>比原文里更直接的读法：</p>
 <ul><li><code>waiting to lock &lt;地址&gt;</code>：这个线程正在门口等哪把锁；</li><li><code>locked &lt;地址&gt;</code>：这个线程手里已经拿着哪把锁；</li><li>把&quot;谁拿着&quot;和&quot;谁在等&quot;配对，就能画出上面那个环。</li></ul>
 <p>线程状态也有讲究。<code>synchronized</code> 抢锁失败通常是 <code>BLOCKED</code>；<code>LockSupport.park()</code> 或 <code>Object.wait()</code> 则显示为 <code>WAITING / TIMED_WAITING</code>。死锁两种状态都可能出现，所以看栈里的锁地址比只看状态更靠谱。</p>
@@ -435,7 +448,7 @@ B线程---开始持有资源object2</code></pre>
 <h2 id="sec-10">怎么拆：四种办法，从最推荐到最省事</h2>
 <h3 id="sec-11">1. 统一加锁顺序（首选，破坏循环等待）</h3>
 <p>既然环来自&quot;顺序相反&quot;，那就让所有线程按同一顺序加锁。改原文代码，去掉 <code>flag</code> 分支即可：</p>
-<pre><code>@Override
+<div class="code-block"><div class="code-bar"><span class="code-lang">java</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>@Override
 public void run() {
     // 所有线程都先 object1，再 object2
     synchronized (object1) {
@@ -445,12 +458,12 @@ public void run() {
             System.out.println(Thread.currentThread().getName() + &quot;---拿到object2，继续干活&quot;);
         }
     }
-}</code></pre>
+}</code></pre></div></div>
 <p>这样 B 想进 <code>object2</code> 之前，必须先拿到 <code>object1</code>；拿不到就在第一把锁门口等，绝不会出现&quot;A 拿 1 等 2、B 拿 2 等 1&quot;的交叉。</p>
 <p>业务上确实没法写死顺序时，可以给资源编号（比如按数据库主键、按对象 ID），一律先小后大。<strong>别用 <code>identityHashCode()</code> 当顺序</strong>，哈希碰撞时一样会死锁。</p>
 <h3 id="sec-12">2. tryLock 超时（破坏请求和保持）</h3>
 <p><code>synchronized</code> 拿不到锁就死等，没法反悔。换成 <code>ReentrantLock.tryLock(timeout)</code>，第二把锁拿不到就把第一把也放了，环就接不上。</p>
-<pre><code>import java.util.concurrent.TimeUnit;
+<div class="code-block is-collapsed" data-expand-label="展开全部 · 38 行"><div class="code-bar"><span class="code-lang">java</span><span class="code-btns"><button type="button" class="code-toggle" aria-expanded="false">展开全部 · 38 行</button><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -487,7 +500,7 @@ public class SafeTransfer {
             if (gotFirst) firstLock.unlock();
         }
     }
-}</code></pre>
+}</code></pre></div></div>
 <p>注意 <code>finally</code> 里的两行：这才是真正&quot;拆环&quot;的地方。只在成功分支解锁，超时那次就会把第一把锁攥到天荒地老，等于没改。</p>
 <h3 id="sec-13">3. 一次性申请所有资源</h3>
 <p>为每个业务操作提前列出需要的全部锁，一次性申请；只要有一个拿不到，就整体放弃并全部释放。银行家算法就是这个思路。优点是彻底，缺点是资源粒度和业务耦合重，Java 业务里不如前两种常用。</p>
@@ -567,6 +580,51 @@ public class SafeTransfer {
 })();
 </script>
 
+<script>
+(function(){
+  function fallbackCopy(text, done){
+    var ta=document.createElement('textarea');
+    ta.value=text; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='-2000px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta); done();
+  }
+  function copyText(text, done){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text, done); });
+    }else{ fallbackCopy(text, done); }
+  }
+  [].forEach.call(document.querySelectorAll('.code-block'), function(block){
+    var pre=block.querySelector('pre');
+    var toggle=block.querySelector('.code-toggle');
+    var copy=block.querySelector('.code-copy');
+    var label=block.getAttribute('data-expand-label')||'展开全部';
+    // 行数够长但实际没超高，就不必折叠，免得短代码也顶着「展开」
+    if(block.classList.contains('is-collapsed') && pre && pre.scrollHeight<=340){
+      block.classList.remove('is-collapsed');
+      if(toggle){ toggle.parentNode.removeChild(toggle); toggle=null; }
+    }
+    if(toggle){
+      toggle.addEventListener('click', function(){
+        var collapsed=block.classList.toggle('is-collapsed');
+        toggle.textContent = collapsed ? label : '收起';
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+    }
+    if(copy){
+      copy.addEventListener('click', function(){
+        var code=block.querySelector('code');
+        copyText(code ? code.textContent : '', function(){
+          copy.textContent='已复制';
+          copy.classList.add('done');
+          setTimeout(function(){ copy.textContent='复制'; copy.classList.remove('done'); }, 1600);
+        });
+      });
+    }
+  });
+})();
+</script>
 <div class="modal-overlay" id="imgModal" role="dialog" aria-modal="true" aria-label="嵌入内容预览">
   <div class="modal">
     <div class="modal-head">

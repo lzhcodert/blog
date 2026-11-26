@@ -168,6 +168,19 @@ a{color:inherit}
 .article-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-3);padding:2px 5px;border-radius:5px;font-size:13px}
 .article-body pre{background:var(--surface-3);padding:14px;border-radius:10px;overflow:auto;margin:0 0 18px}
 .article-body pre code{background:transparent;padding:0}
+/* 代码块：超过 14 行默认折叠，所有代码块都能一键复制 */
+.code-block{margin:0 0 18px;border:.5px solid var(--line);border-radius:11px;background:var(--surface-3);overflow:hidden}
+.code-bar{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 12px;border-bottom:.5px solid var(--line)}
+.code-lang{font-size:11px;letter-spacing:.4px;color:var(--faint);text-transform:lowercase}
+.code-btns{margin-left:auto;display:flex;gap:2px}
+.code-btns button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;line-height:1;padding:6px 9px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s}
+.code-btns button:hover{background:var(--line);color:var(--text)}
+.code-btns button.done{color:#34c759}
+.code-block pre{margin:0;padding:12px 14px;border-radius:0;background:transparent}
+.code-body{position:relative}
+.code-block.is-collapsed .code-body{max-height:320px;overflow:hidden}
+.code-block.is-collapsed .code-body::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to bottom,transparent,var(--surface-3));pointer-events:none}
+@media(max-width:760px){.code-block pre{padding:11px 12px}.code-btns button{font-size:11.5px;padding:5px 8px}}
 .article-body table{border-collapse:collapse;width:100%;margin:0 0 20px;font-size:14px}
 .article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
 .article-body th{background:var(--surface-3);font-weight:600}
@@ -322,7 +335,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <article class="article">
   <div class="article-meta-top"><span class="dot" style="background:#007aff"></span>多线程并发</div>
   <h1 class="article-title">线程池不是 new 一个就完事：7 个参数、4 种拒绝策略和一条任务流水线</h1>
-  <div class="article-meta">2026-11-26 · 24 分钟阅读</div>
+  <div class="article-meta">2026-11-26 · 32 分钟阅读</div>
   <div class="article-body">
 <p>线程池最容易被误解的一点是：它不是一个&quot;装线程的集合&quot;，而是一套<strong>任务调度规则</strong>。你把任务丢进去，它决定现在跑、排队、加开线程，还是直接拒绝。</p>
 <p>规则不复杂，但顺序很关键。很多人以为线程池会先把线程扩到最大，再排队；实际正好相反——<strong>先占满核心线程，再进队列，队列满了才加开临时线程</strong>。这一条没搞清楚，参数就会配错。</p>
@@ -332,7 +345,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <ul><li><strong>复用线程</strong>：线程用完不销毁，回到池里等下一个任务，降低创建和回收的频率。</li><li><strong>统一管理</strong>：线程名、数量、状态、队列长度、已完成任务数都能集中控制，避免代码里到处 <code>new Thread()</code> 把资源打满。</li></ul>
 <p>原文还有一句很实在的提醒：不要用 <code>Executors</code> 直接创建线程池。阿里巴巴开发手册也明确写了这一条。原因不是 <code>Executors</code> 有 bug，而是它把关键参数藏起来了，尤其是<strong>无界队列</strong>和<strong>无上限线程数</strong>，很容易在流量上来时把内存或线程数打爆。</p>
 <h2 id="sec-2">先记住这条任务流水线</h2>
-<pre><code>submit(task)
+<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>submit(task)
    │
    ├─ 核心线程还没满？ ── 是 ──▶ 创建核心线程，立刻执行
    │
@@ -340,10 +353,11 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
    │
    ├─ 队列也满了 ──▶ 创建临时线程（最多到 maximumPoolSize）
    │
-   └─ 连最大线程数也满了 ──▶ 触发拒绝策略 handler</code></pre>
+   └─ 连最大线程数也满了 ──▶ 触发拒绝策略 handler</code></pre></div></div>
 <p>一句话记忆：<strong>核心 → 队列 → 扩容 → 拒绝</strong>。</p>
 <p>所以 <code>maximumPoolSize</code> 不是&quot;线程池一上来就能开到这么大&quot;，而是&quot;队列满了以后，最多还能临时加多少&quot;。如果队列是无界的，队列永远满不了，最大线程数就永远用不上。</p>
 <figure class="md-figure"><img src="../embed/threadpool/threadpool-architecture.png" alt="原文图 1：任务先 submit 进 workQueue，核心线程 take，队列满后救急线程 poll" loading="lazy"><figcaption>原文图 1：任务先 submit 进 workQueue，核心线程 take，队列满后救急线程 poll</figcaption></figure>
+<p><strong>怎么看这张图</strong>：顺着箭头走就是任务流向 —— 任务先进 <code>workQueue</code>，核心线程用 <code>take()</code> 从队列里拿；核心线程占满后新任务留在队列等着；只有队列满了，救急线程才用 <code>poll()</code> 越过队列直接取任务。所以图里&quot;救急线程&quot;的箭头是从队列<strong>旁边</strong>插进去的，不是排在队尾。</p>
 <h2 id="sec-3">ThreadPoolExecutor 和 ThreadPoolTaskExecutor 别搞混</h2>
 <ul><li><code>ThreadPoolExecutor</code>：JUC 包里的原版，7 个参数自己配，最可控。</li><li><code>ThreadPoolTaskExecutor</code>：Spring 对它的一层封装，主要目的是让线程池能注册成 Bean，交给 Spring 管理生命周期，避免每个业务方各自乱建池。核心逻辑仍然是 <code>ThreadPoolExecutor</code> 在跑。</li></ul>
 <p>日常写业务，如果项目已经用 Spring，用 <code>ThreadPoolTaskExecutor</code> 做 Bean 化配置没问题；但参数含义、执行顺序、拒绝策略，还是下面这套。</p>
@@ -353,7 +367,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <ul><li><code>corePoolSize</code> 不能大于 <code>maximumPoolSize</code>，否则构造时直接抛 <code>IllegalArgumentException</code>。</li><li><code>keepAliveTime = 0</code> 表示临时线程一空闲就回收；如果任务本身很短，临时线程可能刚创建就退出。</li><li>核心线程默认不会被回收。想让核心线程也超时，调用 <code>allowCoreThreadTimeOut(true)</code>。</li><li><code>workQueue</code> 的选择直接决定线程池行为：<code>ArrayBlockingQueue</code> 有界，<code>LinkedBlockingQueue</code> 默认近似无界，<code>SynchronousQueue</code> 不存储任务、直接交给线程。</li></ul>
 <h2 id="sec-5">用一段代码把参数跑一遍</h2>
 <p>下面这段代码沿用原文的配置：核心 2、最大 3、队列容量 2、拒绝策略 <code>AbortPolicy</code>。原文用 <code>submit</code> 提交，再反射从 <code>FutureTask</code> 里取任务名；这里改用 <code>execute</code>，队列里直接就是 <code>MyTask</code>，打印出来更直观，代码也更短、可直接运行。</p>
-<pre><code>import java.util.concurrent.ArrayBlockingQueue;
+<div class="code-block is-collapsed" data-expand-label="展开全部 · 90 行"><div class="code-bar"><span class="code-lang">java</span><span class="code-btns"><button type="button" class="code-toggle" aria-expanded="false">展开全部 · 90 行</button><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -442,22 +456,33 @@ public class ThreadPoolDemo {
             return &quot;MyTask(&quot; + name + &quot;)&quot;;
         }
     }
-}</code></pre>
+}</code></pre></div></div>
 <h3 id="sec-6">逐步看状态变化</h3>
 <table><thead><tr><th>步骤</th><th>poolSize</th><th>队列</th><th>发生了什么</th></tr></thead><tbody><tr><td>初始</td><td>0</td><td>空</td><td>线程按需创建，不是一构造就开满</td></tr><tr><td>加入 1</td><td>1</td><td>空</td><td>创建第 1 个核心线程</td></tr><tr><td>加入 2</td><td>2</td><td>空</td><td>创建第 2 个核心线程，核心已满</td></tr><tr><td>加入 3</td><td>2</td><td><code>[MyTask(3)]</code></td><td>核心满了，任务 3 进队列</td></tr><tr><td>加入 4</td><td>2</td><td><code>[MyTask(3), MyTask(4)]</code></td><td>队列容量 2，已满</td></tr><tr><td>加入 5</td><td>3</td><td><code>[MyTask(3), MyTask(4)]</code></td><td>队列满了，创建 1 个临时线程执行任务 5</td></tr><tr><td>加入 6</td><td>3</td><td><code>[MyTask(3), MyTask(4)]</code></td><td>最大线程 3 已满，<code>AbortPolicy</code> 抛异常</td></tr></tbody></table>
 <blockquote>下面几张运行结果截图来自原文，控制台时间、线程名以原文为准；本文示例改用 <code>execute</code> 后，队列里会直接显示 <code>MyTask(...)</code>，状态含义相同。</blockquote>
-<figure class="md-figure"><img src="../embed/threadpool/tasks-1-2.png" alt="原文图 2：任务 1、2 占满两个核心线程，poolSize=2，队列为空" loading="lazy"><figcaption>原文图 2：任务 1、2 占满两个核心线程，poolSize=2，队列为空</figcaption></figure>
-<figure class="md-figure"><img src="../embed/threadpool/tasks-3-4-queue.png" alt="原文图 3：任务 3、4 进入队列，poolSize 仍为 2" loading="lazy"><figcaption>原文图 3：任务 3、4 进入队列，poolSize 仍为 2</figcaption></figure>
-<figure class="md-figure"><img src="../embed/threadpool/task-5-extra-thread.png" alt="原文图 4：任务 5 到来时队列已满，创建 myThread3，poolSize 变成 3" loading="lazy"><figcaption>原文图 4：任务 5 到来时队列已满，创建 myThread3，poolSize 变成 3</figcaption></figure>
-<p>几个值得注意的细节：</p>
-<ul><li>任务 3、4 进了队列，但不会立刻执行，因为两个核心线程被 1、2 占着，各睡 1 小时。</li><li>任务 5 不是排到 3、4 后面，而是<strong>加开临时线程</strong>直接跑。这就是&quot;队列满才扩容&quot;。</li><li>任务 6 来的时候，核心 2 + 临时 1 都在忙，队列 2 个位置也满了，只能拒绝。</li></ul>
+<figure class="md-figure"><img src="../embed/threadpool/tasks-1-2.png" alt="原文图 2：任务 1、2 占满两个核心线程，pool size=2，队列为空" loading="lazy"><figcaption>原文图 2：任务 1、2 占满两个核心线程，pool size=2，队列为空</figcaption></figure>
+<p><strong>怎么看这张图</strong>：<code>[main]</code> 开头的行是主线程每隔 300 毫秒打印的一次池状态，<code>myThread1</code>、<code>myThread2</code> 是真正干活的工作线程。</p>
+<ul><li><code>pool size: 0, queue: []</code>：线程池刚 <code>new</code> 出来时<strong>一个线程都没有</strong>，核心线程是&quot;来任务才创建&quot;的懒加载，不是构造时开满。</li><li><code>[myThread1] running...MyTask(1)</code> 紧跟 <code>pool size: 1</code>：任务 1 来了，才创建第 1 个核心线程。</li><li><code>[myThread2] running...MyTask(2)</code> 紧跟 <code>pool size: 2</code>：任务 2 来了，创建第 2 个核心线程。</li><li>三行 <code>queue: []</code> 全程为空：任务 1、2 直接被核心线程接走了，压根不用排队。</li><li>任务 1、2 各睡 1 小时，所以 <code>running</code> 之后不会有&quot;跑完&quot;的日志；池子稳定停在 2，没超过 <code>corePoolSize=2</code>。</li></ul>
+<figure class="md-figure"><img src="../embed/threadpool/tasks-3-4-queue.png" alt="原文图 3：任务 3、4 进入队列，pool size 仍为 2" loading="lazy"><figcaption>原文图 3：任务 3、4 进入队列，pool size 仍为 2</figcaption></figure>
+<p><strong>怎么看这张图</strong>：前 5 行和上一张一模一样（0 → 1 → 2），说明是同一个程序接着往下跑。</p>
+<ul><li>中间几行 <code>WARNING: An illegal reflective access operation has occurred</code> 是 JDK 9+ 的模块化警告：原文为了打印队列里的任务名，用反射读了 <code>FutureTask</code> 的私有字段，新 JDK 会提示&quot;以后要禁止这种反射&quot;。<strong>它只是警告，不影响运行结果</strong>；本文示例改用 <code>execute</code> 后就不会出现。</li><li><code>pool size: 2, queue: [MyTask(3)]</code>：核心线程已满，任务 3 <strong>没有</strong>开新线程，而是进队列。</li><li><code>pool size: 2, queue: [MyTask(3), MyTask(4)]</code>：任务 4 也进队列，队列容量 2 到这里刚好满。</li><li>两次 <code>pool size</code> 都是 2 —— 这是整条流水线最容易被忽略的一步：<strong>队列没满之前，线程数不会涨</strong>。</li></ul>
+<figure class="md-figure"><img src="../embed/threadpool/task-5-extra-thread.png" alt="原文图 4：任务 5 到来时队列已满，创建 myThread3，pool size 变成 3" loading="lazy"><figcaption>原文图 4：任务 5 到来时队列已满，创建 myThread3，pool size 变成 3</figcaption></figure>
+<p><strong>怎么看这张图</strong>：前面 <code>queue: [MyTask(3), MyTask(4)]</code> 出现时，队列已经满了。</p>
+<ul><li><code>[myThread3] running...MyTask(5)</code>：任务 5 没有排到 3、4 后面，而是<strong>新开了第 3 个线程</strong>直接执行。</li><li>最后 <code>pool size: 3</code>：达到 <code>maximumPoolSize</code>。救急线程数 = 最大 3 − 核心 2 = 1，只有这一根。</li><li><code>queue</code> 仍是 <code>[MyTask(3), MyTask(4)]</code>：任务 5 没进队列，说明<strong>扩容优先于排队</strong>。</li><li>任务 3、4 此时还卡在队列里，要等核心线程空出来（1 小时后）才会被执行。</li></ul>
+<p>所以判断顺序一句话：先看 <code>pool size</code> 涨没涨，再看 <code>queue</code> 满没满 —— 池子涨之前，队列一定已经满了。</p>
 <h2 id="sec-7">4 种拒绝策略</h2>
 <table><thead><tr><th>策略</th><th>行为</th><th>适合场景</th><th>风险</th></tr></thead><tbody><tr><td><code>AbortPolicy</code></td><td>抛 <code>RejectedExecutionException</code></td><td>不能丢任务的场景，让调用方知道</td><td>没捕获异常会中断提交逻辑</td></tr><tr><td><code>CallerRunsPolicy</code></td><td>让提交任务的线程自己跑</td><td>需要背压、允许变慢</td><td>会阻塞调用线程，可能拖慢主流程</td></tr><tr><td><code>DiscardPolicy</code></td><td>静默丢弃新任务</td><td>可丢的日志、埋点</td><td>没有任何通知，容易查不到</td></tr><tr><td><code>DiscardOldestPolicy</code></td><td>丢掉队列里最老的任务，再重试提交</td><td>只关心最新数据的场景</td><td>老任务被无声丢弃，可能丢关键请求</td></tr></tbody></table>
 <p>原文里的演示很直观：</p>
 <ul><li>改成 <code>CallerRunsPolicy</code>：任务 6 交给提交任务的线程执行，所以能看到 <code>main</code> 线程在跑任务 6。</li><li>改成 <code>DiscardPolicy</code>：任务 6 直接消失，不抛异常，也不执行。原文没有给这个策略单独放截图，因为它连日志都不会留下。</li><li>改成 <code>DiscardOldestPolicy</code>：队列里的任务 3 被挤掉，任务 6 入队，任务 4 变成队首。</li></ul>
 <figure class="md-figure"><img src="../embed/threadpool/abort-policy.png" alt="原文图 5：AbortPolicy 下任务 6 被拒绝，抛出 RejectedExecutionException" loading="lazy"><figcaption>原文图 5：AbortPolicy 下任务 6 被拒绝，抛出 RejectedExecutionException</figcaption></figure>
+<p><strong>怎么看这张图</strong>：前 4 行还是&quot;3、4 排队，5 由 <code>myThread3</code> 跑&quot;，和上一张完全一致。</p>
+<ul><li><code>pool size: 3, queue: [MyTask(3), MyTask(4)]</code>：核心 2 + 救急 1 全忙，队列 2 个位置也满，四个出口全堵死。</li><li>下一行就是 <code>Exception in thread &quot;main&quot; java.util.concurrent.RejectedExecutionException</code>：任务 6 被拒绝。</li><li>堆栈<strong>从下往上读</strong>最清楚：<code>main</code> → <code>submit</code> → <code>execute</code> → <code>reject</code> → <code>AbortPolicy.rejectedExecution</code>，最后一步就是拒绝策略亲自抛的异常。</li><li>关键细节：异常抛在 <strong>main 线程</strong>，不在池里的线程。外层不 <code>try-catch</code>，提交任务的循环会直接中断，后面本该提交的任务全都不执行了。</li><li>末尾那段 <code>Task ...@481a15f rejected from ...ThreadPoolExecutor@...</code> 只是说明&quot;哪个任务被哪个池拒了&quot;，对定位没太大用。</li></ul>
 <figure class="md-figure"><img src="../embed/threadpool/caller-runs-policy.png" alt="原文图 6：CallerRunsPolicy 下 main 线程亲自执行 MyTask(6)" loading="lazy"><figcaption>原文图 6：CallerRunsPolicy 下 main 线程亲自执行 MyTask(6)</figcaption></figure>
+<p><strong>怎么看这张图</strong>：前 4 行同样不变。</p>
+<ul><li><code>[main] running...MyTask(6)</code>：任务 6 由 <strong>main 线程自己</strong>执行。因为 main 就是调用 <code>submit</code> 的那个线程，<code>CallerRunsPolicy</code> 的规则是&quot;谁提交的谁自己跑&quot;。</li><li>前后两条 <code>pool size: 3, queue: [MyTask(3), MyTask(4)]</code> 完全没变：既没加线程，也没进队列，任务是被&quot;退回&quot;给调用方的。</li><li>任务 6 没设执行时长，所以 <code>running</code> 之后立刻结束，不会看到它睡很久。</li><li>代价在图上不明显但很关键：main 在跑任务 6 的这段时间无法提交新任务，这就是<strong>背压</strong> —— 上游被自动降速，而不是把任务堆在内存里。</li></ul>
 <figure class="md-figure"><img src="../embed/threadpool/discard-oldest-policy.png" alt="原文图 7：DiscardOldestPolicy 丢弃队首任务 3，队列变成 MyTask(4) 和 MyTask(6)" loading="lazy"><figcaption>原文图 7：DiscardOldestPolicy 丢弃队首任务 3，队列变成 MyTask(4) 和 MyTask(6)</figcaption></figure>
+<p><strong>怎么看这张图</strong>：比对最后两行就行。</p>
+<ul><li><code>pool size: 3, queue: [MyTask(3), MyTask(4)]</code>：队列满，任务 6 到来。</li><li>最后一行变成 <code>queue: [MyTask(4), MyTask(6)]</code>：队首的 <code>MyTask(3)</code> 被踢出队列，任务 6 补到队尾。</li><li><code>pool size</code> 一直是 3，队列长度还是 2：总量没变，是&quot;换人&quot;，不是&quot;扩容&quot;。</li><li>全程没有异常、没有日志，任务 3 就这么无声无息地消失 —— 所以这个策略在生产上最危险，丢的是<strong>排在最前面、等了最久</strong>的那个任务。</li><li>如果换成 <code>DiscardPolicy</code>，控制台会和这张图一样安静，区别只是队列仍然是 <code>[MyTask(3), MyTask(4)]</code>，消失的是新来的任务 6。</li></ul>
 <p>生产上，支付、订单、扣减库存这类任务不要用后两种&quot;静默丢弃&quot;策略；至少用 <code>AbortPolicy</code> 让上游感知，或者用 <code>CallerRunsPolicy</code> 做背压。</p>
 <h2 id="sec-8">四个常见坑</h2>
 <h3 id="sec-9">1. 用了无界队列，最大线程数形同虚设</h3>
@@ -551,6 +576,51 @@ public class ThreadPoolDemo {
 })();
 </script>
 
+<script>
+(function(){
+  function fallbackCopy(text, done){
+    var ta=document.createElement('textarea');
+    ta.value=text; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='-2000px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta); done();
+  }
+  function copyText(text, done){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text, done); });
+    }else{ fallbackCopy(text, done); }
+  }
+  [].forEach.call(document.querySelectorAll('.code-block'), function(block){
+    var pre=block.querySelector('pre');
+    var toggle=block.querySelector('.code-toggle');
+    var copy=block.querySelector('.code-copy');
+    var label=block.getAttribute('data-expand-label')||'展开全部';
+    // 行数够长但实际没超高，就不必折叠，免得短代码也顶着「展开」
+    if(block.classList.contains('is-collapsed') && pre && pre.scrollHeight<=340){
+      block.classList.remove('is-collapsed');
+      if(toggle){ toggle.parentNode.removeChild(toggle); toggle=null; }
+    }
+    if(toggle){
+      toggle.addEventListener('click', function(){
+        var collapsed=block.classList.toggle('is-collapsed');
+        toggle.textContent = collapsed ? label : '收起';
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+    }
+    if(copy){
+      copy.addEventListener('click', function(){
+        var code=block.querySelector('code');
+        copyText(code ? code.textContent : '', function(){
+          copy.textContent='已复制';
+          copy.classList.add('done');
+          setTimeout(function(){ copy.textContent='复制'; copy.classList.remove('done'); }, 1600);
+        });
+      });
+    }
+  });
+})();
+</script>
 <div class="modal-overlay" id="imgModal" role="dialog" aria-modal="true" aria-label="嵌入内容预览">
   <div class="modal">
     <div class="modal-head">

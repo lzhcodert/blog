@@ -148,11 +148,24 @@ function renderMarkdown(md, headings) {
     if (!t) { i++; continue; }
 
     if (/^```/.test(t)) {
+      const lang = t.replace(/^```/, '').trim();
       i++;
       const buf = [];
       while (i < lines.length && !/^```/.test(lines[i].trim())) { buf.push(lines[i]); i++; }
       i++;
-      out.push('<pre><code>' + escapeHtml(buf.join('\n')) + '</code></pre>');
+      // 长代码默认折叠，短代码只保留复制入口
+      const collapsible = buf.length > 14;
+      out.push(
+        '<div class="code-block' + (collapsible ? ' is-collapsed' : '') + '"' +
+        (collapsible ? ' data-expand-label="展开全部 · ' + buf.length + ' 行"' : '') + '>' +
+        '<div class="code-bar"><span class="code-lang">' + escapeHtml(lang) + '</span>' +
+        '<span class="code-btns">' +
+        (collapsible ? '<button type="button" class="code-toggle" aria-expanded="false">展开全部 · ' + buf.length + ' 行</button>' : '') +
+        '<button type="button" class="code-copy">复制</button>' +
+        '</span></div>' +
+        '<div class="code-body"><pre><code>' + escapeHtml(buf.join('\n')) + '</code></pre></div>' +
+        '</div>'
+      );
       continue;
     }
 
@@ -279,6 +292,19 @@ const DETAIL_CSS = `
 .article-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-3);padding:2px 5px;border-radius:5px;font-size:13px}
 .article-body pre{background:var(--surface-3);padding:14px;border-radius:10px;overflow:auto;margin:0 0 18px}
 .article-body pre code{background:transparent;padding:0}
+/* 代码块：超过 14 行默认折叠，所有代码块都能一键复制 */
+.code-block{margin:0 0 18px;border:.5px solid var(--line);border-radius:11px;background:var(--surface-3);overflow:hidden}
+.code-bar{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 12px;border-bottom:.5px solid var(--line)}
+.code-lang{font-size:11px;letter-spacing:.4px;color:var(--faint);text-transform:lowercase}
+.code-btns{margin-left:auto;display:flex;gap:2px}
+.code-btns button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;line-height:1;padding:6px 9px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s}
+.code-btns button:hover{background:var(--line);color:var(--text)}
+.code-btns button.done{color:#34c759}
+.code-block pre{margin:0;padding:12px 14px;border-radius:0;background:transparent}
+.code-body{position:relative}
+.code-block.is-collapsed .code-body{max-height:320px;overflow:hidden}
+.code-block.is-collapsed .code-body::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to bottom,transparent,var(--surface-3));pointer-events:none}
+@media(max-width:760px){.code-block pre{padding:11px 12px}.code-btns button{font-size:11.5px;padding:5px 8px}}
 .article-body table{border-collapse:collapse;width:100%;margin:0 0 20px;font-size:14px}
 .article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
 .article-body th{background:var(--surface-3);font-weight:600}
@@ -665,6 +691,53 @@ const THEME_JS = `
 })();
 </script>`;
 
+const CODE_JS = `
+<script>
+(function(){
+  function fallbackCopy(text, done){
+    var ta=document.createElement('textarea');
+    ta.value=text; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='-2000px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta); done();
+  }
+  function copyText(text, done){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text, done); });
+    }else{ fallbackCopy(text, done); }
+  }
+  [].forEach.call(document.querySelectorAll('.code-block'), function(block){
+    var pre=block.querySelector('pre');
+    var toggle=block.querySelector('.code-toggle');
+    var copy=block.querySelector('.code-copy');
+    var label=block.getAttribute('data-expand-label')||'展开全部';
+    // 行数够长但实际没超高，就不必折叠，免得短代码也顶着「展开」
+    if(block.classList.contains('is-collapsed') && pre && pre.scrollHeight<=340){
+      block.classList.remove('is-collapsed');
+      if(toggle){ toggle.parentNode.removeChild(toggle); toggle=null; }
+    }
+    if(toggle){
+      toggle.addEventListener('click', function(){
+        var collapsed=block.classList.toggle('is-collapsed');
+        toggle.textContent = collapsed ? label : '收起';
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+    }
+    if(copy){
+      copy.addEventListener('click', function(){
+        var code=block.querySelector('code');
+        copyText(code ? code.textContent : '', function(){
+          copy.textContent='已复制';
+          copy.classList.add('done');
+          setTimeout(function(){ copy.textContent='复制'; copy.classList.remove('done'); }, 1600);
+        });
+      });
+    }
+  });
+})();
+</script>`;
+
 function injectTheme(html) {
   return html
     .replace('</head>', THEME_BOOT_JS + '\n</head>')
@@ -816,6 +889,7 @@ function renderDetail(post, baseCss) {
     '</main>\n' +
     tocMobileHtml + '\n' +
     TOC_JS +
+    CODE_JS +
     '</body>\n</html>\n';
   return injectTheme(injectModal(html));
 }
