@@ -39,11 +39,11 @@
 <body>
 <div class="hero">
   <h1>GoldenDB 原理图解</h1>
-  <p>七张图讲清：CN / DN / GTM 各管什么，一条 SQL 怎么跑，数据怎么分片，它和 MySQL 哪些地方像，跨分片转账怎么做到不串账，以及 MVCC 为什么读不挡写。</p>
+  <p>八张图讲清：CN / DN / GTM 各管什么，一条 SQL 怎么跑，数据怎么分片，它和 MySQL 哪些地方像，跨分片转账怎么做到不串账，MVCC 为什么读不挡写，以及这些节点到底以什么形式跑在机器上。</p>
 </div>
 <div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
 <div class="nav">
-  <a href="#c1">总览</a><a href="#c2">三个角色</a><a href="#c3">SQL 旅程</a><a href="#c4">分片副本</a><a href="#c5">MySQL 对照</a><a href="#c6">分布式事务</a><a href="#c7">MVCC</a>
+  <a href="#c1">总览</a><a href="#c2">三个角色</a><a href="#c3">SQL 旅程</a><a href="#c4">分片副本</a><a href="#c5">MySQL 对照</a><a href="#c6">分布式事务</a><a href="#c7">MVCC</a><a href="#c8">进程视角</a>
 </div>
 
 <!-- 1 总览 -->
@@ -399,6 +399,84 @@
     </svg>
   </div>
   <div class="foot"><b>类比：</b>你读一本正在被修改的账簿。账簿每改一次就贴一张新补丁（undo 前像）。管理员告诉你「101 号修改还没生效」，你就跳过它，看上一版已经盖章生效的账页。</div>
+</div>
+
+<!-- 8 进程视角 -->
+<div class="card" id="c8">
+  <div class="card-head">
+    <h2><span class="num">8</span>它们到底怎么跑？独立服务进程，不是你 JVM 里的线程 <span class="tag">部署</span></h2>
+    <p>官方明确的是「节点类型 + 部署形态」：白皮书把节点分成管理节点（CM/PM/MDS/InsightServer 等）和非管理节点（CN/DN/GTM/LDS 等），两类都能部署在物理机或容器。官方公开资料没有披露 CN/DN/GTM 的实现语言与进程名。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 370" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="m8" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+        <marker id="m8g" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker>
+      </defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="22" width="992" height="38" rx="10" fill="#fff" stroke="#e5e5ea"/>
+        <text x="44" y="46" font-size="12.5" font-weight="700" fill="#1d1d1f">一个请求要穿过三层进程：你的应用 → CN 服务 → DN / GTM 服务；管理面在旁边看着，不挡业务 SQL。</text>
+
+        <rect x="24" y="78" width="230" height="164" rx="13" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="42" y="104" font-size="13.5" font-weight="700" fill="#1d1d1f">你的业务应用</text>
+        <text x="42" y="130" font-size="11.5" fill="#6e6e73">Java / Go / Python 都行</text>
+        <rect x="42" y="146" width="194" height="42" rx="9" fill="#fff" stroke="#d1d1d6"/>
+        <text x="56" y="166" font-size="11.5" font-weight="700" fill="#1d1d1f">JDBC / ODBC 客户端驱动</text>
+        <text x="56" y="182" font-size="10.5" fill="#6e6e73">连的是 CN 的服务端口</text>
+        <text x="42" y="214" font-size="11" fill="#1d1d1f">这里是 Java 进程（如果你的应用是 Java）</text>
+        <text x="42" y="232" font-size="10.5" fill="#6e6e73">但它只是客户端，不是 GoldenDB 内核</text>
+
+        <g stroke="#007aff" stroke-width="1.8" marker-end="url(#m8)" fill="none">
+          <path d="M254,160 L292,160"/>
+        </g>
+        <text x="258" y="150" font-size="10.5" fill="#007aff">SQL</text>
+
+        <rect x="294" y="78" width="300" height="76" rx="13" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="312" y="102" font-size="13.5" font-weight="700" fill="#0a58ca">CN 计算服务进程 × N</text>
+        <text x="312" y="124" font-size="11" fill="#1d1d1f">无状态、对等，监听服务端口</text>
+        <text x="312" y="144" font-size="11" fill="#6e6e73">解析 / 优化 / 路由 / 汇总</text>
+
+        <rect x="294" y="166" width="300" height="76" rx="13" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="312" y="190" font-size="13.5" font-weight="700" fill="#1d7a45">DN 数据服务进程 + DBAgent</text>
+        <text x="312" y="212" font-size="11" fill="#1d1d1f">安全组一主多备，数据落在这里</text>
+        <text x="312" y="232" font-size="10.5" fill="#6e6e73">DBAgent 解析 binlog 做补偿回滚</text>
+
+        <g stroke="#007aff" stroke-width="1.6" marker-end="url(#m8)" fill="none">
+          <path d="M444,154 L444,166"/>
+        </g>
+        <text x="452" y="164" font-size="10.5" fill="#007aff">下发执行</text>
+
+        <rect x="624" y="78" width="392" height="76" rx="13" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="642" y="102" font-size="13.5" font-weight="700" fill="#3a2a7a">GTM 全局事务管理服务 · 主备 / 集群</text>
+        <text x="642" y="124" font-size="11" fill="#1d1d1f">发 GTID、维护活跃事务与生命周期</text>
+        <text x="642" y="144" font-size="10.5" fill="#6e6e73">不存业务数据，只管「算不算数」</text>
+
+        <rect x="624" y="166" width="392" height="76" rx="13" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="642" y="190" font-size="13.5" font-weight="700" fill="#8a5a00">CM / PM / MDS / InsightServer</text>
+        <text x="642" y="212" font-size="11" fill="#1d1d1f">管理节点：集群管理、计算节点管理、元数据服务</text>
+        <text x="642" y="232" font-size="10.5" fill="#6e6e73">Insight 提供 Web 运维入口，不涉及业务访问流程</text>
+
+        <g stroke="#007aff" stroke-width="1.6" marker-end="url(#m8)" fill="none">
+          <path d="M594,108 L624,108"/>
+        </g>
+        <text x="598" y="100" font-size="10.5" fill="#007aff">GTID</text>
+
+        <g stroke="#8e8e93" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#m8g)" fill="none">
+          <path d="M626,214 L594,214"/><path d="M626,206 L448,164"/>
+        </g>
+        <text x="602" y="248" font-size="10.5" fill="#8e8e93">虚线：管理面（不挡业务 SQL）</text>
+
+        <rect x="24" y="262" width="992" height="44" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="44" y="283" font-size="12" font-weight="700" fill="#1d7a45">官方明确：节点是独立自治的计算机节点，可部署在物理机，也可部署在容器。</text>
+        <text x="44" y="300" font-size="11" fill="#6e6e73">白皮书 3.1 架构设计 / 3.2.4 物理机部署 / 3.2.5 容器化部署；术语表：CM ClusterManager、PM ProxyManager、MDS MetaDataServer。</text>
+
+        <rect x="24" y="316" width="992" height="42" rx="11" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="44" y="337" font-size="12" font-weight="700" fill="#c62828">官方没写：CN / DN / GTM 用什么语言实现、进程名叫什么。</text>
+        <text x="44" y="353" font-size="11" fill="#6e6e73">能确定的是它们不是你业务 JVM 里的线程；「像 MySQL 内核那样原生编译」是合理推断，不是官方声明，别当成既定事实。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>Java 出现在你的应用和 JDBC 驱动里；GoldenDB 的 CN / DN / GTM 是数据库自己装的服务，跑在数据库机器或容器里。排障时先看对应那层服务的存活与日志，别在应用代码里找它们。</div>
 </div>
 
 <script>

@@ -319,7 +319,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <article class="article">
   <div class="article-meta-top"><span class="dot" style="background:#af52de"></span>数据库</div>
   <h1 class="article-title">GoldenDB 到底是个啥？把 CN、DN、GTM 讲成人话</h1>
-  <div class="article-meta">2026-11-26 · 12 分钟阅读</div>
+  <div class="article-meta">2026-11-26 · 17 分钟阅读</div>
   <div class="article-body">
 <p>如果你用过 MySQL，可以把它想成楼下那家小卖部：老板一个人收钱、记账、发货，生意再好也只是把货架加高。GoldenDB 面对的是另一种场景——一个银行核心系统，数据量大到一台机器放不下，交易多到一台机器扛不住。办法不是把一台机器做得无限大，而是找一群机器分工，并让它们看起来仍然像「一台数据库」。</p>
 <p>金篆信科在官方技术白皮书里的定义很直接：GoldenDB 是集中式与分布式一体化的数据库，整体由<strong>计算节点、数据节点、全局事务管理器、管理节点</strong>四种核心模块组成，采用 Share-Nothing 架构，各节点不共享资源，无单点故障。</p>
@@ -328,45 +328,60 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <h2 id="sec-2">先把四个角色认全</h2>
 <table><thead><tr><th>角色</th><th>官方说法</th><th>大白话</th><th>挂了会怎样</th></tr></thead><tbody><tr><td>CN 计算节点</td><td>ComputeNode，无状态、对等；接 SQL、优化、路由、汇总</td><td>前台调度员：接单、看菜单、派给哪个厨房、最后拼菜</td><td>换一台 CN 继续服务，数据没事</td></tr><tr><td>DN 数据节点</td><td>DataNode，最终存储；按安全组做一主多备</td><td>仓库加账本：货真放在这里，正本和副本各一份</td><td>备节点顶上，继续读写</td></tr><tr><td>GTM 全局事务管理器</td><td>Global Transaction Manager；发 GTID、维护活跃事务和快照</td><td>发号员兼裁判：给每笔跨仓改动发唯一工单号</td><td>主备或集群切换，只影响绑定租户</td></tr><tr><td>管理节点</td><td>Insight、元数据、监控、扩容、主备切换；不参与业务访问</td><td>物业或后台：装系统、看监控、调度资源</td><td>影响运维，不直接挡住业务 SQL</td></tr></tbody></table>
 <p>这里最容易被误读的是 GTM：它<strong>不存业务数据</strong>，只管「谁在改、改到哪一步、这行改动算不算已经生效」。CN 也<strong>不存业务数据</strong>，所以才能无状态扩展。真正把数据落在磁盘上的，是 DN。</p>
-<h2 id="sec-3">一条 SQL 在后台跑了几站</h2>
+<h2 id="sec-3">它们到底以什么形式跑？不是 Java 进程</h2>
+<p>开发者最常追问的是：CN、DN、GTM 在机器上究竟是个啥？是我 Java 应用里的线程吗？是 JVM 进程吗？答案分两层说，一层是官方明确写的，一层是官方没写、只能合理推断的。</p>
+<p><strong>先说结论：CN / DN / GTM 是 GoldenDB 安装在数据库机器上的独立服务进程（或容器里的服务），跑在服务器端；你的 Java 程序只是通过 JDBC 驱动连到 CN 的服务端口发 SQL。两者不在同一个进程里，更不是同一个 JVM。</strong></p>
+<h3 id="sec-4">官方明确写了什么</h3>
+<p>白皮书 3.1 说，GoldenDB 的节点是「独立自治的通用计算机节点」，彼此之间通过网络通讯；3.2.4 和 3.2.5 把节点分成两类：</p>
+<ul><li><strong>管理节点</strong>：<code>CM / PM / MDS / InsightServer 等</code>。术语表给出全称：<code>CM ClusterManager</code> 集群管理服务、<code>PM ProxyManager</code> 计算节点管理服务、<code>MDS MetaDataServer</code> 元数据管理服务；Insight 是提供 Web 界面的统一运维平台。</li><li><strong>非管理节点</strong>：<code>CN / DN / GTM / LDS 等</code>。也就是真正处理业务请求的那几个角色。</li></ul>
+<p>这两类节点都<strong>可以部署在物理机上，也可以部署在容器里</strong>。所以从运维视角看，你在服务器上看到的是一组按角色划分的服务进程或容器，不是一个叫「GoldenDB」的单体程序。</p>
+<p>白皮书还提到 <code>DBAgent</code>：跨片事务提交失败时，各节点的 DBAgent 解析 binlog、构造反向 SQL 做补偿回滚。这说明 DN 所在机器上除了数据服务本身，还有配套的代理组件。</p>
+<h3 id="sec-5">官方没写什么（这点必须说清）</h3>
+<p>翻遍公开的白皮书和产品页，<strong>没有看到官方披露 CN / DN / GTM 用哪种编程语言实现，也没有列出具体的进程名</strong>。所以「是不是 Java 写的」这个问题，官方资料本身不能直接回答。</p>
+<p>能确定的只有：<strong>它们不是你业务应用 JVM 里的东西</strong>。Java 出现在这些地方——你用 Java 写的应用、官方提供的 JDBC 驱动、带 Web 界面的 Insight 运维平台。别把这些和数据库内核服务混为一谈。</p>
+<blockquote>合理推断（不是官方声明）：从「内核 100% 自主掌控」、兼容 MySQL 的 binlog 与 MVCC、以及证券场景微秒级时延这些公开信息看，CN / DN / GTM 更像是传统数据库内核那种原生编译的服务（这类系统通常用 C / C++），而不是跑在 JVM 上的 Java 服务。这可以帮你建立心智模型，但部署和排障时请以厂商给出的进程清单为准，不要拿推断当事实。</blockquote>
+<h3 id="sec-6">换成排障语言就是</h3>
+<table><thead><tr><th>你观察到的现象</th><th>该去看哪一层</th><th>大白话</th></tr></thead><tbody><tr><td>应用连不上、SQL 发不出去</td><td>CN 服务端口 / 进程 / 容器是否存活；多个 CN 对等，可换一个试</td><td>前台在不在</td></tr><tr><td>数据读写异常、主备切换</td><td>DN 安全组主备状态、DBAgent 日志</td><td>仓库和账本对不对</td></tr><tr><td>事务卡住、GTID 申请异常</td><td>GTM 主备 / 集群状态</td><td>发号员在不在</td></tr><tr><td>控制台操作报错但不影响业务</td><td>CM / PM / MDS / InsightServer</td><td>物业办公室，不影响卖货</td></tr></tbody></table>
+<blockquote>大白话：你的 Java 程序是「顾客」，JDBC 是「电话线」，CN 是「接线前台」，DN 是「仓库」，GTM 是「发号员」。顾客用什么语言说话，跟仓库管理员是什么工种，是两回事。文末第 8 张图把这几层画在了一起。</blockquote>
+<h2 id="sec-7">一条 SQL 在后台跑了几站</h2>
 <p>白皮书给的流向很清晰：应用连到 CN 的服务端口，CN 做语法解析和优化，生成分布式执行计划树，按连接实例定义把请求下发到对应数据节点子集群；DN 本地执行后把结果集返回，CN 再做汇总、排序、聚合，最后回给应用。中间可能有多次交互。</p>
 <ol><li><strong>建链</strong>：应用连到 CN 的某个服务端口，这个端口绑定了后端哪组 DN。</li><li><strong>解析与优化</strong>：CN 看懂 SQL，做逻辑优化和物理优化。</li><li><strong>路由</strong>：根据分片规则判断数据在哪几个安全组，生成分布式计划树。</li><li><strong>本地执行</strong>：DN 在自己这片数据上查或改，主节点负责写，备节点可以分摊读。</li><li><strong>汇总返回</strong>：CN 把各片结果合并，业务侧看到的还是一张表、一条结果。</li></ol>
 <blockquote>大白话：像点外卖。你只管下单，平台接单后决定哪个厨房做、要不要拆单，厨房出品后平台把几盒菜拼成一单送到你手上。你不需要知道后厨在哪条街。</blockquote>
-<h2 id="sec-4">数据怎么切：分片与安全组</h2>
+<h2 id="sec-8">数据怎么切：分片与安全组</h2>
 <p>一张大表不可能整块塞给一台 DN。GoldenDB 支持<strong>哈希、范围、列表、复制、多级分片</strong>：哈希适合均匀打散，范围适合按日期或数值分段，列表适合按地区、机构代码这类枚举值，复制适合不常改的小表，多级分片适合多法人这种精细场景。</p>
 <p>切完之后，每一片会变成一个<strong>安全组</strong>：组里一个或多个 DN 持有相同数据，其中一个是主节点，其余是备节点，主备之间实时复制；副本使用改进的 raft 一致性协议同步，官方术语里还提到 gSync 同步复制技术。</p>
 <p>还有两个细节很实用：</p>
 <ul><li><strong>广播表</strong>：不常改又经常被关联的小表，复制到每个分片，查询时不用跨节点找人；</li><li><strong>全局索引</strong>：用非分片字段查询时，先查到「这个字段对应哪条分片键」，避免把 SQL 群发到所有 DN。</li></ul>
-<h2 id="sec-5">它和 MySQL 到底哪里像</h2>
+<h2 id="sec-9">它和 MySQL 到底哪里像</h2>
 <p>这是最值得说清楚的地方。官方白皮书的说法是：「兼容 MySQL 语法」「兼容 MySQL 的 sql_mode 特性，兼容 MySQL 的 binlog 特性」「分布式事务借鉴单机事务实现」。注意用词是<strong>兼容与借鉴</strong>，不是「把 MySQL 内核直接改成分布式」。</p>
 <table><thead><tr><th>层面</th><th>相同的地方</th><th>大白话</th></tr></thead><tbody><tr><td>接入</td><td>支持 JDBC、ODBC 等标准驱动与协议</td><td>原来的连接方式和客户端基本能沿用</td></tr><tr><td>写法</td><td>常用语法、数据类型、函数、自增列、存储过程、触发器、视图、sql_mode</td><td>会写 MySQL，就容易上手</td></tr><tr><td>日志</td><td>兼容 binlog 特性；分布式回滚时 DBAgent 会解析 binlog 找 GTID</td><td>还是用日志记录变更，也拿日志反推回滚</td></tr><tr><td>并发</td><td>MVCC、undo 前像、读不加锁</td><td>读写不必互相排队</td></tr><tr><td>事务</td><td>四种隔离级别，推荐 Read Committed；ACID、XA 接口</td><td>还是「要么全做，要么全不做」</td></tr></tbody></table>
 <p>所以更准确的理解是：<strong>它保留了 MySQL 的使用习惯和单机事务那套词汇，在集群层重新做了分片、路由、全局事务和可见性判断。</strong></p>
 <p>多出来的那一层，恰恰是难点：CN 要会派活，DN 要会分片和复制，GTM 要发全局号并维护全局快照，每行还要多一个 GTID 隐藏列。</p>
-<h2 id="sec-6">跨分片转账：最难的那一题</h2>
+<h2 id="sec-10">跨分片转账：最难的那一题</h2>
 <p>假设 A、B 两个账户在不同分片，A 给 B 转 50 元。最大的风险是：A 扣成功了，B 加失败了，钱凭空消失。</p>
 <p>白皮书给出的做法是：</p>
 <ol><li>CN 向 GTM 申请一个全局唯一且递增的事务 ID，也就是 <strong>GTID</strong>；为了少跑腿，官方还做了批量申请和批量释放；</li><li>GoldenDB 给所有表增加一个 <strong>GTID 隐含列</strong>，更新数据时同步更新它，把它当作分布式环境下的「全局锁」；</li><li>CN 作为协调者，用改进的两阶段提交协调多个 DN 上的本地事务；所有 SQL 执行完后，各 DN 统一提交；</li><li>如果某个 DN 提交失败，其他节点上的 DBAgent 会解析 binlog，找出带有这个 GTID 的改动，构造反向 SQL 下发回滚。</li></ol>
 <blockquote>大白话：两个仓库同时搬货，总部给这次搬运发同一张运单号 9527。其中一个仓库搬砸了，就按运单号把另一个仓库已经搬走的货原样搬回来。于是不会出现「钱扣了、没到账」。</blockquote>
 <p>这就是官方文档强调的<strong>强一致</strong>：更新完成后，后续读操作只能读到更新后的值。</p>
-<h2 id="sec-7">MVCC：读为什么不用等写</h2>
+<h2 id="sec-11">MVCC：读为什么不用等写</h2>
 <p>单机 MySQL 里，MVCC 让读不加锁、读写不冲突；GoldenDB 要做的是「分布式 MVCC」。</p>
 <p>白皮书描述的过程是：SELECT 发起时，CN 拿到一份全局活跃事务列表 <code>active_gtm_gtid_list</code>，并把它带到 DN 做可见性判断。</p>
 <ul><li>数据行上的 GTID <strong>不在</strong>活跃列表里：说明这批改动已经全局可见，直接返回当前数据；</li><li>数据行上的 GTID <strong>在</strong>活跃列表里：说明改它的人还没尘埃落定，就通过 undo 构造前像数据，继续往前找，直到找到全局可见的版本。</li></ul>
 <blockquote>类比：你读一本正在被修改的账簿。每改一次就贴一张旧页备份。管理员告诉你「101 号修改还没盖章」，你就跳过它，看上一版已经盖章生效的账页。</blockquote>
 <p>这里的差别在于：单机看的是本地活跃事务，GoldenDB 还要把 GTM 的全局名单带下来。这是「分布式」三个字真正贵的地方。</p>
-<h2 id="sec-8">什么时候值得上分布式</h2>
+<h2 id="sec-12">什么时候值得上分布式</h2>
 <p>官方给了三种部署形态：</p>
 <ul><li><strong>集中式</strong>：单分片租户，不带 GTM，只有普通事务；适合数据量不大、不用分片的情况；</li><li><strong>分布式</strong>：多分片租户，带 GTM；数据跨片、事务跨片，才需要全局事务管理；</li><li><strong>混合</strong>：同一个集群里同时有单分片和多分片租户，并且可以在集中式和分布式之间在线转化。</li></ul>
 <p>所以别把分布式当银弹。数据量小、单机扛得住时，简单就是优势；当单机容量和性能真的成为瓶颈，再让 CN、DN、GTM 这套分工上场。</p>
-<h2 id="sec-9">官方资料</h2>
+<h2 id="sec-13">官方资料</h2>
 <p>本文事实依据主要来自中兴通讯官网公开资料：</p>
-<ul><li><a href="https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/goldendb/%E9%87%91%E7%AF%86%E4%BF%A1%E7%A7%91GoldenDB%E6%95%B0%E6%8D%AE%E5%BA%93V6%20%E6%8A%80%E6%9C%AF%E7%99%BD%E7%9A%AE%E4%B9%A620260708.pdf" target="_blank" rel="noopener">金篆信科 GoldenDB 数据库 V6 技术白皮书</a>：术语表 1.2 至 1.3、3.1 架构设计、3.1.5 多语法引擎、4.1 分布式事务控制、4.3.2 MVCC；</li><li><a href="https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/mediares/golden_db/pdf/report2024010303.pdf" target="_blank" rel="noopener">GoldenDB 分布式事务型数据库金融应用指南</a>：整体架构与金融场景说明。</li></ul>
-<h2 id="sec-10">一句话记住</h2>
+<ul><li><a href="https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/goldendb/%E9%87%91%E7%AF%86%E4%BF%A1%E7%A7%91GoldenDB%E6%95%B0%E6%8D%AE%E5%BA%93V6%20%E6%8A%80%E6%9C%AF%E7%99%BD%E7%9A%AE%E4%B9%A620260708.pdf" target="_blank" rel="noopener">金篆信科 GoldenDB 数据库 V6 技术白皮书</a>：术语表 1.2 至 1.3、3.1 架构设计、3.1.5 多语法引擎、3.2.4 物理机部署、3.2.5 容器化部署、4.1 分布式事务控制、4.3.2 MVCC；</li><li><a href="https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/mediares/golden_db/pdf/report2024010303.pdf" target="_blank" rel="noopener">GoldenDB 分布式事务型数据库金融应用指南</a>：整体架构与金融场景说明。</li></ul>
+<h2 id="sec-14">一句话记住</h2>
 <p>CN 管去哪查，DN 管真存真算，GTM 管跨机器算不算数；和 MySQL 像在写法和单机事务，难在把这套写法搬到一群机器上还不出错。</p>
   </div>
   <div class="article-embeds">
-    <h2 id="sec-embeds">GoldenDB 原理图解（七张图）</h2>
-<figure class="embed-figure"><figcaption><span>图 1 · 总览 / 三角色 / SQL 旅程 / 分片副本 / MySQL 对照 / 分布式事务 / MVCC（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/goldendb-explained.html" data-modal-title="GoldenDB 到底是个啥？把 CN、DN、GTM 讲成人话 · 图 1 · 总览 / 三角色 / SQL 旅程 / 分片副本 / MySQL 对照 / 分布式事务 / MVCC（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 总览 / 三角色 / SQL 旅程 / 分片副本 / MySQL 对照 / 分布式事务 / MVCC（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+    <h2 id="sec-embeds">GoldenDB 原理图解（八张图）</h2>
+<figure class="embed-figure"><figcaption><span>图 1 · 总览 / 三角色 / SQL 旅程 / 分片副本 / MySQL 对照 / 分布式事务 / MVCC / 进程视角（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/goldendb-explained.html" data-modal-title="GoldenDB 到底是个啥？把 CN、DN、GTM 讲成人话 · 图 1 · 总览 / 三角色 / SQL 旅程 / 分片副本 / MySQL 对照 / 分布式事务 / MVCC / 进程视角（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 总览 / 三角色 / SQL 旅程 / 分片副本 / MySQL 对照 / 分布式事务 / MVCC / 进程视角（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
@@ -407,11 +422,11 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 &lt;body&gt;
 &lt;div class=&quot;hero&quot;&gt;
   &lt;h1&gt;GoldenDB 原理图解&lt;/h1&gt;
-  &lt;p&gt;七张图讲清：CN / DN / GTM 各管什么，一条 SQL 怎么跑，数据怎么分片，它和 MySQL 哪些地方像，跨分片转账怎么做到不串账，以及 MVCC 为什么读不挡写。&lt;/p&gt;
+  &lt;p&gt;八张图讲清：CN / DN / GTM 各管什么，一条 SQL 怎么跑，数据怎么分片，它和 MySQL 哪些地方像，跨分片转账怎么做到不串账，MVCC 为什么读不挡写，以及这些节点到底以什么形式跑在机器上。&lt;/p&gt;
 &lt;/div&gt;
 &lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
 &lt;div class=&quot;nav&quot;&gt;
-  &lt;a href=&quot;#c1&quot;&gt;总览&lt;/a&gt;&lt;a href=&quot;#c2&quot;&gt;三个角色&lt;/a&gt;&lt;a href=&quot;#c3&quot;&gt;SQL 旅程&lt;/a&gt;&lt;a href=&quot;#c4&quot;&gt;分片副本&lt;/a&gt;&lt;a href=&quot;#c5&quot;&gt;MySQL 对照&lt;/a&gt;&lt;a href=&quot;#c6&quot;&gt;分布式事务&lt;/a&gt;&lt;a href=&quot;#c7&quot;&gt;MVCC&lt;/a&gt;
+  &lt;a href=&quot;#c1&quot;&gt;总览&lt;/a&gt;&lt;a href=&quot;#c2&quot;&gt;三个角色&lt;/a&gt;&lt;a href=&quot;#c3&quot;&gt;SQL 旅程&lt;/a&gt;&lt;a href=&quot;#c4&quot;&gt;分片副本&lt;/a&gt;&lt;a href=&quot;#c5&quot;&gt;MySQL 对照&lt;/a&gt;&lt;a href=&quot;#c6&quot;&gt;分布式事务&lt;/a&gt;&lt;a href=&quot;#c7&quot;&gt;MVCC&lt;/a&gt;&lt;a href=&quot;#c8&quot;&gt;进程视角&lt;/a&gt;
 &lt;/div&gt;
 
 &lt;!-- 1 总览 --&gt;
@@ -769,6 +784,84 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
   &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;类比：&lt;/b&gt;你读一本正在被修改的账簿。账簿每改一次就贴一张新补丁（undo 前像）。管理员告诉你「101 号修改还没生效」，你就跳过它，看上一版已经盖章生效的账页。&lt;/div&gt;
 &lt;/div&gt;
 
+&lt;!-- 8 进程视角 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;c8&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;8&lt;/span&gt;它们到底怎么跑？独立服务进程，不是你 JVM 里的线程 &lt;span class=&quot;tag&quot;&gt;部署&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;官方明确的是「节点类型 + 部署形态」：白皮书把节点分成管理节点（CM/PM/MDS/InsightServer 等）和非管理节点（CN/DN/GTM/LDS 等），两类都能部署在物理机或容器。官方公开资料没有披露 CN/DN/GTM 的实现语言与进程名。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 370&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;
+        &lt;marker id=&quot;m8&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;m8g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;
+      &lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;22&quot; width=&quot;992&quot; height=&quot;38&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;46&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一个请求要穿过三层进程：你的应用 → CN 服务 → DN / GTM 服务；管理面在旁边看着，不挡业务 SQL。&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;78&quot; width=&quot;230&quot; height=&quot;164&quot; rx=&quot;13&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;42&quot; y=&quot;104&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;你的业务应用&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;130&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;Java / Go / Python 都行&lt;/text&gt;
+        &lt;rect x=&quot;42&quot; y=&quot;146&quot; width=&quot;194&quot; height=&quot;42&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;56&quot; y=&quot;166&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;JDBC / ODBC 客户端驱动&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;182&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;连的是 CN 的服务端口&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;214&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;这里是 Java 进程（如果你的应用是 Java）&lt;/text&gt;
+        &lt;text x=&quot;42&quot; y=&quot;232&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;但它只是客户端，不是 GoldenDB 内核&lt;/text&gt;
+
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.8&quot; marker-end=&quot;url(#m8)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M254,160 L292,160&quot;/&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;258&quot; y=&quot;150&quot; font-size=&quot;10.5&quot; fill=&quot;#007aff&quot;&gt;SQL&lt;/text&gt;
+
+        &lt;rect x=&quot;294&quot; y=&quot;78&quot; width=&quot;300&quot; height=&quot;76&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;312&quot; y=&quot;102&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;CN 计算服务进程 × N&lt;/text&gt;
+        &lt;text x=&quot;312&quot; y=&quot;124&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;无状态、对等，监听服务端口&lt;/text&gt;
+        &lt;text x=&quot;312&quot; y=&quot;144&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;解析 / 优化 / 路由 / 汇总&lt;/text&gt;
+
+        &lt;rect x=&quot;294&quot; y=&quot;166&quot; width=&quot;300&quot; height=&quot;76&quot; rx=&quot;13&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;312&quot; y=&quot;190&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;DN 数据服务进程 + DBAgent&lt;/text&gt;
+        &lt;text x=&quot;312&quot; y=&quot;212&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;安全组一主多备，数据落在这里&lt;/text&gt;
+        &lt;text x=&quot;312&quot; y=&quot;232&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;DBAgent 解析 binlog 做补偿回滚&lt;/text&gt;
+
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#m8)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M444,154 L444,166&quot;/&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;452&quot; y=&quot;164&quot; font-size=&quot;10.5&quot; fill=&quot;#007aff&quot;&gt;下发执行&lt;/text&gt;
+
+        &lt;rect x=&quot;624&quot; y=&quot;78&quot; width=&quot;392&quot; height=&quot;76&quot; rx=&quot;13&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;642&quot; y=&quot;102&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;GTM 全局事务管理服务 · 主备 / 集群&lt;/text&gt;
+        &lt;text x=&quot;642&quot; y=&quot;124&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;发 GTID、维护活跃事务与生命周期&lt;/text&gt;
+        &lt;text x=&quot;642&quot; y=&quot;144&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;不存业务数据，只管「算不算数」&lt;/text&gt;
+
+        &lt;rect x=&quot;624&quot; y=&quot;166&quot; width=&quot;392&quot; height=&quot;76&quot; rx=&quot;13&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;642&quot; y=&quot;190&quot; font-size=&quot;13.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;CM / PM / MDS / InsightServer&lt;/text&gt;
+        &lt;text x=&quot;642&quot; y=&quot;212&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;管理节点：集群管理、计算节点管理、元数据服务&lt;/text&gt;
+        &lt;text x=&quot;642&quot; y=&quot;232&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;Insight 提供 Web 运维入口，不涉及业务访问流程&lt;/text&gt;
+
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#m8)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M594,108 L624,108&quot;/&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;598&quot; y=&quot;100&quot; font-size=&quot;10.5&quot; fill=&quot;#007aff&quot;&gt;GTID&lt;/text&gt;
+
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.4&quot; stroke-dasharray=&quot;5,4&quot; marker-end=&quot;url(#m8g)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M626,214 L594,214&quot;/&gt;&lt;path d=&quot;M626,206 L448,164&quot;/&gt;
+        &lt;/g&gt;
+        &lt;text x=&quot;602&quot; y=&quot;248&quot; font-size=&quot;10.5&quot; fill=&quot;#8e8e93&quot;&gt;虚线：管理面（不挡业务 SQL）&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;262&quot; width=&quot;992&quot; height=&quot;44&quot; rx=&quot;11&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;283&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;官方明确：节点是独立自治的计算机节点，可部署在物理机，也可部署在容器。&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;300&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;白皮书 3.1 架构设计 / 3.2.4 物理机部署 / 3.2.5 容器化部署；术语表：CM ClusterManager、PM ProxyManager、MDS MetaDataServer。&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;316&quot; width=&quot;992&quot; height=&quot;42&quot; rx=&quot;11&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;337&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;官方没写：CN / DN / GTM 用什么语言实现、进程名叫什么。&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;353&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;能确定的是它们不是你业务 JVM 里的线程；「像 MySQL 内核那样原生编译」是合理推断，不是官方声明，别当成既定事实。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;Java 出现在你的应用和 JDBC 驱动里；GoldenDB 的 CN / DN / GTM 是数据库自己装的服务，跑在数据库机器或容器里。排障时先看对应那层服务的存活与日志，别在应用代码里找它们。&lt;/div&gt;
+&lt;/div&gt;
+
 &lt;script&gt;
 (function(){
   var svgs=Array.prototype.slice.call(document.querySelectorAll(&#39;svg[viewBox]&#39;));
@@ -854,15 +947,15 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 " sandbox="allow-scripts" loading="lazy" style="height:1180px"></iframe></figure>
   </div>
 </article>
-<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">一句话版本</a></div><div class="toc-group"><a href="#sec-2" class="">先把四个角色认全</a></div><div class="toc-group"><a href="#sec-3" class="">一条 SQL 在后台跑了几站</a></div><div class="toc-group"><a href="#sec-4" class="">数据怎么切：分片与安全组</a></div><div class="toc-group"><a href="#sec-5" class="">它和 MySQL 到底哪里像</a></div><div class="toc-group"><a href="#sec-6" class="">跨分片转账：最难的那一题</a></div><div class="toc-group"><a href="#sec-7" class="">MVCC：读为什么不用等写</a></div><div class="toc-group"><a href="#sec-8" class="">什么时候值得上分布式</a></div><div class="toc-group"><a href="#sec-9" class="">官方资料</a></div><div class="toc-group"><a href="#sec-10" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 原理图解（七张图）</a></div></nav>
+<nav class="toc" aria-label="文章目录"><div class="toc-title">本页目录</div><div class="toc-group"><a href="#sec-1" class="">一句话版本</a></div><div class="toc-group"><a href="#sec-2" class="">先把四个角色认全</a></div><div class="toc-group"><a href="#sec-3" class="">它们到底以什么形式跑？不是 Java 进程</a><a href="#sec-4" class="lv3">官方明确写了什么</a><a href="#sec-5" class="lv3">官方没写什么（这点必须说清）</a><a href="#sec-6" class="lv3">换成排障语言就是</a></div><div class="toc-group"><a href="#sec-7" class="">一条 SQL 在后台跑了几站</a></div><div class="toc-group"><a href="#sec-8" class="">数据怎么切：分片与安全组</a></div><div class="toc-group"><a href="#sec-9" class="">它和 MySQL 到底哪里像</a></div><div class="toc-group"><a href="#sec-10" class="">跨分片转账：最难的那一题</a></div><div class="toc-group"><a href="#sec-11" class="">MVCC：读为什么不用等写</a></div><div class="toc-group"><a href="#sec-12" class="">什么时候值得上分布式</a></div><div class="toc-group"><a href="#sec-13" class="">官方资料</a></div><div class="toc-group"><a href="#sec-14" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 原理图解（八张图）</a></div></nav>
 </div>
 </main>
 <button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button>
 <div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
   <div class="toc-backdrop" data-toc-close></div>
   <div class="toc-panel">
-    <div class="toc-panel-head"><span>本页目录 · 11 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
-    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">一句话版本</a></div><div class="toc-group"><a href="#sec-2" class="">先把四个角色认全</a></div><div class="toc-group"><a href="#sec-3" class="">一条 SQL 在后台跑了几站</a></div><div class="toc-group"><a href="#sec-4" class="">数据怎么切：分片与安全组</a></div><div class="toc-group"><a href="#sec-5" class="">它和 MySQL 到底哪里像</a></div><div class="toc-group"><a href="#sec-6" class="">跨分片转账：最难的那一题</a></div><div class="toc-group"><a href="#sec-7" class="">MVCC：读为什么不用等写</a></div><div class="toc-group"><a href="#sec-8" class="">什么时候值得上分布式</a></div><div class="toc-group"><a href="#sec-9" class="">官方资料</a></div><div class="toc-group"><a href="#sec-10" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 原理图解（七张图）</a></div></nav>
+    <div class="toc-panel-head"><span>本页目录 · 15 节</span><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">一句话版本</a></div><div class="toc-group"><a href="#sec-2" class="">先把四个角色认全</a></div><div class="toc-group"><a href="#sec-3" class="">它们到底以什么形式跑？不是 Java 进程</a><a href="#sec-4" class="lv3">官方明确写了什么</a><a href="#sec-5" class="lv3">官方没写什么（这点必须说清）</a><a href="#sec-6" class="lv3">换成排障语言就是</a></div><div class="toc-group"><a href="#sec-7" class="">一条 SQL 在后台跑了几站</a></div><div class="toc-group"><a href="#sec-8" class="">数据怎么切：分片与安全组</a></div><div class="toc-group"><a href="#sec-9" class="">它和 MySQL 到底哪里像</a></div><div class="toc-group"><a href="#sec-10" class="">跨分片转账：最难的那一题</a></div><div class="toc-group"><a href="#sec-11" class="">MVCC：读为什么不用等写</a></div><div class="toc-group"><a href="#sec-12" class="">什么时候值得上分布式</a></div><div class="toc-group"><a href="#sec-13" class="">官方资料</a></div><div class="toc-group"><a href="#sec-14" class="">一句话记住</a></div><div class="toc-group"><a href="#sec-embeds" class="">GoldenDB 原理图解（八张图）</a></div></nav>
   </div>
 </div>
 
