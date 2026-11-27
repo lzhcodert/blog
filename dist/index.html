@@ -76,15 +76,14 @@ a{color:inherit}
 .chip-all:hover{color:var(--accent)}
 
 /* 树上元素 */
-.leaf,.lbl{cursor:pointer}
+.leaf{cursor:pointer}
 .leaf-scale{transition:transform .18s cubic-bezier(.2,.8,.2,1);transform-box:fill-box;transform-origin:center}
-.leaf:hover .leaf-scale,.leaf.sel .leaf-scale{transform:scale(1.32)}
+.leaf:hover .leaf-scale,.leaf.sel .leaf-scale{transform:scale(1.45)}
 .leaf .halo{fill:none;stroke-width:1.5;opacity:0;transition:opacity .2s ease}
-.leaf:hover .halo,.leaf.sel .halo{opacity:.6}
+.leaf:hover .halo,.leaf.sel .halo{opacity:.75}
+.leaf.sel .core{stroke:var(--fg);stroke-width:1.2}
 .leaf:focus{outline:none}
 .leaf:focus-visible .halo{opacity:.95;stroke:var(--fg)}
-.lbl{transition:fill .15s ease,opacity .25s ease;font-size:11.5px;fill:var(--fg2);font-family:inherit}
-.lbl:hover,.lbl.sel{fill:var(--fg);font-weight:600}
 .dim{opacity:.08;pointer-events:none}
 .branch-main{stroke-linecap:round;opacity:.62}
 .branch-twig{stroke-linecap:round;opacity:.5}
@@ -227,7 +226,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <header class="site-head">
   <div>
     <h1 class="site-title">一棵树<span>每片叶子是一篇文章</span></h1>
-    <p class="site-sub">悬停叶片看摘要 · 点选读全文 · 图例与搜索可筛选</p>
+    <p class="site-sub">点选叶片看摘要 · 再点阅读全文 · 图例与搜索可筛选</p>
   </div>
   <div class="search">
     <svg class="si" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.2 4.2" stroke-linecap="round"/></svg>
@@ -394,8 +393,8 @@ document.getElementById('stats').innerHTML =
 var svg=document.getElementById('tree-svg'), tip=document.getElementById('tip');
 /* 画布视口：由 fitCanvas() 按树的实际边界自动扩展，新增分类无需手改 viewBox */
 var VB={x:0,y:0,w:1000,h:480};
-var gGround=el('g',{}), gTrunk=el('g',{}), gBranch=el('g',{}), gLeaf=el('g',{}), gLabel=el('g',{});
-svg.appendChild(gGround); svg.appendChild(gTrunk); svg.appendChild(gBranch); svg.appendChild(gLeaf); svg.appendChild(gLabel);
+var gGround=el('g',{}), gTrunk=el('g',{}), gBranch=el('g',{}), gLeaf=el('g',{});
+svg.appendChild(gGround); svg.appendChild(gTrunk); svg.appendChild(gBranch); svg.appendChild(gLeaf);
 
 /* ---------- 地面与草丛 ---------- */
 gGround.appendChild(el('ellipse',{cx:501,cy:461,rx:112,ry:7,fill:'var(--fg3)',opacity:.12}));
@@ -506,20 +505,6 @@ function articleLeaf(p,cat,bx,by,angDeg){
   return g;
 }
 
-/* 标签：放在叶片尖端外侧，沿叶片朝向 */
-function labelFor(p,bx,by,angDeg){
-  var ar=angDeg*RAD;
-  var tipX=bx+Math.cos(ar)*26, tipY=by+Math.sin(ar)*26;
-  var dx=Math.cos(ar), dyv=Math.sin(ar);
-  var anchor = dx>0.3 ? 'start' : (dx<-0.3 ? 'end' : 'middle');
-  var dy = anchor!=='middle' ? 4 : (dyv>0?15:-9);
-  var t=el('text',{'class':'lbl',x:tipX.toFixed(1),y:tipY.toFixed(1),dy:dy,
-    'text-anchor':anchor,tabindex:'0',role:'button','aria-label':'阅读：'+p.t});
-  t.textContent=p.t;
-  gLabel.appendChild(t);
-  return t;
-}
-
 /* ---------- 组装树 ---------- */
 var leaves=[], listItems=[], selected=null;
 
@@ -559,10 +544,9 @@ activeCats.forEach(function(cat,ci){
       decorLeaf(px, py, twigAng+side*(28+rand(k+fi*2)*26)+(rand(k*3+ci*5+fi)-0.5)*24, cat.color, k+ci*13+fi+7);
     });
 
-    /* 文章叶 */
+    /* 文章叶（标题不再挂在叶旁，统一在下方卡片展示） */
     var leafAng = twigAng + (rand(k*5+ci*3+1)-0.5)*24;
     var g=articleLeaf(p,cat,end.x,end.y,leafAng);
-    var t=labelFor(p,end.x,end.y,leafAng);
 
     function showTip(){
       tip.innerHTML='<div class="tt">'+esc(p.t)+'</div>'+
@@ -579,39 +563,13 @@ activeCats.forEach(function(cat,ci){
     function onKey(e){ if (e.key==='Enter'||e.key===' '){ e.preventDefault(); select(p); } }
 
     g.addEventListener('mouseenter',showTip); g.addEventListener('mouseleave',hideTip);
-    t.addEventListener('mouseenter',showTip); t.addEventListener('mouseleave',hideTip);
     g.addEventListener('click',function(){ select(p); });
-    t.addEventListener('click',function(){ select(p); });
-    g.addEventListener('keydown',onKey); t.addEventListener('keydown',onKey);
+    g.addEventListener('keydown',onKey);
     g.addEventListener('focus',showTip); g.addEventListener('blur',hideTip);
-    t.addEventListener('focus',showTip); t.addEventListener('blur',hideTip);
 
-    leaves.push({g:g,t:t,p:p});
+    leaves.push({g:g,p:p});
   });
 });
-
-/* ---------- 标签避让：分支密集时向下错开，避免标题互相压盖 ---------- */
-function avoidLabelOverlap(){
-  var placed=[];
-  var sorted=leaves.slice().sort(function(a,b){
-    return (+a.t.getAttribute('y'))-(+b.t.getAttribute('y'));
-  });
-  sorted.forEach(function(L){
-    var t=L.t, step=0;
-    while (step<10){
-      var b;
-      try { b=t.getBBox(); } catch(e){ return; }
-      var hit=false;
-      for (var i=0;i<placed.length;i++){
-        var p=placed[i];
-        if (b.x<p.x+p.w+3 && b.x+b.w+3>p.x && b.y<p.y+p.h+2 && b.y+b.h+2>p.y){ hit=true; break; }
-      }
-      if (!hit){ placed.push({x:b.x,y:b.y,w:b.w,h:b.h}); break; }
-      t.setAttribute('y', (+t.getAttribute('y'))+14);
-      step++;
-    }
-  });
-}
 
 /* ---------- 自适应画布：按树的实际边界扩展 viewBox ----------
    左右保持不小于 1000（树干仍在正中），垂直方向贴紧内容再留少量边距，
@@ -699,7 +657,7 @@ function syncUI(){
     var p=L.p, cat=catOf(p.c);
     var hay=(p.t+' '+cat.n+' '+p.ex+' '+p.date).toLowerCase();
     p._ok=(!activeCat||p.c===activeCat) && (!q||hay.indexOf(q)>-1);
-    L.g.classList.toggle('dim',!p._ok); L.t.classList.toggle('dim',!p._ok);
+    L.g.classList.toggle('dim',!p._ok);
     if (p._ok) total++;
   });
   listItems.forEach(function(it){ it.li.hidden=!it.p._ok; });
@@ -717,7 +675,7 @@ clearBtn.addEventListener('click',function(){ search.value=''; syncUI(); search.
 var card=document.getElementById('post-card');
 function clearSelect(){
   selected=null;
-  leaves.forEach(function(L){ L.g.classList.remove('sel'); L.t.classList.remove('sel'); });
+  leaves.forEach(function(L){ L.g.classList.remove('sel'); });
   listItems.forEach(function(it){ it.li.classList.remove('sel'); });
   card.style.borderLeftColor='var(--accent)';
   card.innerHTML='<div class="pc-main"><div class="pc-empty">点选树上的叶片，查看文章摘要。</div></div>';
@@ -725,7 +683,7 @@ function clearSelect(){
 function select(p){
   selected=p;
   var cat=catOf(p.c);
-  leaves.forEach(function(L){ var on=L.p===p; L.g.classList.toggle('sel',on); L.t.classList.toggle('sel',on); });
+  leaves.forEach(function(L){ L.g.classList.toggle('sel',L.p===p); });
   listItems.forEach(function(it){ it.li.classList.toggle('sel',it.p===p); });
   card.style.borderLeftColor=cat.color;
   card.innerHTML=
@@ -743,7 +701,6 @@ function select(p){
   tip.style.opacity=0;
 }
 
-avoidLabelOverlap();
 fitCanvas();
 syncUI();
 clearSelect();

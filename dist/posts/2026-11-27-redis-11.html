@@ -76,15 +76,14 @@ a{color:inherit}
 .chip-all:hover{color:var(--accent)}
 
 /* 树上元素 */
-.leaf,.lbl{cursor:pointer}
+.leaf{cursor:pointer}
 .leaf-scale{transition:transform .18s cubic-bezier(.2,.8,.2,1);transform-box:fill-box;transform-origin:center}
-.leaf:hover .leaf-scale,.leaf.sel .leaf-scale{transform:scale(1.32)}
+.leaf:hover .leaf-scale,.leaf.sel .leaf-scale{transform:scale(1.45)}
 .leaf .halo{fill:none;stroke-width:1.5;opacity:0;transition:opacity .2s ease}
-.leaf:hover .halo,.leaf.sel .halo{opacity:.6}
+.leaf:hover .halo,.leaf.sel .halo{opacity:.75}
+.leaf.sel .core{stroke:var(--fg);stroke-width:1.2}
 .leaf:focus{outline:none}
 .leaf:focus-visible .halo{opacity:.95;stroke:var(--fg)}
-.lbl{transition:fill .15s ease,opacity .25s ease;font-size:11.5px;fill:var(--fg2);font-family:inherit}
-.lbl:hover,.lbl.sel{fill:var(--fg);font-weight:600}
 .dim{opacity:.08;pointer-events:none}
 .branch-main{stroke-linecap:round;opacity:.62}
 .branch-twig{stroke-linecap:round;opacity:.5}
