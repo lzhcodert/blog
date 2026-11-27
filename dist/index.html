@@ -632,7 +632,7 @@ POSTS.slice().sort(function(a,b){ return b.stamp.localeCompare(a.stamp); }).forE
   li.className='post-item'; li.dataset.url=p.url;
   li.innerHTML='<span class="pl-dot" style="background:'+cat.color+'"></span>'+
     '<span class="pl-date">'+p.d+'</span>'+
-    '<a class="pl-title" href="'+p.url+'" target="_blank" rel="noopener">'+esc(p.t)+'</a>'+
+    '<a class="pl-title" href="'+p.url+'">'+esc(p.t)+'</a>'+
     (p.em?'<span class="pl-em">'+p.em+' 图</span>':'')+
     '<span class="pl-cat">'+cat.n+'</span>';
   li.addEventListener('click',function(e){
@@ -696,7 +696,7 @@ function select(p){
     '</div>'+
     '<div class="pc-side">'+
       (p.em?'<span class="pc-embed">含交互内容</span>':'')+
-      '<a class="pc-read" href="'+p.url+'" target="_blank" rel="noopener">阅读全文 →</a>'+
+      '<a class="pc-read" href="'+p.url+'">阅读全文 →</a>'+
     '</div>';
   tip.style.opacity=0;
 }
