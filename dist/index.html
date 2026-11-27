@@ -264,7 +264,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 
 <noscript>
   <ul class="post-list">
-    <li class="post-item"><span class="pl-dot" style="background:#5ac8fa"></span><span class="pl-date">11.27</span><a class="pl-title" href="posts/2026-11-27-sqlserver-goldendb-12.html">把 CRM 从 SQL Server 迁到 GoldenDB：一次迁移真正要过的六道关</a><span class="pl-em">1 图</span><span class="pl-cat">数据库</span></li>
+    <li class="post-item"><span class="pl-dot" style="background:#5ac8fa"></span><span class="pl-date">11.27</span><a class="pl-title" href="posts/2026-11-27-sqlserver-goldendb-12.html">把 CRM 从 SQL Server 迁到 GoldenDB：Sloth 直连还是 Loader 文件摆渡</a><span class="pl-em">1 图</span><span class="pl-cat">数据库</span></li>
     <li class="post-item"><span class="pl-dot" style="background:#5ac8fa"></span><span class="pl-date">11.27</span><a class="pl-title" href="posts/2026-11-27-redis-11.html">Redis Key 怎么设计？六张图讲清命名、长度、大 key 和集群哈希标签</a><span class="pl-em">1 图</span><span class="pl-cat">数据库</span></li>
     <li class="post-item"><span class="pl-dot" style="background:#5ac8fa"></span><span class="pl-date">11.27</span><a class="pl-title" href="posts/2026-11-27-13.html">缓存穿透、击穿、雪崩：三张图讲明白三种&quot;缓存没挡住&quot;</a><span class="pl-em">1 图</span><span class="pl-cat">数据库</span></li>
     <li class="post-item"><span class="pl-dot" style="background:#ff2d55"></span><span class="pl-date">11.27</span><a class="pl-title" href="posts/2026-11-27-14.html">网关到底在管什么？从小区大门讲到线上入口</a><span class="pl-em">1 图</span><span class="pl-cat">架构</span></li>
@@ -305,8 +305,8 @@ window.__CATS__ = [
 ];
 window.__POSTS__ = [
   { url:'posts/2026-11-27-sqlserver-goldendb-12.html', c:'c3ohdsm',
-    t:"把 CRM 从 SQL Server 迁到 GoldenDB：一次迁移真正要过的六道关", date:'2026-11-27', stamp:'2026-11-27T16:20', m:21, em:1,
-    ex:"以银行 CRM 的客户表、跟进记录、机构字典和商机表为例，讲清 SQL Server 到 GoldenDB 迁移的四件事：建表结构怎么改、分片键怎么选、T-SQL 怎么转、数据怎么用 Sloth 搬且不出错，附权威出处与回退方案。" },
+    t:"把 CRM 从 SQL Server 迁到 GoldenDB：Sloth 直连还是 Loader 文件摆渡", date:'2026-11-27', stamp:'2026-11-27T16:45', m:38, em:1,
+    ex:"以银行 CRM 为例，讲清 SQL Server 到 GoldenDB 迁移的四件事：建表结构怎么改、分片键怎么选、T-SQL 怎么转、数据怎么搬——重点对比 Sloth 直连与 Loader 文件摆渡，完整拆解 bcp 分批导出到 Loader 读文件写入的每一步，附权威出处与回退方案。" },
   { url:'posts/2026-11-27-redis-11.html', c:'c3ohdsm',
     t:"Redis Key 怎么设计？六张图讲清命名、长度、大 key 和集群哈希标签", date:'2026-11-27', stamp:'2026-11-27T15:40', m:21, em:1,
     ex:"把 Redis key 当成\"数据库表结构\"来设计：冒号分层、长度适中、避开坑字符、TTL 打散、大 key 拆分、集群用花括号。六张图 + 反例对照 + 权威出处。" },

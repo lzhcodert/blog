@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>把 CRM 从 SQL Server 迁到 GoldenDB：一次迁移真正要过的六道关 · 札记</title>
+<title>把 CRM 从 SQL Server 迁到 GoldenDB：Sloth 直连还是 Loader 文件摆渡 · 札记</title>
 <style>
 
 /* ============ 主题变量（支持浅色/深色） ============ */
@@ -367,8 +367,8 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <div class="detail-wrap">
 <article class="article">
   <div class="article-meta-top"><span class="dot" style="background:#5ac8fa"></span>数据库</div>
-  <h1 class="article-title">把 CRM 从 SQL Server 迁到 GoldenDB：一次迁移真正要过的六道关</h1>
-  <div class="article-meta">2026-11-27 · 21 分钟阅读</div>
+  <h1 class="article-title">把 CRM 从 SQL Server 迁到 GoldenDB：Sloth 直连还是 Loader 文件摆渡</h1>
+  <div class="article-meta">2026-11-27 · 38 分钟阅读</div>
   <div class="article-body">
 <p>数据库迁移最容易产生的误会，是把它当成&quot;导出再导入&quot;。</p>
 <p>真到项目里你会发现，<strong>搬数据往往是工作量最小的一环</strong>。真正费劲的是前面那些问题：</p>
@@ -377,9 +377,9 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <blockquote>说明：GoldenDB 是金篆信科（中兴）的分布式数据库，在 <strong>MySQL 模式</strong>下兼容 MySQL 8.0.25 及以前版本的语法、数据类型、内置函数、视图和存储过程。它不兼容 SQL Server 的 T-SQL，所以&quot;改 SQL&quot;这一关躲不掉。</blockquote>
 <h2 id="sec-1">先把全局看清：四道关</h2>
 <p>按顺序是这四步：</p>
-<table><thead><tr><th>关口</th><th>做什么</th><th>谁来做</th></tr></thead><tbody><tr><td>① 结构</td><td>字段类型映射、主键索引重设、加分片规则</td><td>人，手工改 DDL</td></tr><tr><td>② 分片</td><td>每张表选分片键和分片策略</td><td>人，按业务查询模式定</td></tr><tr><td>③ 语法</td><td>T-SQL 改成 MySQL 写法</td><td>人，改应用 SQL</td></tr><tr><td>④ 数据</td><td>全量搬迁 + 一致性校验 + 差异修复</td><td>Sloth 工具</td></tr></tbody></table>
+<table><thead><tr><th>关口</th><th>做什么</th><th>谁来做</th></tr></thead><tbody><tr><td>① 结构</td><td>字段类型映射、主键索引重设、加分片规则</td><td>人，手工改 DDL</td></tr><tr><td>② 分片</td><td>每张表选分片键和分片策略</td><td>人，按业务查询模式定</td></tr><tr><td>③ 语法</td><td>T-SQL 改成 MySQL 写法</td><td>人，改应用 SQL</td></tr><tr><td>④ 数据</td><td>全量搬迁 + 一致性校验 + 差异修复</td><td>Sloth 直连 或 Loader 文件摆渡</td></tr></tbody></table>
 <p>前三关都在停机窗口<strong>之前</strong>完成，窗口里只做第四关和切换。</p>
-<p>一个必须先接受的现实：<strong>Sloth 只负责搬数据，不负责把 T-SQL 翻译成 MySQL SQL，也不负责帮你建表。</strong></p>
+<p>一个必须先接受的现实：<strong>不管选 Sloth 还是 Loader，工具都只负责搬数据，不负责把 T-SQL 翻译成 MySQL SQL，也不负责帮你建表。</strong></p>
 <h2 id="sec-2">第一关：建表结构怎么改</h2>
 <p>拿 CRM 最常用的客户主表 <code>crm_customer</code> 举例。</p>
 <p><strong>SQL Server 原版：</strong></p>
@@ -426,36 +426,82 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <table><thead><tr><th>SQL Server</th><th>GoldenDB（MySQL 模式）</th></tr></thead><tbody><tr><td><code>SELECT TOP 10 * FROM t</code></td><td><code>SELECT * FROM t LIMIT 10</code></td></tr><tr><td><code>ISNULL(mobile, &#39;N/A&#39;)</code></td><td><code>IFNULL(mobile, &#39;N/A&#39;)</code></td></tr><tr><td><code>GETDATE()</code></td><td><code>NOW()</code></td></tr><tr><td><code>NEWID()</code></td><td><code>UUID()</code></td></tr><tr><td><code>[dbo].[crm_customer]</code></td><td><code>crm_customer</code>（去方括号）</td></tr><tr><td><code>N&#39;中文客户&#39;</code></td><td><code>&#39;中文客户&#39;</code>（库用 <code>utf8mb4</code>）</td></tr><tr><td><code>OFFSET 20 ROWS FETCH NEXT 10</code></td><td><code>LIMIT 20, 10</code></td></tr><tr><td><code>MERGE INTO ...</code></td><td><code>INSERT ... ON DUPLICATE KEY UPDATE</code></td></tr></tbody></table>
 <p><strong>别用正则全局替换。</strong> 这些是常见对应关系，不是等价转换规则。尤其是：</p>
 <ul><li>存储过程、触发器、自定义函数要<strong>逐条重写并测试</strong>。GoldenDB 在 MySQL 模式下支持这些对象，但语法按 MySQL 写，不是 T-SQL。</li><li>应用连接串里的驱动要换成 GoldenDB 的 JDBC 驱动，字符集参数（GBK 链路）按官方文档在 URL 里配 <code>characterEncoding=gbk</code>。</li><li>参数化查询保持原样，顺便检查有没有拼接 SQL 的老代码。</li></ul>
-<h2 id="sec-6">第四关：数据怎么搬——Sloth 能做什么、不能做什么</h2>
-<p>Sloth 是金篆信科的数据迁移工具，官方定位是&quot;集管控、运维、编排于一体&quot;，支持 Oracle、DB2、SQLServer、MySQL、PostgreSQL 等异构数据源与 GoldenDB 之间的数据迁移同步。</p>
-<p>但<strong>具体到 SQLServer → GoldenDB（官方代号 X2G）这条路，功能矩阵里是有限制的</strong>：</p>
-<table><thead><tr><th>能力</th><th>X2G 支持情况</th></tr></thead><tbody><tr><td>全量迁移</td><td>✓</td></tr><tr><td>数据校验（快照比对 / 同步比对）</td><td>✓</td></tr><tr><td>数据修复</td><td>✓</td></tr><tr><td>断点续传</td><td>✓</td></tr><tr><td>对象迁移（表、存储过程等）</td><td>✕</td></tr><tr><td>增量 DDL</td><td>✕</td></tr><tr><td>增量 DML</td><td>✕</td></tr><tr><td>不停服&quot;迁移+同步&quot;</td><td>✕（矩阵里没有 X2G 这一项）</td></tr></tbody></table>
-<p>对照一下：MySQL → GoldenDB（M2G）和 Oracle → GoldenDB（O2G）是支持&quot;迁移+同步&quot;的，能做到不停服。SQLServer 这条路不行。</p>
-<p><strong>这直接决定排期方式：</strong></p>
-<ul><li>停机窗口<strong>之前</strong>：完成建表、分片、SQL 改造、回归测试，把能提前做的全做完。</li><li>停机窗口<strong>之内</strong>：停写 → 全量搬迁 → 校验 → 修复 → 切换。</li><li>不要按&quot;全+增无缝切换&quot;的宣传口径排计划，那是别的源库路线才有的能力。</li></ul>
-<p>Sloth 的基本动作是：注册数据源 → 配置最小权限 → 新建任务（选全量）→ 配映射规则和白名单 → 开比对 → 可行性检查 → 保存启动。迁移过程中源端别做 DDL，目标端的外键和触发器要关掉。</p>
-<blockquote>说明：Sloth 的具体功能矩阵会随版本调整。本文按 2026 年初公开的官方功能文档写，立项时请核对你要用的版本。</blockquote>
-<h2 id="sec-7">割接当天：七步走，并留好回退路</h2>
+<h2 id="sec-6">第四关：数据怎么搬——Sloth 直连，还是 Loader 摆渡</h2>
+<p>搬数据有两条路。一条是让工具<strong>同时连着两端数据库，边读边写</strong>；另一条是<strong>先把源库导成文件，再让 GoldenDB 自己的工具把文件读进去</strong>。</p>
+<p>打个比方：Sloth 像一根接在两边之间的管道，Loader 像摆渡——货得先卸到码头（文件），再装船。管道省事，摆渡可控。</p>
+<p>先把两条路的差别摆清楚，后面重点讲摆渡怎么走：</p>
+<table><thead><tr><th>对比项</th><th>Sloth 直连搬运</th><th>Loader 文件摆渡</th></tr></thead><tbody><tr><td>数据怎么走</td><td>工具连源库 + 目标库，边读边写</td><td>SQL Server 先导出 CSV，Loader 再读文件写入</td></tr><tr><td>中间产物</td><td>没有，数据在内存里流转</td><td>有，一批一个文件，落在磁盘上</td></tr><tr><td>断点续传</td><td>工具自己记进度</td><td>按文件记：哪个文件失败就重导哪个</td></tr><tr><td>校验 / 修复</td><td>工具自带快照比对和数据修复</td><td>工具只报成功/失败行数，一致性自己写脚本比</td></tr><tr><td>对源库压力</td><td>持续连库读取</td><td>导出完就断开，也可在业务低峰慢慢导</td></tr><tr><td>能做的准备</td><td>边搬边写</td><td>文件落地后能先脱敏、清洗、补列再导</td></tr><tr><td>SQLServer→GoldenDB 增量</td><td>不支持</td><td>也不支持，两者都要停写窗口</td></tr></tbody></table>
+<p>一句话：<strong>Sloth 是&quot;管到底&quot;的搬运工，Loader 是&quot;只管往库里写文件&quot;的工具</strong>。SQLServer 这条路两者都不支持增量同步——别指望哪条路能少停机。</p>
+<blockquote>说明：Sloth 的 SQLServer→GoldenDB（官方代号 X2G）只支持停服全量迁移 + 校验 + 修复，不支持对象迁移、增量 DDL/DML；MySQL、Oracle 到 GoldenDB 才支持&quot;迁移+同步&quot;。功能矩阵按公开文档整理，立项时核对你的版本。</blockquote>
+<h3 id="sec-7">为什么项目里常常选文件摆渡</h3>
+<p>不是因为 Sloth 不好，而是有些现场条件决定了只能这么走：</p>
+<ul><li><strong>表太大</strong>：一张客户表几百 GB，一次性直连搬，中途断一次就得从头来；拆成 50 批，断一批只重导一批。</li><li><strong>网络隔离</strong>：生产网和信创网之间不通数据库端口，只能过文件交换平台传文件。</li><li><strong>要清洗数据</strong>：源端有敏感字段要脱敏、<code>guid</code> 要转 <code>CHAR(36)</code>、类型要先在导出查询里转好，文件是天然的&quot;加工台&quot;。</li><li><strong>节奏可控</strong>：先导小表试水，再一批批放大表，出问题随时暂停。</li></ul>
+<p>代价也明确：<strong>多出来的文件要自己管，校验脚本要自己写</strong>。</p>
+<h3 id="sec-8">第一步：SQL Server 端按主键范围拆批</h3>
+<p>拆批的关键是<strong>按主键范围切，不要按时间、不要按页号</strong>。</p>
+<ul><li>按时间切：同一秒几十条记录，边界容易重复或漏；</li><li>按页号切（<code>OFFSET/FETCH</code>）：越往后翻越慢，而且导出期间有新写入就会错位；</li><li>按主键范围切：边界是数字，连续、不重叠，漏了哪段一眼看得出来。</li></ul>
+<p>先算出主键边界：</p>
+<div class="code-block"><div class="code-bar"><span class="code-lang">sql</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>SELECT MIN(cust_id) AS min_id, MAX(cust_id) AS max_id
+FROM crm.dbo.crm_customer;
+-- 假设得到 1 ~ 50000000，按每批 100 万切成 50 批：
+-- 第 1 批 [1, 1000000)，第 2 批 [1000000, 2000000)……第 50 批 [49000000, 50000001)</code></pre></div></div>
+<p>然后用 SQL Server 官方的 <code>bcp</code> 工具，带 <code>queryout</code> 把每一批导成 CSV：</p>
+<div class="code-block"><div class="code-bar"><span class="code-lang">bat</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>bcp &quot;SELECT cust_id, cust_name, id_no, mobile, CAST(level AS DECIMAL(19,4)) AS level, CONVERT(varchar(19), created_at, 120) AS created_at, CAST(guid AS CHAR(36)) AS guid FROM crm.dbo.crm_customer WHERE cust_id &gt;= 1 AND cust_id &lt; 1000000 ORDER BY cust_id&quot; queryout &quot;D:\crm_export\crm_customer_001.csv&quot; -c -C 65001 -t &quot;,&quot; -r &quot;\n&quot; -S sqlsrv01 -d crm -U ldsuser -P &quot;******&quot; -b 10000 -e &quot;D:\crm_export\err_001.log&quot;</code></pre></div></div>
+<p><strong>注意看查询里那几处 <code>CAST</code> / <code>CONVERT</code></strong>：类型转换和日期格式化在导出的时候就做完，导出的文件已经是 GoldenDB 想要的样子。别把 <code>MONEY</code>、<code>DATETIME2</code>、<code>UNIQUEIDENTIFIER</code> 原样导出去再指望导入工具猜——这是最常见的事故来源。</p>
+<p><code>bcp</code> 的参数按官方说明：</p>
+<table><thead><tr><th>参数</th><th>作用</th><th>这里为什么这么写</th></tr></thead><tbody><tr><td><code>queryout</code></td><td>导出一条 SQL 查询的结果</td><td>要带 <code>WHERE</code> 按主键范围切批，不能用整表 <code>out</code></td></tr><tr><td><code>-c</code></td><td>字符格式</td><td>跨库迁移用字符格式，别用 <code>-n</code>（本机格式只有 SQL Server 自己认）</td></tr><tr><td><code>-C 65001</code></td><td>字符集（UTF-8 代码页）</td><td>中文客户名不乱码；旧系统用 GBK 就写 936，但要全链路一致</td></tr><tr><td><code>-t &quot;,&quot;</code></td><td>字段分隔符</td><td>和后面 Loader 的 <code>fields terminated by</code> 对应</td></tr><tr><td><code>-r &quot;\n&quot;</code></td><td>行分隔符</td><td>Windows 上要写引号，命令行里 <code>\</code> 要转义</td></tr><tr><td><code>-b 10000</code></td><td>每批提交行数</td><td>控制单次写入量，失败时回滚范围小</td></tr><tr><td><code>-e</code></td><td>错误记录文件</td><td>导出阶段的行级错误单独落盘，别混进数据文件</td></tr><tr><td><code>-F / -L</code></td><td>首行 / 末行</td><td>另一种按行号切批的方式，不如主键范围稳</td></tr></tbody></table>
+<p>每导完一批，记一笔台账：批次号、主键范围、文件行数、文件 MD5。后面重导、校验全靠这张表。</p>
+<h3 id="sec-9">第二步：文件落地，先清点再往下走</h3>
+<ul><li><strong>一批一文件</strong>，文件名带批次号（<code>crm_customer_001.csv</code> … <code>050.csv</code>），别把所有批次塞进同一个大文件。</li><li><strong>先对账</strong>：每个文件的行数，应该等于源库该主键范围的 <code>COUNT(*)</code>。对不上就别导，多半是 <code>WHERE</code> 边界写重了或者漏了。</li><li><strong>留 MD5</strong>：文件过交换平台可能损坏，导入前校验一次 MD5 比排查乱码快得多。</li><li><strong>别手改文件</strong>：要改数据就改导出查询重新导，手改 CSV 容易破坏分隔符和对齐。</li></ul>
+<h3 id="sec-10">第三步：Loader 读文件写入 GoldenDB</h3>
+<p>这里的工具官方叫 <strong>LoadServer</strong>，是 GoldenDB 自研的导入导出工具，命令行通过 <code>dbtool -loadserver</code> 下发任务。一个典型的导入命令：</p>
+<div class="code-block"><div class="code-bar"><span class="code-lang">bash</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>dbtool -loadserver -type=&quot;in&quot; -clusterid=1 \
+  -sql=&quot;load data infile &#39;/data/crm/crm_customer_001.csv&#39; into table crm.crm_customer fields terminated by &#39;,&#39; optionally enclosed by &#39;\&quot;&#39; lines terminated by &#39;\n&#39; (cust_id,cust_name,id_no,mobile,level,created_at,guid);&quot; \
+  -user=&#39;ldsuser&#39; -password=&#39;******&#39; -db-conn-info=10.229.31.202:8881</code></pre></div></div>
+<p><strong>最容易出错的一行是括号里的列清单</strong>：列数、顺序必须和 CSV 文件完全一致。Loader 是按位置对号入座的，名字对不上它也不会帮你纠正。</p>
+<p><code>dbtool</code> 的主要参数：</p>
+<table><thead><tr><th>参数</th><th>作用</th></tr></thead><tbody><tr><td><code>-type=in / out</code></td><td>导入 / 导出</td></tr><tr><td><code>-clusterid</code></td><td>目标集群编号</td></tr><tr><td><code>-sql</code></td><td>具体的 <code>LOAD DATA INFILE</code> 或 <code>SELECT ... INTO OUTFILE</code> 语句</td></tr><tr><td><code>-db-conn-info</code></td><td>计算节点 IP:端口</td></tr><tr><td><code>-errorignore=N</code></td><td>最多容忍 N 条错误数据，超过整批失败</td></tr><tr><td><code>-loadin-support-null=1</code></td><td>把 <code>,,</code> 这样的空字段当成 NULL</td></tr><tr><td><code>-backup</code></td><td>导入前备份数据文件</td></tr><tr><td><code>-enable-ftp</code></td><td>走文件传输协议通道（见下）</td></tr></tbody></table>
+<p><strong>两条通道怎么选</strong>：</p>
+<ul><li><strong>计算节点通道（默认）</strong>：Loader 读文件 → 解析校验 → 执行线程连计算节点批量写。配置简单，计算节点负责路由到正确的分片——你建表时按 <code>cust_id</code> 做了 HASH 分片，Loader 不用自己算数据该去哪个 DN。</li><li><strong>文件传输协议通道（<code>-enable-ftp</code>）</strong>：Loader 先向元数据节点拿表结构，<strong>按分片规则把一个大文件拆成各个分片的小文件</strong>，再通知各数据节点的代理直接下载导入。少一跳计算节点，大批量更快，但要多配 <code>MetaDataServer</code> / <code>ClusterManager</code> 的地址。</li></ul>
+<p>一句话：<strong>小批量、图省事用默认通道；几百 GB、追求速度用 <code>-enable-ftp</code>。</strong></p>
+<h3 id="sec-11">第四步：失败数据落盘，修完再导</h3>
+<p>Loader 内部是一条流水线：<strong>读线程</strong>按行列分隔符读 CSV，每若干行成一批进解析队列；<strong>解析线程</strong>做合法性校验和字段处理；<strong>执行线程</strong>连计算节点批量写；写失败的行由<strong>落盘线程</strong>单独写到文件里。</p>
+<p>所以正确的动作不是&quot;整批重来&quot;，而是：</p>
+<ol><li>看落盘的失败文件，定位是格式问题、超长、还是主键冲突；</li><li>修数据（改导出查询重新导，或改失败文件）；</li><li>只重导那批，用 <code>replace</code> 或 <code>ignore</code> 处理主键冲突：</li></ol>
+<div class="code-block"><div class="code-bar"><span class="code-lang">bash</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code># replace：文件里的记录覆盖库中同主键的旧记录（放在 into 前面）
+load data infile &#39;crm_customer_001.csv&#39; replace into table crm.crm_customer ...
+# ignore：库里已有的记录保留，跳过文件里的重复行
+load data infile &#39;crm_customer_001.csv&#39; ignore into table crm.crm_customer ...</code></pre></div></div>
+<p><code>-errorignore=N</code> 是容忍上限，别设成很大去&quot;掩盖&quot;错误——失败行落盘了却没人管，比整批失败更危险。</p>
+<h3 id="sec-12">第五步：校验——Loader 不替你比数据</h3>
+<p>这是文件方式和 Sloth 最大的差别：<strong>Sloth 自带快照比对和数据修复，Loader 只告诉你写进去多少行、失败多少行。写得对不对，得自己比。</strong></p>
+<p>三样必比：</p>
+<table><thead><tr><th>比什么</th><th>怎么比</th></tr></thead><tbody><tr><td>行数</td><td>每个批次文件行数 vs GoldenDB 里该主键范围的 <code>COUNT(*)</code></td></tr><tr><td>主键</td><td>源端和目标端的 <code>cust_id</code> 集合做差集，看有没有多或漏</td></tr><tr><td>金额</td><td>CRM 商机表的金额做 <code>SUM</code>，源端目标端对总数</td></tr></tbody></table>
+<p>再抽几十条记录逐字段看：中文客户名有没有乱码、<code>id_no</code> 有没有被截断、<code>guid</code> 是不是标准 36 位。<strong>这类问题行数是对的，只有逐字段看才能发现。</strong></p>
+<h3 id="sec-13">文件格式的六个坑</h3>
+<ol><li><strong>分隔符撞车</strong>：客户名里有逗号，<code>fields terminated by &#39;,&#39;</code> 就会把一行切碎。用 <code>optionally enclosed by &#39;&quot;&#39;</code> 给字段加引号，或者把分隔符换成一个不会出现的字符。</li><li><strong>NULL 的表达</strong>：源端 NULL 导成空字段后，加 <code>-loadin-support-null=1</code> 才把 <code>,,</code> 当 NULL，否则可能变成空字符串。</li><li><strong>日期格式</strong>：<code>DATETIME2</code> 带小数秒，导出时用 <code>CONVERT(varchar(19), created_at, 120)</code> 统一成 <code>YYYY-MM-DD HH:MI:SS</code>。</li><li><strong>字符集全链路一致</strong>：导出 <code>-C 65001</code>、文件 UTF-8、GoldenDB 表字符集 UTF-8。中间任何一环是 GBK 都可能乱码。</li><li><strong>行尾干净</strong>：每行字段数一样，最后一行也要有换行符，别多写分隔符。</li><li><strong>列清单写全</strong>：<code>LOAD DATA</code> 里显式写 <code>(col1,col2,...)</code>，别省略靠默认顺序。</li></ol>
+<blockquote>说明：<code>LoadServer</code> 的配置项（如 <code>dumper_query_thread_nums</code>、<code>load_enable_ftp</code>）和命令参数以你使用的 GoldenDB 版本手册为准；不同版本可能有差异。</blockquote>
+<h2 id="sec-14">割接当天：七步走，并留好回退路</h2>
 <p>迁移成功不等于切换成功。割接窗口里最重要的是<strong>可回退</strong>。</p>
-<ol><li><strong>停写公告</strong>：冻结 CRM 写入，确认无在途事务。</li><li><strong>最终增量</strong>：把停写前最后一批数据补搬完。</li><li><strong>全量校验</strong>：行数、主键、金额汇总都要比。</li><li><strong>差异修复</strong>：对不上的记录修完再比一次。</li><li><strong>应用切库</strong>：改连接串，先灰度放几个客户经理试。</li><li><strong>业务冒烟</strong>：建档、查全景画像、写跟进、拉营销名单，核心动作过一遍。</li><li><strong>全面放开</strong>：观察 QPS、慢 SQL、报错率。</li></ol>
+<ol><li><strong>停写公告</strong>：冻结 CRM 写入，确认无在途事务。</li><li><strong>最后批次补导</strong>：Sloth 用户把停写前最后一段补搬完；Loader 用户把最后一批文件重新导出（此时已停写，数据定格）再导入。两条路都没有增量同步，别指望工具自动追平。</li><li><strong>全量校验</strong>：行数、主键、金额汇总都要比。</li><li><strong>差异修复</strong>：对不上的记录修完再比一次。</li><li><strong>应用切库</strong>：改连接串，先灰度放几个客户经理试。</li><li><strong>业务冒烟</strong>：建档、查全景画像、写跟进、拉营销名单，核心动作过一遍。</li><li><strong>全面放开</strong>：观察 QPS、慢 SQL、报错率。</li></ol>
 <p><strong>验收口径</strong>：数据零差异 + 核心交易跑通 + 性能指标达标，三者缺一不放量。</p>
 <p><strong>回退路线</strong>要提前备好并演练过：</p>
 <ul><li>源库保持只读、<strong>不要立刻下线</strong>，直到观察期结束；</li><li>连接串做成配置中心的开关，切回不改代码；</li><li>切回后的新数据要有反向同步通道（Sloth 支持 G2X 反向同步到 SQLServer）；</li><li>没演练过的回退方案等于没有。</li></ul>
 <p>一句话：<strong>迁移看数据一致性，割接看可回退性。前者靠比对，后者靠演练。</strong></p>
-<h2 id="sec-8">术语小抄</h2>
-<table><thead><tr><th>术语</th><th>大白话</th></tr></thead><tbody><tr><td>GoldenDB</td><td>金篆信科（中兴）的分布式数据库，MySQL 模式下兼容 MySQL 语法</td></tr><tr><td>Sloth</td><td>GoldenDB 的数据迁移工具，管全量、同步、比对、修复</td></tr><tr><td>X2G / M2G / O2G</td><td>源库缩写→GoldenDB：SQLServer / MySQL / Oracle 到 GoldenDB</td></tr><tr><td>T-SQL</td><td>SQL Server 的 SQL 方言，和 MySQL 语法不同</td></tr><tr><td>分片键</td><td>决定一行数据落到哪个分片节点的字段</td></tr><tr><td>DISTRIBUTED BY</td><td>GoldenDB 建表时指定分片规则的语法</td></tr><tr><td>HASH / RANGE / LIST</td><td>三种分片策略：打散 / 按范围 / 按枚举值</td></tr><tr><td>复制表</td><td>小表在每个分片存一份，避免跨分片关联</td></tr><tr><td>快照比对</td><td>在某个时间点对源端和目标端做全量数据比对</td></tr><tr><td>增量 DML</td><td>迁移期间的增删改，X2G 这条路径不支持</td></tr></tbody></table>
-<h2 id="sec-9">参考出处</h2>
-<ol><li>中兴通讯《GoldenDB 数据库 V6 技术白皮书》：高 SQL 兼容性（SQL92/99/2003、兼容 MySQL 语法与常用 Oracle/DB2 语法）、分片与在线扩容、备份恢复。&lt;https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/goldendb/250828内容更新素材/中兴通讯GoldenDB数据库V6技术白皮书.pdf&gt;</li><li>金篆信科 GoldenDB 官方（转载于墨天轮）《GoldenDB 分布式数据库：迁移工具 Sloth 功能概览》：X2G 停服迁移支持全量/校验/修复，不支持对象迁移、增量 DDL/DML；不停服迁移项目类型列表；数据源类型；断点续传与对象迁移说明。&lt;https://cs.enmotech.com/db/2008423782366126080&gt;</li><li>金篆信科官方公众号《全链路数据迁移平台——GoldenDB Sloth 工具解析》（《中兴通讯技术》金篆数据库 GoldenDB 专题，作者沈文宽）：对象迁移先行、全量+增量衔接、双重校验机制；Sloth 已在电信行业支撑 BOSS、CRM 等系统割接。&lt;http://mp.weixin.qq.com/s?__biz=Mzg4Njc2NDAwNg==&amp;mid=2247492965&amp;idx=1&amp;sn=8eb7efccba660316e5eac9abcdd8df66&gt;</li><li>《GoldenDB 分布式数据库：与 MySQL 兼容性》：兼容 MySQL 8.0.25 及以前版本的类型、语法、函数、视图、存储过程；完整数据类型清单；建表带 <code>DISTRIBUTED BY</code>；字符集与字符序。&lt;http://www.modb.pro/db/2034913305219915776&gt;</li><li>《GoldenDB 分布式数据库：应用开发设计规范》：对象命名不超过 30 字符、单行不超过 1M、避免 <code>DEFAULT NULL</code>、必须有主键索引；分片键与分片规则设计原则（HASH/RANGE/LIST/复制表）。&lt;https://cs.enmotech.com/db/2026936329574621184&gt;</li><li>《GoldenDB 分布式数据库：如何迁移 MySQL 数据库数据到 GoldenDB》：使用限制（迁移中不做 DDL、关闭目标端外键与触发器）、类型映射、Sloth 任务参数。&lt;http://www.modb.pro/db/1942047348876652544&gt;</li></ol>
+<h2 id="sec-15">术语小抄</h2>
+<table><thead><tr><th>术语</th><th>大白话</th></tr></thead><tbody><tr><td>GoldenDB</td><td>金篆信科（中兴）的分布式数据库，MySQL 模式下兼容 MySQL 语法</td></tr><tr><td>Sloth</td><td>GoldenDB 的数据迁移工具，管全量、同步、比对、修复（SQLServer 这条路只支持全量）</td></tr><tr><td>Loader / LoadServer</td><td>GoldenDB 自研的导入导出工具，读 CSV 文件写入数据库，用 <code>dbtool -loadserver</code> 下发</td></tr><tr><td>bcp</td><td>SQL Server 官方的批量导出工具，<code>queryout</code> 可以把查询结果导成文件</td></tr><tr><td>X2G / M2G / O2G</td><td>源库缩写→GoldenDB：SQLServer / MySQL / Oracle 到 GoldenDB</td></tr><tr><td>T-SQL</td><td>SQL Server 的 SQL 方言，和 MySQL 语法不同</td></tr><tr><td>分片键</td><td>决定一行数据落到哪个分片节点的字段</td></tr><tr><td>DISTRIBUTED BY</td><td>GoldenDB 建表时指定分片规则的语法</td></tr><tr><td>HASH / RANGE / LIST</td><td>三种分片策略：打散 / 按范围 / 按枚举值</td></tr><tr><td>复制表</td><td>小表在每个分片存一份，避免跨分片关联</td></tr><tr><td>快照比对</td><td>在某个时间点对源端和目标端做全量数据比对</td></tr><tr><td>增量 DML</td><td>迁移期间的增删改，X2G 这条路径不支持</td></tr></tbody></table>
+<h2 id="sec-16">参考出处</h2>
+<ol><li>中兴通讯《GoldenDB 数据库 V6 技术白皮书》：高 SQL 兼容性（SQL92/99/2003、兼容 MySQL 语法与常用 Oracle/DB2 语法）、分片与在线扩容、备份恢复。&lt;https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/goldendb/250828内容更新素材/中兴通讯GoldenDB数据库V6技术白皮书.pdf&gt;</li><li>金篆信科 GoldenDB 官方（转载于墨天轮）《GoldenDB 分布式数据库：迁移工具 Sloth 功能概览》：X2G 停服迁移支持全量/校验/修复，不支持对象迁移、增量 DDL/DML；不停服迁移项目类型列表；数据源类型；断点续传与对象迁移说明。&lt;https://cs.enmotech.com/db/2008423782366126080&gt;</li><li>金篆信科官方公众号《全链路数据迁移平台——GoldenDB Sloth 工具解析》（《中兴通讯技术》金篆数据库 GoldenDB 专题，作者沈文宽）：对象迁移先行、全量+增量衔接、双重校验机制；Sloth 已在电信行业支撑 BOSS、CRM 等系统割接。&lt;http://mp.weixin.qq.com/s?__biz=Mzg4Njc2NDAwNg==&amp;mid=2247492965&amp;idx=1&amp;sn=8eb7efccba660316e5eac9abcdd8df66&gt;</li><li>《GoldenDB 分布式数据库：与 MySQL 兼容性》：兼容 MySQL 8.0.25 及以前版本的类型、语法、函数、视图、存储过程；完整数据类型清单；建表带 <code>DISTRIBUTED BY</code>；字符集与字符序。&lt;http://www.modb.pro/db/2034913305219915776&gt;</li><li>《GoldenDB 分布式数据库：应用开发设计规范》：对象命名不超过 30 字符、单行不超过 1M、避免 <code>DEFAULT NULL</code>、必须有主键索引；分片键与分片规则设计原则（HASH/RANGE/LIST/复制表）。&lt;https://cs.enmotech.com/db/2026936329574621184&gt;</li><li>《GoldenDB 分布式数据库：如何迁移 MySQL 数据库数据到 GoldenDB》：使用限制（迁移中不做 DDL、关闭目标端外键与触发器）、类型映射、Sloth 任务参数。&lt;http://www.modb.pro/db/1942047348876652544&gt;</li><li>金篆信科 GoldenDB 官方（转载于墨天轮）《GoldenDB 分布式数据库：LoadServer 导入导出》：LoadServer 使用场景、计算节点通道与文件传输协议通道、导入导出的线程模型、<code>dbtool -loadserver</code> 命令与 <code>LOAD DATA INFILE</code> / <code>SELECT INTO OUTFILE</code> 语法、参数与容错。&lt;https://www.modb.pro/db/2004480348072779776&gt;</li><li>Microsoft Learn《bcp 实用工具》：SQL Server 批量导出语法、<code>queryout</code>、<code>-c</code> / <code>-C</code> / <code>-t</code> / <code>-r</code> / <code>-b</code> / <code>-F</code> / <code>-L</code> / <code>-e</code> 参数说明与示例。&lt;https://learn.microsoft.com/zh-cn/sql/tools/bcp-utility?view=sql-server-ver17&gt;</li><li>中兴通讯《GoldenDB 分布式事务型数据库金融应用指南》：迁移工具集（评估工具 CACtool、平台化迁移工具 Sloth）与反向同步能力。&lt;https://www.zte.com.cn/content/dam/zte-site/res-www-zte-com-cn/mediares/golden_db/pdf/report2024010303.pdf&gt;</li></ol>
 <blockquote>说明：文中 CRM 表名、字段和割接流程是<strong>教学用示例</strong>，用来串起迁移方法，不代表任何真实生产系统的结构。功能矩阵按文中所列公开文档版本整理，项目立项时请以目标版本的官方材料为准。</blockquote>
   </div>
   <div class="article-embeds">
-    <h2 id="sec-embeds">SQL Server 迁 GoldenDB 图解（六张图）</h2>
-<figure class="embed-figure"><figcaption><span>图 1 四道关总览 / 图 2 CRM 表改造 / 图 3 分片键选择 / 图 4 语法转换 / 图 5 Sloth 能力边界 / 图 6 割接回退（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/sqlserver-to-goldendb.html" data-modal-title="把 CRM 从 SQL Server 迁到 GoldenDB：一次迁移真正要过的六道关 · 图 1 四道关总览 / 图 2 CRM 表改造 / 图 3 分片键选择 / 图 4 语法转换 / 图 5 Sloth 能力边界 / 图 6 割接回退（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 四道关总览 / 图 2 CRM 表改造 / 图 3 分片键选择 / 图 4 语法转换 / 图 5 Sloth 能力边界 / 图 6 割接回退（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+    <h2 id="sec-embeds">SQL Server 迁 GoldenDB 图解（七张图）</h2>
+<figure class="embed-figure"><figcaption><span>图 1 四道关总览 / 图 2 CRM 表改造 / 图 3 分片键选择 / 图 4 语法转换 / 图 5 Sloth 与 Loader 对比 / 图 6 文件搬运全流程 / 图 7 割接回退（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/sqlserver-to-goldendb.html" data-modal-title="把 CRM 从 SQL Server 迁到 GoldenDB：Sloth 直连还是 Loader 文件摆渡 · 图 1 四道关总览 / 图 2 CRM 表改造 / 图 3 分片键选择 / 图 4 语法转换 / 图 5 Sloth 与 Loader 对比 / 图 6 文件搬运全流程 / 图 7 割接回退（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 四道关总览 / 图 2 CRM 表改造 / 图 3 分片键选择 / 图 4 语法转换 / 图 5 Sloth 与 Loader 对比 / 图 6 文件搬运全流程 / 图 7 割接回退（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
-&lt;title&gt;SQL Server 迁 GoldenDB · 六张图讲明白&lt;/title&gt;
+&lt;title&gt;SQL Server 迁 GoldenDB · 七张图讲明白&lt;/title&gt;
 &lt;style&gt;
   :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
   *{box-sizing:border-box}
@@ -489,12 +535,12 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 &lt;/head&gt;
 &lt;body&gt;
 &lt;div class=&quot;hero&quot;&gt;
-  &lt;h1&gt;SQL Server → GoldenDB：一次 CRM 迁移要过的六道关&lt;/h1&gt;
-  &lt;p&gt;别把迁移想成&quot;导出再导入&quot;。真正的工作量在四件事上：表结构怎么改、分片键怎么选、SQL 语法怎么转、数据怎么搬且不出错。六张图按这个顺序讲。&lt;/p&gt;
+  &lt;h1&gt;SQL Server → GoldenDB：一次 CRM 迁移要过的四道关&lt;/h1&gt;
+  &lt;p&gt;别把迁移想成&quot;导出再导入&quot;。真正的工作量在四件事上：表结构怎么改、分片键怎么选、SQL 语法怎么转、数据怎么搬且不出错。第四关重点讲 Sloth 直连与 Loader 文件摆渡两条路。&lt;/p&gt;
 &lt;/div&gt;
 &lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
 &lt;div class=&quot;nav&quot;&gt;
-  &lt;a href=&quot;#m1&quot;&gt;总览&lt;/a&gt;&lt;a href=&quot;#m2&quot;&gt;CRM 表改造&lt;/a&gt;&lt;a href=&quot;#m3&quot;&gt;分片键&lt;/a&gt;&lt;a href=&quot;#m4&quot;&gt;语法转换&lt;/a&gt;&lt;a href=&quot;#m5&quot;&gt;Sloth 搬家&lt;/a&gt;&lt;a href=&quot;#m6&quot;&gt;割接回退&lt;/a&gt;
+  &lt;a href=&quot;#m1&quot;&gt;总览&lt;/a&gt;&lt;a href=&quot;#m2&quot;&gt;CRM 表改造&lt;/a&gt;&lt;a href=&quot;#m3&quot;&gt;分片键&lt;/a&gt;&lt;a href=&quot;#m4&quot;&gt;语法转换&lt;/a&gt;&lt;a href=&quot;#m5&quot;&gt;两条搬数据路&lt;/a&gt;&lt;a href=&quot;#m6&quot;&gt;文件搬运全流程&lt;/a&gt;&lt;a href=&quot;#m7&quot;&gt;割接回退&lt;/a&gt;
 &lt;/div&gt;
 
 &lt;!-- 1 总览 --&gt;
@@ -541,8 +587,8 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
       &lt;rect x=&quot;880&quot; y=&quot;88&quot; width=&quot;116&quot; height=&quot;98&quot; rx=&quot;12&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
       &lt;text x=&quot;938&quot; y=&quot;116&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;第 4 关&lt;/text&gt;
       &lt;text x=&quot;938&quot; y=&quot;140&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot; text-anchor=&quot;middle&quot;&gt;数据&lt;/text&gt;
-      &lt;text x=&quot;938&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot; text-anchor=&quot;middle&quot;&gt;Sloth&lt;/text&gt;
-      &lt;text x=&quot;938&quot; y=&quot;178&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot; text-anchor=&quot;middle&quot;&gt;全量+校验&lt;/text&gt;
+      &lt;text x=&quot;938&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot; text-anchor=&quot;middle&quot;&gt;Sloth / Loader&lt;/text&gt;
+      &lt;text x=&quot;938&quot; y=&quot;178&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot; text-anchor=&quot;middle&quot;&gt;两条路&lt;/text&gt;
 
       &lt;rect x=&quot;44&quot; y=&quot;216&quot; width=&quot;952&quot; height=&quot;84&quot; rx=&quot;13&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
       &lt;text x=&quot;64&quot; y=&quot;244&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一个必须先接受的事实&lt;/text&gt;
@@ -551,7 +597,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 
       &lt;rect x=&quot;44&quot; y=&quot;324&quot; width=&quot;464&quot; height=&quot;150&quot; rx=&quot;13&quot; fill=&quot;#fff7f6&quot; stroke=&quot;#ffc9c4&quot;/&gt;
       &lt;text x=&quot;64&quot; y=&quot;352&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;最容易踩的四个坑&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;380&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;① 以为 Sloth 能自动迁表结构 → SQLServer→GoldenDB 不支持对象迁移&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;380&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;① 以为工具能自动迁表结构 → 两条路都要自己建表&lt;/text&gt;
       &lt;text x=&quot;64&quot; y=&quot;406&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;② 分片键随手选 → 客户维度查询变成全分片扫描&lt;/text&gt;
       &lt;text x=&quot;64&quot; y=&quot;432&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;③ 只搬数据不比对 → 到了割接才发现字段截断、乱码&lt;/text&gt;
       &lt;text x=&quot;64&quot; y=&quot;458&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;④ 忘了方括号标识符 [dbo].[t] → 语法直接报错&lt;/text&gt;
@@ -730,61 +776,135 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
   &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;逐行对照，绿色虚线就是&quot;改写方向&quot;。最后一行提醒很关键：&lt;b&gt;别用正则全局替换&lt;/b&gt;，改完必须拿测试库跑回归。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 5 Sloth 搬家 --&gt;
+&lt;!-- 5 两条搬数据路对比 --&gt;
 &lt;div class=&quot;card&quot; id=&quot;m5&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;数据怎么搬：Sloth 能做什么、不能做什么 &lt;span class=&quot;tag&quot;&gt;迁移&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;Sloth 是金篆信科的迁移工具，支持 SQLServer 等异构源向 GoldenDB 迁移。但 SQLServer 这条路有明确边界，先看清楚再排计划。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;搬数据两条路：Sloth 直连 vs Loader 摆渡 &lt;span class=&quot;tag&quot;&gt;迁移&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;一条是管道（工具连着两端库边读边写），一条是摆渡（先把源库导成文件，再让 GoldenDB 读文件）。SQLServer 这条路两者都不支持增量。&lt;/p&gt;
   &lt;/div&gt;
   &lt;svg viewBox=&quot;0 0 1040 500&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
     &lt;defs&gt;
       &lt;marker id=&quot;mg5b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+      &lt;marker id=&quot;mg5p&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#5856d6&quot;/&gt;&lt;/marker&gt;
     &lt;/defs&gt;
     &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;SQLServer → GoldenDB（官方代号 X2G）的能力边界&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;取自 Sloth 官方功能矩阵：这一路是&quot;停服全量迁移&quot;，不是&quot;全+增无缝切换&quot;&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;同一批 CRM 数据，两种搬法&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;上排看数据怎么走，下排看各自的代价与适合场景&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;92&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;13&quot; fill=&quot;#f4fbf6&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;✓ 支持&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;150&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;全量迁移&lt;/text&gt;
-      &lt;text x=&quot;220&quot; y=&quot;150&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot;&gt;把存量数据搬到 GoldenDB&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;182&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;数据校验&lt;/text&gt;
-      &lt;text x=&quot;220&quot; y=&quot;182&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot;&gt;快照比对 / 同步比对&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;214&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;数据修复&lt;/text&gt;
-      &lt;text x=&quot;220&quot; y=&quot;214&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot;&gt;比对出差异后修复&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;246&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;断点续传&lt;/text&gt;
-      &lt;text x=&quot;220&quot; y=&quot;246&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot;&gt;故障后从断点继续&lt;/text&gt;
-
-      &lt;rect x=&quot;528&quot; y=&quot;92&quot; width=&quot;468&quot; height=&quot;196&quot; rx=&quot;13&quot; fill=&quot;#fff7f6&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;548&quot; y=&quot;120&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;✕ 不支持（这条路）&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;150&quot; font-size=&quot;11&quot; fill=&quot;#c62828&quot;&gt;对象迁移&lt;/text&gt;
-      &lt;text x=&quot;716&quot; y=&quot;150&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;表/存储过程要自己建&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;182&quot; font-size=&quot;11&quot; fill=&quot;#c62828&quot;&gt;增量 DDL&lt;/text&gt;
-      &lt;text x=&quot;716&quot; y=&quot;182&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;迁移期间表结构变更&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;214&quot; font-size=&quot;11&quot; fill=&quot;#c62828&quot;&gt;增量 DML&lt;/text&gt;
-      &lt;text x=&quot;716&quot; y=&quot;214&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;迁移期间的增删改&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;246&quot; font-size=&quot;11&quot; fill=&quot;#c62828&quot;&gt;不停服&quot;全+增&quot;&lt;/text&gt;
-      &lt;text x=&quot;716&quot; y=&quot;246&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;矩阵里没有 X2G 这一项&lt;/text&gt;
-
-      &lt;rect x=&quot;44&quot; y=&quot;312&quot; width=&quot;952&quot; height=&quot;82&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#9cc3ff&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;340&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;这意味着什么&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;366&quot; font-size=&quot;11&quot; fill=&quot;#3a4a63&quot;&gt;迁移窗口内源库要停写（或者你自己做双写/停服导流），不能指望工具边搬边追增量。对比 MySQL / Oracle 到 GoldenDB 是支持&quot;迁移+同步&quot;的。&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;384&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;排期建议：把结构迁移、SQL 改造、回归测试放在停机窗口之前，窗口里只做全量搬迁 + 校验 + 切换。&lt;/text&gt;
-
+      &lt;!-- 路 A --&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;90&quot; width=&quot;452&quot; height=&quot;182&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#9cc3ff&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;118&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;路 A · Sloth 直连（管道）&lt;/text&gt;
+      &lt;rect x=&quot;64&quot; y=&quot;134&quot; width=&quot;112&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#9cc3ff&quot;/&gt;
+      &lt;text x=&quot;120&quot; y=&quot;156&quot; font-size=&quot;10.5&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;SQL Server&lt;/text&gt;
+      &lt;rect x=&quot;248&quot; y=&quot;134&quot; width=&quot;112&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#dbeafe&quot; stroke=&quot;#9cc3ff&quot;/&gt;
+      &lt;text x=&quot;304&quot; y=&quot;156&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;Sloth&lt;/text&gt;
+      &lt;rect x=&quot;432&quot; y=&quot;134&quot; width=&quot;46&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#9cc3ff&quot;/&gt;
+      &lt;text x=&quot;455&quot; y=&quot;156&quot; font-size=&quot;9.5&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;GDB&lt;/text&gt;
       &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#mg5b)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M140,420 L140,456&quot;/&gt;
+        &lt;path d=&quot;M180,151 L244,151&quot;/&gt;&lt;path d=&quot;M364,151 L428,151&quot;/&gt;
       &lt;/g&gt;
-      &lt;rect x=&quot;44&quot; y=&quot;462&quot; width=&quot;952&quot; height=&quot;30&quot; rx=&quot;8&quot; fill=&quot;#f2f2f7&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;482&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;标准动作：建好目标表 → 配数据源与权限 → 新建全量任务 → 开比对 → 校验差异 → 修复 → 停写切换&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;✓ 中间无文件，工具自带校验与修复&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;220&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;✓ 配置数据源 → 建全量任务 → 开比对&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;244&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;✕ SQLServer 这条路不支持增量同步&lt;/text&gt;
+
+      &lt;!-- 路 B --&gt;
+      &lt;rect x=&quot;528&quot; y=&quot;90&quot; width=&quot;468&quot; height=&quot;182&quot; rx=&quot;13&quot; fill=&quot;#f3efff&quot; stroke=&quot;#d4c8ff&quot;/&gt;
+      &lt;text x=&quot;548&quot; y=&quot;118&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3fc9&quot;&gt;路 B · Loader 文件摆渡&lt;/text&gt;
+      &lt;rect x=&quot;548&quot; y=&quot;134&quot; width=&quot;108&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#d4c8ff&quot;/&gt;
+      &lt;text x=&quot;602&quot; y=&quot;156&quot; font-size=&quot;10.5&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;SQL Server&lt;/text&gt;
+      &lt;rect x=&quot;706&quot; y=&quot;134&quot; width=&quot;112&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#e9dfff&quot; stroke=&quot;#d4c8ff&quot;/&gt;
+      &lt;text x=&quot;762&quot; y=&quot;156&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3fc9&quot; text-anchor=&quot;middle&quot;&gt;CSV 文件&lt;/text&gt;
+      &lt;rect x=&quot;870&quot; y=&quot;134&quot; width=&quot;106&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#d4c8ff&quot;/&gt;
+      &lt;text x=&quot;923&quot; y=&quot;156&quot; font-size=&quot;10.5&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;Loader→GDB&lt;/text&gt;
+      &lt;g stroke=&quot;#5856d6&quot; stroke-width=&quot;1.5&quot; fill=&quot;none&quot; marker-end=&quot;url(#mg5p)&quot;&gt;
+        &lt;path d=&quot;M660,151 L702,151&quot;/&gt;&lt;path d=&quot;M822,151 L866,151&quot;/&gt;
+      &lt;/g&gt;
+      &lt;text x=&quot;548&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#6f6250&quot;&gt;✓ 一批一文件，失败只重导那一批&lt;/text&gt;
+      &lt;text x=&quot;548&quot; y=&quot;220&quot; font-size=&quot;10.5&quot; fill=&quot;#6f6250&quot;&gt;✓ 文件落地后可脱敏、清洗、补列&lt;/text&gt;
+      &lt;text x=&quot;548&quot; y=&quot;244&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;✕ 要自己管文件、自己写校验脚本&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;296&quot; width=&quot;952&quot; height=&quot;76&quot; rx=&quot;13&quot; fill=&quot;#fff8e6&quot; stroke=&quot;#ffd8a8&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;322&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#b26a00&quot;&gt;怎么选&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;346&quot; font-size=&quot;11&quot; fill=&quot;#8a6a3b&quot;&gt;网络通、量中等、想少操心 → 选 Sloth。表很大、两端隔离只能传文件、导出后要清洗脱敏 → 选 Loader。&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;364&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;共同前提：SQLServer 这条路都没有&quot;全+增无缝&quot;，停机窗口里都要停写、补最后一批、比对、再切换。&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;394&quot; width=&quot;952&quot; height=&quot;88&quot; rx=&quot;13&quot; fill=&quot;#f4fbf6&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;420&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;一句话记住&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;446&quot; font-size=&quot;11.5&quot; fill=&quot;#1d7a45&quot;&gt;Sloth 是&quot;管到底&quot;的搬运工：连库、搬、比、修都包了。&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;470&quot; font-size=&quot;11.5&quot; fill=&quot;#1d7a45&quot;&gt;Loader 是&quot;只管往库里写文件&quot;的工具：箱子怎么打包、里面东西对不对，得你自己负责。&lt;/text&gt;
     &lt;/g&gt;
   &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;左右两块对照着看。最核心的一句在中间蓝框：&lt;b&gt;SQLServer 这条路没有&quot;全+增无缝&quot;&lt;/b&gt;，窗口内要停写。这是官方文档功能矩阵里写明的，别按宣传口径排期。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先看上面两条数据流：A 是一条直线连到底，B 中间多了&quot;CSV 文件&quot;这一站。再看每块下方的 ✓ 与 ✕：&lt;b&gt;省事和可控是此消彼长的&lt;/b&gt;。最后蓝框——两条路都得停写，这是 SQLServer 这条路的天花板。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 6 割接回退 --&gt;
+&lt;!-- 6 Loader 文件搬运全流程 --&gt;
 &lt;div class=&quot;card&quot; id=&quot;m6&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;割接当天：按顺序走，并且一定留回退路 &lt;span class=&quot;tag&quot;&gt;落地&lt;/span&gt;&lt;/h2&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;Loader 摆渡全流程：从 bcp 拆批到写入 GoldenDB &lt;span class=&quot;tag&quot;&gt;重点&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;六步走：算主键边界 → bcp 按范围导 CSV → 文件清点 → Loader 读文件 → 失败落盘重导 → 自己写脚本校验。工具只管写，对不对要自己比。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 620&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;defs&gt;
+      &lt;marker id=&quot;mg6b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+    &lt;/defs&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;文件摆渡六步：一步一步都能单独重来&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;按主键范围切批是核心——边界连续不重叠，漏了哪段一眼看得出来&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;92&quot; width=&quot;300&quot; height=&quot;112&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#9cc3ff&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;118&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 算边界 + ② bcp 拆批导出&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;SELECT MIN/MAX(cust_id) → 50 批 × 100 万&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;164&quot; font-size=&quot;10&quot; font-family=&quot;monospace&quot; fill=&quot;#1d1d1f&quot;&gt;bcp &quot;... WHERE cust_id&amp;gt;=1 AND &amp;lt;1000000&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;182&quot; font-size=&quot;10&quot; font-family=&quot;monospace&quot; fill=&quot;#1d1d1f&quot;&gt;queryout crm_customer_001.csv -c -C 65001&lt;/text&gt;
+
+      &lt;rect x=&quot;370&quot; y=&quot;92&quot; width=&quot;300&quot; height=&quot;112&quot; rx=&quot;13&quot; fill=&quot;#f3efff&quot; stroke=&quot;#d4c8ff&quot;/&gt;
+      &lt;text x=&quot;390&quot; y=&quot;118&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3fc9&quot;&gt;③ 文件落地清点&lt;/text&gt;
+      &lt;text x=&quot;390&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#6f6250&quot;&gt;一批一文件，记台账：主键范围 / 行数 / MD5&lt;/text&gt;
+      &lt;text x=&quot;390&quot; y=&quot;164&quot; font-size=&quot;10.5&quot; fill=&quot;#6f6250&quot;&gt;行数对不上先别导，多半是边界写重或漏&lt;/text&gt;
+      &lt;text x=&quot;390&quot; y=&quot;186&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;导出时就把 MONEY / DATETIME2 转好&lt;/text&gt;
+
+      &lt;rect x=&quot;696&quot; y=&quot;92&quot; width=&quot;300&quot; height=&quot;112&quot; rx=&quot;13&quot; fill=&quot;#fff8e6&quot; stroke=&quot;#ffd8a8&quot;/&gt;
+      &lt;text x=&quot;716&quot; y=&quot;118&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#b26a00&quot;&gt;④ Loader 读文件写入&lt;/text&gt;
+      &lt;text x=&quot;716&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3b&quot;&gt;dbtool -loadserver -type=in -sql=&quot;load data infile...&quot;&lt;/text&gt;
+      &lt;text x=&quot;716&quot; y=&quot;164&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3b&quot;&gt;列清单顺序必须和文件完全一致&lt;/text&gt;
+      &lt;text x=&quot;716&quot; y=&quot;186&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3b&quot;&gt;默认走计算节点；-enable-ftp 按分片拆小文件&lt;/text&gt;
+
+      &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#mg6b)&quot; fill=&quot;none&quot;&gt;
+        &lt;path d=&quot;M348,148 L366,148&quot;/&gt;&lt;path d=&quot;M674,148 L692,148&quot;/&gt;
+      &lt;/g&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;234&quot; width=&quot;476&quot; height=&quot;130&quot; rx=&quot;13&quot; fill=&quot;#fff7f6&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;260&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;⑤ 失败数据落盘 → 修 → 重导&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;286&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;读线程 → 解析线程（校验）→ 执行线程（写库）→ 失败落盘线程&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;310&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;别整批重来：看失败文件，修好只重导那一批&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;334&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;主键冲突：replace（覆盖）放 into 前 / ignore（跳过）&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;354&quot; font-size=&quot;10&quot; fill=&quot;#a9342e&quot;&gt;-errorignore=N 别设太大，掩盖错误比整批失败更危险&lt;/text&gt;
+
+      &lt;rect x=&quot;546&quot; y=&quot;234&quot; width=&quot;450&quot; height=&quot;130&quot; rx=&quot;13&quot; fill=&quot;#f4fbf6&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+      &lt;text x=&quot;566&quot; y=&quot;260&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;⑥ 自己写脚本校验（Loader 不管）&lt;/text&gt;
+      &lt;text x=&quot;566&quot; y=&quot;286&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot;&gt;行数：每批文件行数 vs 目标库该主键范围 COUNT&lt;/text&gt;
+      &lt;text x=&quot;566&quot; y=&quot;310&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot;&gt;主键：源端与目标端 cust_id 集合做差集&lt;/text&gt;
+      &lt;text x=&quot;566&quot; y=&quot;334&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot;&gt;金额：商机表 SUM 对总；抽样看中文名 / id_no / guid&lt;/text&gt;
+      &lt;text x=&quot;566&quot; y=&quot;354&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;行数对不代表字段对，乱码和截断只能逐字段看&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;392&quot; width=&quot;952&quot; height=&quot;88&quot; rx=&quot;13&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;418&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;文件格式的六个坑&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;442&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;① 客户名里有逗号 → optionally enclosed by &#39;&quot;&#39;　② ,, 要设 -loadin-support-null=1 才是 NULL&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;464&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;③ DATETIME2 先 CONVERT(varchar(19),...,120)　④ 导出 -C 65001 / 文件 UTF-8 / 表 UTF-8 全链路一致　⑤ 行尾干净　⑥ 列清单写全&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;504&quot; width=&quot;952&quot; height=&quot;96&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#9cc3ff&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;530&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;割接时怎么做最后一批&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;554&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;两条路都没有增量同步：停写 → 把最后一批文件重新导出（此时数据已定格）→ 导入 → 比对 → 切应用。&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;578&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;回退开关提前留好：源库保持只读不删、连接串做成配置、切回后的新数据要有反向同步通道。&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上排三步是&quot;导出侧&quot;，下排两步是&quot;导入 + 校验&quot;。最关键的两处：&lt;b&gt;② 按主键范围拆批&lt;/b&gt;（不要按时间或页号），&lt;b&gt;⑥ 校验自己写&lt;/b&gt;（Loader 只报成功/失败行数，不保证字段对）。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 7 割接回退 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m7&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;7&lt;/span&gt;割接当天：按顺序走，并且一定留回退路 &lt;span class=&quot;tag&quot;&gt;落地&lt;/span&gt;&lt;/h2&gt;
     &lt;p&gt;迁移成功不等于切换成功。割接窗口里最重要的是&quot;可回退&quot;——任何一步对不上，都要能原路退回去。&lt;/p&gt;
   &lt;/div&gt;
   &lt;svg viewBox=&quot;0 0 1040 490&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
@@ -795,7 +915,7 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
       &lt;rect x=&quot;44&quot; y=&quot;94&quot; width=&quot;620&quot; height=&quot;330&quot; rx=&quot;13&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
       &lt;g font-size=&quot;11&quot;&gt;
         &lt;text x=&quot;64&quot; y=&quot;124&quot; fill=&quot;#007aff&quot;&gt;① 停写公告&lt;/text&gt;&lt;text x=&quot;160&quot; y=&quot;124&quot; fill=&quot;#6e6e73&quot;&gt;冻结 CRM 写入，确认无在途事务&lt;/text&gt;
-        &lt;text x=&quot;64&quot; y=&quot;158&quot; fill=&quot;#007aff&quot;&gt;② 最终增量&lt;/text&gt;&lt;text x=&quot;160&quot; y=&quot;158&quot; fill=&quot;#6e6e73&quot;&gt;把停写前最后一批数据补搬&lt;/text&gt;
+        &lt;text x=&quot;64&quot; y=&quot;158&quot; fill=&quot;#007aff&quot;&gt;② 最后批次补导&lt;/text&gt;&lt;text x=&quot;160&quot; y=&quot;158&quot; fill=&quot;#6e6e73&quot;&gt;停写后重导最后一批，数据已定格&lt;/text&gt;
         &lt;text x=&quot;64&quot; y=&quot;192&quot; fill=&quot;#007aff&quot;&gt;③ 全量校验&lt;/text&gt;&lt;text x=&quot;160&quot; y=&quot;192&quot; fill=&quot;#6e6e73&quot;&gt;行数 / 主键 / 金额汇总比对&lt;/text&gt;
         &lt;text x=&quot;64&quot; y=&quot;226&quot; fill=&quot;#007aff&quot;&gt;④ 差异修复&lt;/text&gt;&lt;text x=&quot;160&quot; y=&quot;226&quot; fill=&quot;#6e6e73&quot;&gt;对不上的记录修完再比一次&lt;/text&gt;
         &lt;text x=&quot;64&quot; y=&quot;260&quot; fill=&quot;#5856d6&quot;&gt;⑤ 应用切库&lt;/text&gt;&lt;text x=&quot;160&quot; y=&quot;260&quot; fill=&quot;#6e6e73&quot;&gt;改连接串，灰度放几个客户经理试&lt;/text&gt;
@@ -905,17 +1025,17 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 &lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;
-" sandbox="allow-scripts" loading="lazy" style="height:1150px"></iframe></figure>
+" sandbox="allow-scripts" loading="lazy" style="height:1350px"></iframe></figure>
   </div>
 </article>
-<nav class="toc" aria-label="文章目录"><div class="toc-head"><span class="toc-title">本页目录</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a></div><div class="toc-group"><a href="#sec-1" class="">先把全局看清：四道关</a></div><div class="toc-group"><a href="#sec-2" class="">第一关：建表结构怎么改</a><a href="#sec-3" class="lv3">字段类型对照</a></div><div class="toc-group"><a href="#sec-4" class="">第二关：分片键怎么选</a></div><div class="toc-group"><a href="#sec-5" class="">第三关：T-SQL 怎么转成 MySQL 写法</a></div><div class="toc-group"><a href="#sec-6" class="">第四关：数据怎么搬——Sloth 能做什么、不能做什么</a></div><div class="toc-group"><a href="#sec-7" class="">割接当天：七步走，并留好回退路</a></div><div class="toc-group"><a href="#sec-8" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-9" class="">参考出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">SQL Server 迁 GoldenDB 图解（六张图）</a></div></nav>
+<nav class="toc" aria-label="文章目录"><div class="toc-head"><span class="toc-title">本页目录</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a></div><div class="toc-group"><a href="#sec-1" class="">先把全局看清：四道关</a></div><div class="toc-group"><a href="#sec-2" class="">第一关：建表结构怎么改</a><a href="#sec-3" class="lv3">字段类型对照</a></div><div class="toc-group"><a href="#sec-4" class="">第二关：分片键怎么选</a></div><div class="toc-group"><a href="#sec-5" class="">第三关：T-SQL 怎么转成 MySQL 写法</a></div><div class="toc-group"><a href="#sec-6" class="">第四关：数据怎么搬——Sloth 直连，还是 Loader 摆渡</a><a href="#sec-7" class="lv3">为什么项目里常常选文件摆渡</a><a href="#sec-8" class="lv3">第一步：SQL Server 端按主键范围拆批</a><a href="#sec-9" class="lv3">第二步：文件落地，先清点再往下走</a><a href="#sec-10" class="lv3">第三步：Loader 读文件写入 GoldenDB</a><a href="#sec-11" class="lv3">第四步：失败数据落盘，修完再导</a><a href="#sec-12" class="lv3">第五步：校验——Loader 不替你比数据</a><a href="#sec-13" class="lv3">文件格式的六个坑</a></div><div class="toc-group"><a href="#sec-14" class="">割接当天：七步走，并留好回退路</a></div><div class="toc-group"><a href="#sec-15" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-16" class="">参考出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">SQL Server 迁 GoldenDB 图解（七张图）</a></div></nav>
 </div>
 </main>
 <div class="detail-actions"><a class="back-fab" href="../index.html" aria-label="返回文章列表"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>返回列表</a><button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button></div><div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
   <div class="toc-backdrop" data-toc-close></div>
   <div class="toc-panel">
-    <div class="toc-panel-head"><span>本页目录 · 10 节</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
-    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先把全局看清：四道关</a></div><div class="toc-group"><a href="#sec-2" class="">第一关：建表结构怎么改</a><a href="#sec-3" class="lv3">字段类型对照</a></div><div class="toc-group"><a href="#sec-4" class="">第二关：分片键怎么选</a></div><div class="toc-group"><a href="#sec-5" class="">第三关：T-SQL 怎么转成 MySQL 写法</a></div><div class="toc-group"><a href="#sec-6" class="">第四关：数据怎么搬——Sloth 能做什么、不能做什么</a></div><div class="toc-group"><a href="#sec-7" class="">割接当天：七步走，并留好回退路</a></div><div class="toc-group"><a href="#sec-8" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-9" class="">参考出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">SQL Server 迁 GoldenDB 图解（六张图）</a></div></nav>
+    <div class="toc-panel-head"><span>本页目录 · 17 节</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先把全局看清：四道关</a></div><div class="toc-group"><a href="#sec-2" class="">第一关：建表结构怎么改</a><a href="#sec-3" class="lv3">字段类型对照</a></div><div class="toc-group"><a href="#sec-4" class="">第二关：分片键怎么选</a></div><div class="toc-group"><a href="#sec-5" class="">第三关：T-SQL 怎么转成 MySQL 写法</a></div><div class="toc-group"><a href="#sec-6" class="">第四关：数据怎么搬——Sloth 直连，还是 Loader 摆渡</a><a href="#sec-7" class="lv3">为什么项目里常常选文件摆渡</a><a href="#sec-8" class="lv3">第一步：SQL Server 端按主键范围拆批</a><a href="#sec-9" class="lv3">第二步：文件落地，先清点再往下走</a><a href="#sec-10" class="lv3">第三步：Loader 读文件写入 GoldenDB</a><a href="#sec-11" class="lv3">第四步：失败数据落盘，修完再导</a><a href="#sec-12" class="lv3">第五步：校验——Loader 不替你比数据</a><a href="#sec-13" class="lv3">文件格式的六个坑</a></div><div class="toc-group"><a href="#sec-14" class="">割接当天：七步走，并留好回退路</a></div><div class="toc-group"><a href="#sec-15" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-16" class="">参考出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">SQL Server 迁 GoldenDB 图解（七张图）</a></div></nav>
   </div>
 </div>
 
