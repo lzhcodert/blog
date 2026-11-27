@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>缓存穿透、击穿、雪崩：三张图讲明白三种&quot;缓存没挡住&quot; · 札记</title>
+<title>手机银行到底是个什么系统？给没接触过的程序员一张上下游地图 · 札记</title>
 <style>
 
 /* ============ 主题变量（支持浅色/深色） ============ */
@@ -365,144 +365,96 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <main class="pad">
 <div class="detail-wrap">
 <article class="article">
-  <div class="article-meta-top"><span class="dot" style="background:#5ac8fa"></span>数据库</div>
-  <h1 class="article-title">缓存穿透、击穿、雪崩：三张图讲明白三种&quot;缓存没挡住&quot;</h1>
-  <div class="article-meta">2026-11-27 · 21 分钟阅读</div>
+  <div class="article-meta-top"><span class="dot" style="background:#5856d6"></span>行业观察</div>
+  <h1 class="article-title">手机银行到底是个什么系统？给没接触过的程序员一张上下游地图</h1>
+  <div class="article-meta">2026-11-27 · 19 分钟阅读</div>
   <div class="article-body">
-<p>缓存出事的时候，告警长得都差不多：<strong>数据库 QPS 突然涨、接口变慢、连接池快打满</strong>。</p>
-<p>但根子可能完全不同。有人连夜加 Redis 节点，有人急着上布隆过滤器，还有人把 TTL 全改长——结果药不对症。</p>
-<p>先把三句话记住：</p>
-<ul><li><strong>穿透</strong>：查的数据<strong>根本不存在</strong>，缓存里没有，数据库里也没有，但请求还源源不断地来。</li><li><strong>击穿</strong>：一个<strong>特别热的 key 恰好过期</strong>，几十万请求同时发现缓存没了，一起扑向数据库。</li><li><strong>雪崩</strong>：<strong>一大片 key 同时过期</strong>，或者缓存集群整体挂了，所有请求一起失去保护。</li></ul>
-<p>再压成一句更好记的：<strong>穿透是&quot;查无此人&quot;，击穿是&quot;一个人恰好下班&quot;，雪崩是&quot;整条街同时停电&quot;。</strong></p>
-<blockquote>说明：这三个词主要是中文工程圈的说法。Redis 官方博客里更常看到 <strong>cache stampede / thundering herd</strong>（对应击穿）和 <strong>cache avalanche</strong>（对应雪崩）；&quot;穿透&quot;在英文资料里通常归入&quot;查询不存在的 key 导致反复 cache miss&quot;，用空值缓存或布隆过滤器来讨论。</blockquote>
-<h2 id="sec-1">先把基准线立住：缓存本来是怎么挡数据库的</h2>
-<p>绝大多数系统用的是 <strong>Cache-Aside（旁路缓存）</strong>：</p>
-<ol><li>应用先读缓存。</li><li>命中就直接用，数据库完全不知道这次请求。</li><li>未命中才查数据库，查完顺手写回缓存，设一个 TTL。</li><li>下一次同样的请求就能命中。</li></ol>
-<p>所以缓存能挡住数据库，靠两个前提：</p>
-<ul><li><strong>缓存里有这个值</strong>；</li><li><strong>用户查的值在数据库里确实存在</strong>。</li></ul>
-<p>三种事故，本质上就是把这两个前提打破：</p>
-<table><thead><tr><th>被打破的前提</th><th>对应事故</th></tr></thead><tbody><tr><td>数据库里压根没这个值</td><td>穿透</td></tr><tr><td>有这个值，但缓存刚好空了一瞬</td><td>击穿</td></tr><tr><td>一大批值同时没了，缓存层整体失守</td><td>雪崩</td></tr></tbody></table>
-<p>下面配的六张图，第一张是正常流程，第二张是总览，第三到第五张分别拆三个事故，第六张是落地清单。每张图下面都有&quot;怎么看&quot;，照着读就行。</p>
-<h2 id="sec-2">穿透：数据库反复被问&quot;这个人存不存在&quot;</h2>
-<h3 id="sec-3">它到底是什么</h3>
-<p>假设你有个商品详情接口 <code>/product?id=1001</code>。</p>
-<p>正常用户查 <code>1001</code>，缓存有就返回。但爬虫或者攻击者开始查：</p>
-<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>id = -1
-id = 99999999
-id = &quot;abc&quot;
-id = 1001&#39; OR &#39;1&#39;=&#39;1</code></pre></div></div>
-<p>这些 key 在缓存里当然没有。请求就穿过缓存问数据库：&quot;有这个商品吗？&quot;数据库查完回答：&quot;没有。&quot;然后<strong>这个&quot;没有&quot;没被记下来</strong>。</p>
-<p>下一个同样的请求来了，再查一次数据库；换个随机 id，又查一次。缓存形同虚设，数据库一直在干无效活。</p>
-<blockquote><strong>穿透的关键不是&quot;查不到&quot;，而是&quot;查不到这件事没有被记住&quot;。</strong></blockquote>
-<h3 id="sec-4">为什么它特别容易被忽略</h3>
-<p>穿透不像雪崩那样轰然倒下。它常常表现为：</p>
-<ul><li>数据库 QPS 比平时高一点，但没到告警线；</li><li>慢查询里看不到特别吓人的 SQL；</li><li>缓存命中率缓慢下降，而不是断崖式下跌；</li><li>日志里大量请求返回&quot;数据不存在&quot;。</li></ul>
-<p>结果就是：大家盯着 CPU、连接数看半天，没发现有人在拿不存在的 id 反复敲门。</p>
-<h3 id="sec-5">两道防线</h3>
-<p><strong>防线 1：布隆过滤器（Bloom Filter）</strong></p>
-<p>在缓存前面放一个&quot;门卫名册&quot;。请求来了先问它：&quot;这个 id 可能存在吗？&quot;</p>
-<p>布隆过滤器的性格很特别：</p>
-<blockquote>它说&quot;不存在&quot;，那就<strong>一定不存在</strong>，直接拦掉；它说&quot;存在&quot;，只是<strong>可能存在</strong>，还要继续往下查。</blockquote>
-<p>Redis 官方文档对这种不对称性写得很直白：如果报告 absent，那肯定 absent；如果报告 present，还有很小概率其实 absent。也就是说，布隆过滤器<strong>不会放过真正不存在的 key</strong>（代价是可能误杀几个存在的 key，让你多做一次数据库查询）。</p>
-<p>Redis 里可以用 Bloom 模块的命令：</p>
-<div class="code-block"><div class="code-bar"><span class="code-lang">redis</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>BF.EXISTS product_filter 1001</code></pre></div></div>
-<p>返回 0 就直接返回空，连 Redis 缓存都不用查。</p>
-<p><strong>防线 2：空值缓存</strong></p>
-<p>数据库查出来是 0 行，也往缓存写一条占位值：</p>
-<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>product:1001 = null   TTL = 30~120 秒</code></pre></div></div>
-<p>下次同样的不存在 id 来了，缓存直接命中这个&quot;查无此人&quot;，数据库不用再被问。</p>
-<p>Redis 官方的 Cache-Aside 实践文档也提到这一点：真实系统里可以为缺失记录缓存一个短 TTL 的 &quot;not found&quot; 哨兵，用来吸收探测不存在 ID 的流量；同时哨兵 TTL 要短于正常缓存，这样新建的记录才能尽快被看到。</p>
-<h3 id="sec-6">这里有个坑</h3>
-<p>空值缓存的 TTL 不能太长。</p>
-<p>比如商品 <code>1002</code> 现在不存在，你缓存了 <code>product:1002 = null</code>，TTL 设了 24 小时。结果运营 5 分钟后上架了这个商品，用户查一小时还是&quot;不存在&quot;——这就是自己制造的数据延迟。</p>
-<p><strong>经验值</strong>：空值 TTL 用 30~120 秒就够挡住突发探测，又不至于让新数据半天出不来。</p>
-<h2 id="sec-7">击穿：一个热点 key 过期，几万人同时扑向数据库</h2>
-<h3 id="sec-8">它到底是什么</h3>
-<p>假设首页有个爆款商品 <code>product:1001</code>，每秒 5000 次请求，缓存命中率几乎 100%。</p>
-<p>它的缓存 TTL 是 300 秒。第 300 秒那一刻，key 过期了。</p>
-<p>在这一瞬间：</p>
-<ul><li>请求 A 发现缓存没了，去查数据库；</li><li>请求 B 也发现没了，去查数据库；</li><li>请求 C、D、E……一直到第 5000 个，都发现没了，都去查数据库。</li></ul>
-<p>数据库原本一秒只被问几次（缓存回源），现在一秒被问 5000 次，而且查的是<strong>同一行数据</strong>。</p>
-<blockquote><strong>击穿的关键不是&quot;数据不存在&quot;，而是&quot;同一时刻，同一个 key，大量并发回源&quot;。</strong></blockquote>
-<p>Redis 官方博客把这种模式叫 <strong>cache stampede / thundering herd</strong>：一个热门缓存条目过期时，依赖它的用户全部回退到数据库，用并发查询把数据库压垮。</p>
-<h3 id="sec-9">它和穿透到底差在哪</h3>
-<table><thead><tr><th>对比项</th><th>穿透</th><th>击穿</th></tr></thead><tbody><tr><td>数据存在吗</td><td><strong>不存在</strong></td><td><strong>存在</strong></td></tr><tr><td>缓存里为什么没有</td><td>从来就没东西可存</td><td>恰好过期 / 被删</td></tr><tr><td>请求特征</td><td>很多不同的不存在 key</td><td>大量请求打同一个 key</td></tr><tr><td>持续时间</td><td>一直有，直到上防线</td><td>一波尖刺，回写后恢复</td></tr><tr><td>典型药方</td><td>布隆过滤器 + 空值缓存</td><td>单飞锁 + 逻辑过期</td></tr></tbody></table>
-<p>一句话：<strong>穿透查的是&quot;没有的东西&quot;，击穿抢的是&quot;同一份东西&quot;。</strong></p>
-<h3 id="sec-10">药方 1：互斥锁 / single-flight</h3>
-<p>核心思想：<strong>同一时刻，只让一个人去查数据库，其他人等结果。</strong></p>
-<p>Redis 里常用 <code>SET lock_key token NX PX ttl</code> 抢锁：</p>
-<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>抢到锁 → 查 DB → 写缓存 → 释放锁
-没抢到 → 等一小会儿 → 再读缓存 → 拿到就返回</code></pre></div></div>
-<p>Redis 官方的 Cache-Aside 示例里用的就是这个思路：用 Lua 脚本原子地 <code>SET NX PX</code> 抢锁，只有拿到锁的任务去查主存储；其他任务短暂轮询缓存，等锁持有者写回。释放锁时还要校验 token，避免自己的锁超时后被别人续上、结果误删了别人的锁。</p>
-<h3 id="sec-11">药方 2：逻辑过期 + 后台刷新</h3>
-<p>另一种思路更&quot;用户友好&quot;：<strong>缓存值不真正删掉，只在里面记一个过期时间。</strong></p>
-<ul><li>请求来了，发现值&quot;逻辑上过期了&quot;；</li><li>先把旧值返回给用户，接口不卡；</li><li>同时异步起一个任务去查数据库、更新缓存；</li><li>下一个请求拿到就是新值。</li></ul>
-<p>Redis 官方在讲 cache stampede 时也提到 <strong>probabilistic early expiration</strong>（如 XFetch）：不等到真正过期，而是按概率提前刷新热 key，把回源动作错开。</p>
-<p>两种药方怎么选：</p>
-<ul><li><strong>不能接受旧数据</strong>（比如库存、价格）：用互斥锁，宁可让用户等几十毫秒。</li><li><strong>能接受秒级旧数据</strong>（比如文章阅读数、首页推荐）：用逻辑过期，体验更顺。</li></ul>
-<h2 id="sec-12">雪崩：一大片 key 同时失效，缓存层整体失守</h2>
-<h3 id="sec-13">它到底是什么</h3>
-<p>雪崩有两种常见起因：</p>
-<p><strong>起因 A：TTL 设得太齐。</strong></p>
-<p>上线时图省事，所有缓存都写 <code>TTL = 300s</code>。于是它们在同一时刻集体过期。那一秒，命中率从 99% 掉到 0，所有请求一起找数据库。</p>
-<p><strong>起因 B：缓存集群故障。</strong></p>
-<p>Redis 主从切换失败、实例 OOM、网络分区、误执行 <code>FLUSHALL</code>……缓存整体不可用，所有请求同时失去保护。</p>
-<p>Redis 官方博客对 cache avalanche 的描述就是：一次故障把整个缓存冲掉，恢复时所有请求一起打到后端；如果故障持续时间超过 TTL，缓存内容基本失效，后端就要承受全量冷启动负载。</p>
-<h3 id="sec-14">它和击穿到底差在哪</h3>
-<table><thead><tr><th>对比项</th><th>击穿</th><th>雪崩</th></tr></thead><tbody><tr><td>影响范围</td><td><strong>一个</strong>热点 key</td><td><strong>一大片</strong> key，甚至整个缓存层</td></tr><tr><td>典型原因</td><td>单个 key 到期</td><td>TTL 整齐、批量刷新、Redis 故障</td></tr><tr><td>恢复方式</td><td>回写一次缓存就好</td><td>要预热、要限流，恢复慢</td></tr><tr><td>典型药方</td><td>单飞锁、逻辑过期</td><td>TTL 抖动、多级缓存、熔断、高可用</td></tr></tbody></table>
-<p>一句话：<strong>击穿是单点爆，雪崩是全面爆。</strong></p>
-<h3 id="sec-15">四层防线</h3>
-<p><strong>① TTL 抖动（Jitter）</strong></p>
-<p>别让所有 key 活一样久：</p>
-<div class="code-block"><div class="code-bar"><span class="code-lang">text</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>ttl = 基础值 + random(0, 抖动区间)</code></pre></div></div>
-<p>比如基础 300 秒，再加 0~60 秒随机值。这样 key 的过期时间散开，不会整点集体阵亡。</p>
-<p>这是成本最低、最该先做的一条。Redis 官方在讲 stampede 和 avalanche 时都点名了 <strong>TTL jitter</strong>：随机化过期时间，避免大量 key 同时失效。</p>
-<p><strong>② 多级缓存</strong></p>
-<p>进程内缓存（比如本地 Caffeine / Go map）挡在最前面，Redis 挡在第二层。Redis 短暂抖动时，本地缓存还能顶一小会儿。</p>
-<p>代价是本地缓存的失效要处理好：要么 TTL 更短，要么实例间广播失效消息，否则用户会读到各自的旧数据。</p>
-<p><strong>③ 熔断与降级</strong></p>
-<p>当数据库压力超标，直接&quot;跳闸&quot;：</p>
-<ul><li>返回兜底数据（比如&quot;服务繁忙，稍后再试&quot;）；</li><li>或者返回上一次缓存下来的旧值；</li><li>让数据库喘口气，别真挂。</li></ul>
-<p>Redis 官方把 circuit breaker 和 load shedding 列为缓存不可用时的最后防线：<strong>宁可拒绝一部分请求，也别把后端彻底打死。</strong></p>
-<p><strong>④ 缓存高可用</strong></p>
-<p>主从、哨兵、集群、跨可用区部署，避免 Redis 自己成为单点。热点数据提前预热，别等流量来了才现装。</p>
-<h2 id="sec-16">三者放一起对照</h2>
-<table><thead><tr><th></th><th>穿透</th><th>击穿</th><th>雪崩</th></tr></thead><tbody><tr><td>一句话</td><td>查无此人</td><td>一人下班，万人扑空</td><td>全城停电</td></tr><tr><td>数据存在吗</td><td>不存在</td><td>存在</td><td>存在</td></tr><tr><td>缓存为什么没挡住</td><td>没东西可存</td><td>单个热点过期</td><td>大片过期 / 缓存挂了</td></tr><tr><td>数据库承受什么</td><td>持续无效查询</td><td>瞬间尖刺</td><td>全量洪峰</td></tr><tr><td>命中率表现</td><td>缓慢下降</td><td>一个点掉下去又回来</td><td>断崖式下跌，恢复慢</td></tr><tr><td>首选防线</td><td>布隆过滤器 + 空值缓存</td><td>单飞锁 / 逻辑过期</td><td>TTL 抖动 + 熔断</td></tr><tr><td>兜底防线</td><td>接口参数校验</td><td>热点预加载</td><td>多级缓存 + 高可用</td></tr></tbody></table>
-<h2 id="sec-17">术语小抄</h2>
-<table><thead><tr><th>术语</th><th>大白话</th></tr></thead><tbody><tr><td>Cache-Aside</td><td>应用自己管缓存：先查缓存，miss 再查库并回写</td></tr><tr><td>命中 Hit / 未命中 Miss</td><td>缓存里有没有你要的 key</td></tr><tr><td>回源</td><td>缓存没命中，转去查数据库</td></tr><tr><td>TTL</td><td>Time To Live，缓存条目活多久</td></tr><tr><td>缓存空值</td><td>把&quot;查无此人&quot;也当结果缓存一小会儿</td></tr><tr><td>布隆过滤器</td><td>省空间的&quot;可能存在&quot;名册：说没有一定没有，说有不一定有</td></tr><tr><td>误判率 False Positive</td><td>布隆说&quot;有&quot;，其实没有的概率</td></tr><tr><td>Single-flight</td><td>同一时刻，同一个 key 只放一个人去回源</td></tr><tr><td>互斥锁</td><td>用 Redis <code>SET NX PX</code> 抢一个短暂的唯一通行证</td></tr><tr><td>逻辑过期</td><td>值不删，只在里面标&quot;该刷新了&quot;</td></tr><tr><td>XFetch</td><td>按概率提前刷新热 key 的算法，不等真正过期</td></tr><tr><td>Jitter</td><td>抖动，在固定值上加随机数，把时间点打散</td></tr><tr><td>熔断 Circuit Breaker</td><td>压力超标就跳闸，先拒绝一部分请求</td></tr><tr><td>降级</td><td>不返回完整结果，改返回兜底值或旧值</td></tr><tr><td>多级缓存</td><td>本地缓存 + 远程缓存两道防线</td></tr><tr><td>预热</td><td>流量来之前先把热点数据塞进缓存</td></tr><tr><td>热 key</td><td>被极高频率访问的某一个 key</td></tr></tbody></table>
-<h2 id="sec-18">生产上怎么定位：别三种药一起灌</h2>
-<p>告警响了，按这个顺序看：</p>
-<ol><li><strong>缓存命中率</strong>：断崖跌 → 雪崩或击穿；缓慢跌 → 警惕穿透。</li><li><strong>DB QPS 曲线</strong>：尖刺后迅速回落 → 击穿；一直高位 → 穿透；洪峰且久不恢复 → 雪崩。</li><li><strong>空值 key 比例</strong>：突然变高 → 有人在探测不存在的 key，上布隆/空值缓存。</li><li><strong>锁等待数</strong>：某个 key 的 single-flight 等待很多 → 热点 key 在打架。</li><li><strong>Redis 自身指标</strong>：连接数、内存、主从切换、<code>evicted_keys</code> → 判断是否缓存层整体出问题。</li></ol>
-<p>定位清楚再动手：</p>
-<ul><li>查不到 → <strong>空值缓存 + 布隆过滤器</strong>；</li><li>一个热 key 过期 → <strong>单飞锁 + 逻辑过期</strong>；</li><li>大片 key 或缓存挂了 → <strong>TTL 抖动 + 多级缓存 + 熔断 + 高可用</strong>。</li></ul>
-<blockquote>一个常见误区：把 TTL 全改成 24 小时&quot;解决&quot;雪崩。那只是把雪崩推迟到明天，还顺手制造了大量脏数据。<strong>TTL 抖动</strong>才是解法，不是&quot;干脆不过期&quot;。</blockquote>
-<h2 id="sec-19">参考资料</h2>
-<p>下面这些资料都在正文里对应了具体结论：</p>
-<ol><li><strong>Redis Blog · How to tame the thundering herd problem</strong>——thundering herd 的定义、缓存过期/故障如何触发 stampede、无 jitter 的重试如何同步化、以及用缓存和限流削峰的思路。</li></ol>
-<p>&lt;https://redis.io/blog/how-to-tame-the-thundering-herd-problem/&gt;</p>
-<ol><li><strong>Redis Blog · Cache layer architecture: a practical guide to speed &amp; scale</strong>——cache stampede 的 request coalescing、TTL jitter、probabilistic early expiration（XFetch）；cache avalanche 的 refresh-ahead、circuit breaker、load shedding。</li></ol>
-<p>&lt;https://redis.io/blog/cache-layer-architecture-guide&gt;</p>
-<ol><li><strong>Redis Docs · Cache-aside with Jedis / Rust</strong>——缺失记录用短 TTL 的 &quot;not found&quot; 哨兵吸收探测流量；用 Lua + <code>SET NX PX</code> 做 single-flight；锁 TTL 要大于最慢回源耗时，释放时校验 token；写入时删缓存而不是同步改写。</li></ol>
-<p>&lt;https://redis.io/docs/latest/develop/use-cases/cache-aside/rust&gt;</p>
-<ol><li><strong>Redis Docs · Probabilistic data types</strong>——Bloom filter 的不对称性：报告不存在则一定不存在，报告存在则可能误判；固定内存占用。</li></ol>
-<p>&lt;https://redis.io/docs/latest/develop/clients/rust/prob/&gt;</p>
-<ol><li><strong>AWS Whitepaper · Database Caching Strategies Using Redis</strong>——远程缓存（side cache）的定位、Cache-Aside 模式、缓存与数据库的职责边界。</li></ol>
-<p>&lt;https://docs.aws.amazon.com/whitepapers/latest/database-caching-strategies-using-redis/database-caching-strategies-using-redis.pdf&gt;</p>
-<p>文中所有大白话、类比、经验值和参数建议都是我的转述与工程经验，<strong>不代表上述文档的原文措辞</strong>；涉及具体产品能力时，以对应版本文档为准。</p>
+<p>先说一个很多程序员入职银行科技部才会发现的真相：</p>
+<p><strong>手机银行不是一个 App，是一整条流水线。</strong></p>
+<p>你手机桌面上那个图标，只是这条流水线最末端的一小块玻璃。它后面站着网关、中台、服务总线、风控引擎、支付系统、核心系统，还有一堆你听都没听过的支撑系统。你在屏幕上点一下「转账」，背后可能已经跑过十几个系统。</p>
+<p>这篇接续上一篇《银行里几百套系统到底怎么连》，把镜头推到手机银行这一个点上。你要带走的就三件事：</p>
+<ol><li><strong>手机银行在银行版图里站在哪</strong>（定位）</li><li><strong>谁找它、它找谁</strong>（上下游）</li><li><strong>一笔钱到底怎么走</strong>（流程）</li></ol>
+<blockquote>说明：不同银行的手机银行架构差异很大，大行和中小行、个人版和对公版都不一样。文中用江西农商联合银行公开的真实架构案例做样本，其余是行业通用框架。看到和你所在银行不一致的地方很正常，以你行内的实际架构为准。</blockquote>
+<h2 id="sec-1">先看一组真实数字和一条监管红线</h2>
+<p>手机银行早就不是「能查余额就万事大吉」的附带品了。</p>
+<p>公开数据说，2026 年上半年 <strong>140 多款手机银行总月活约 9.59 亿</strong>，同比增长 14% 以上；用户单机单日有效使用时间 3.4 分钟，比去年同期还涨了 8.4%。也就是说，手机银行已经是银行服务客户的主渠道，不是备选渠道。</p>
+<p>监管也早就把它单独立了规矩。人民银行 <strong>JR/T 0092—2019《移动金融客户端应用软件安全管理规范》</strong>把移动金融 App 分成三类，手机银行被归进最严的那一类：</p>
+<table><thead><tr><th>类别</th><th>定义</th><th>举例</th></tr></thead><tbody><tr><td>资金交易类</td><td>直接面向用户提供资金交易服务</td><td><strong>手机银行</strong>、支付 App</td></tr><tr><td>信息采集类</td><td>不直接交易，但采集个人敏感信息</td><td>信贷申请 App 等</td></tr><tr><td>资讯查询类</td><td>只做产品推介、信息查询、资讯推送</td><td>银行资讯类 App</td></tr></tbody></table>
+<p>规范原话是：<strong>资金交易类客户端应用软件应符合资金交易、信息保护等所有技术及管理安全要求。</strong> 它还明确要求身份认证可采用口令、短信验证码、手势密码、生物特征识别等要素；内存中不应存在完整的银行卡密码和网络支付交易密码明文。</p>
+<p><strong>一句话：手机银行是银行里「既要跑得快、又绝对不能出错」的那类系统。</strong> 这个双重要求，直接决定了它的架构长什么样。</p>
+<h2 id="sec-2">一、定位：手机银行是门脸，不是账房</h2>
+<p>先把它放回上一篇那张地图：</p>
+<ul><li><strong>手机银行属于渠道层</strong>，和网银、柜面、ATM、开放银行并列。</li><li>它的职责是<strong>受理请求、渲染结果、做端侧安全校验</strong>。</li><li>它<strong>不存余额、不自己记账、不做最终风控决策</strong>。</li></ul>
+<p>你可能会反驳：我在手机银行上明明看到了余额啊？</p>
+<p>那是核心系统算完返回来的结果，手机银行只是把它画在屏幕上。就像餐厅菜单上写了「今日特价」，菜单本身不管厨房里有没有这道菜。</p>
+<p><strong>记住这条边界，后面所有架构问题都能想通</strong>：界面归 App，判断归中台，记账归核心。</p>
+<h2 id="sec-3">二、五层架构：一家真实银行是怎么搭的</h2>
+<p>空谈分层没意思，看一个公开的真实案例。</p>
+<p>江西农商联合银行 2026 年上线企业手机银行的公开材料里，把平台拆成了<strong>五层</strong>（原文措辞）：</p>
+<blockquote>前端应用层、网关接入层、业务能力层、平台支撑中间件层、后端系统对接层。</blockquote>
+<p>我们逐层翻译成人话：</p>
+<table><thead><tr><th>层</th><th>它干什么</th><th>大白话</th><th>用到的东西（公开案例）</th></tr></thead><tbody><tr><td>前端应用层</td><td>承载 App 页面和业务场景</td><td>用户看得见的那层</td><td>mPaaS + Vue3，兼容 iOS/Android/鸿蒙/H5</td></tr><tr><td>网关接入层</td><td>统一承接请求、流量调度、协议适配、安全管控</td><td>门口的保安兼调度</td><td>交易网关 + API 网关</td></tr><tr><td>业务能力层</td><td>沉淀用户、账户、认证、审批、支付、电子合约等能力</td><td>可复用的业务积木</td><td>中台化，「一次建设、多端复用」</td></tr><tr><td>平台支撑中间件层</td><td>微服务框架、数据库、缓存、消息队列</td><td>地基和水管</td><td>SOFA 框架、国产数据库、Redis、MQ</td></tr><tr><td>后端系统对接层</td><td>连接行内各种业务系统</td><td>插线板</td><td><strong>企业服务总线（ESB）对接 30 余个系统</strong></td></tr></tbody></table>
+<p>最后一行是重点：<strong>手机银行自己不直连那 30 多个系统，是通过企业服务总线（ESB）统一对接的。</strong></p>
+<p>ESB 是什么？可以理解成银行内部的「翻译官 + 总机」：</p>
+<ul><li>手机银行说「我要查余额」，发出的是一种报文格式；</li><li>核心系统只认另一种格式；</li><li>ESB 负责翻译、路由、转发，还要记日志、做限流。</li></ul>
+<p>没有 ESB，每个渠道都要认识每个系统，N 个渠道 × M 个系统 = 一堆意大利面。有了 ESB，变成 N + M。</p>
+<blockquote><strong>这就是手机上银行架构的第一条关键认知</strong>：你在 App 上点的每一个按钮，大概率不是直接打到核心，而是经过网关 → 中台 → ESB → 目标系统这条链路。</blockquote>
+<h2 id="sec-4">三、上游：谁会来找手机银行</h2>
+<p>「上游」指的是<strong>给它派活的一方</strong>。手机银行的上游有四家：</p>
+<ol><li><strong>客户</strong>：最主要的上游。查余额、转账、买理财、缴话费。</li><li><strong>运营后台 / 营销平台</strong>：下发活动配置、弹窗、产品推荐位、功能开关。</li><li><strong>开放银行 / 第三方场景</strong>：工行的开放平台就是典型。第三方 App 调银行 API，最终落到手机银行背后的同一套能力上。</li><li><strong>监管与运维系统</strong>：报送数据、采集行为日志、下发安全策略。</li></ol>
+<p>注意第 2 和第 3 家——它们说明一件事：<strong>手机银行不是一个孤立的 App，它被很多「非用户点击」的力量驱动着。</strong> 你看到首页换个 banner，可能来自运营平台的一条配置，而不是发了一个新版本。</p>
+<h2 id="sec-5">四、下游：手机银行会跟哪些系统打交道</h2>
+<p>「下游」指的是<strong>它被谁服务、它去调用谁</strong>。按调用目的分成六堆：</p>
+<h3 id="sec-6">1. 账务类：核心系统</h3>
+<p>查余额、查明细、转账、存款、贷款还款——最终都要问核心。这是最重要、最不能出错的下游。</p>
+<h3 id="sec-7">2. 支付类：支付清算 / 银联 / 网联 / 央行</h3>
+<ul><li>行内转账：核心自己记借贷两边。</li><li>跨行转账：走行内支付系统，再接 IBPS / HVPS / 银联 / 网联。</li><li>扫码支付：接银联或网联。</li></ul>
+<h3 id="sec-8">3. 身份与客户类：ECIF、统一认证、证件核验</h3>
+<ul><li><strong>ECIF</strong>：把同一个人在各系统的身份拼成一个客户号。</li><li><strong>统一认证平台</strong>：管密码、短信验证码、生物识别、设备绑定。</li><li><strong>公安/运营商接口</strong>：实名核验、手机号三要素验证。</li></ul>
+<h3 id="sec-9">4. 风控安全类：反欺诈、反洗钱、风控引擎</h3>
+<ul><li><strong>反欺诈 / 交易风控</strong>：转账时实时打分，决定放行、二次验证还是拦截。公开案例里，有银行把近 200 个关键交易场景纳入实时风险监测，用「专家规则 + 机器学习模型」双轨决策。</li><li><strong>反洗钱系统</strong>：大额和可疑交易报送。</li><li><strong>设备指纹 / 安全键盘 / TEE</strong>：端侧安全能力。</li></ul>
+<h3 id="sec-10">5. 产品与业务类：信贷、理财、票据、贵金属</h3>
+<p>手机银行上你看到的每一个产品页，背后基本都有一个对应的专业业务系统在供数、受理、回写状态。</p>
+<h3 id="sec-11">6. 支撑类：短信、推送、影像、客服、数据平台</h3>
+<ul><li><strong>短信平台</strong>：验证码和交易通知。</li><li><strong>消息推送</strong>：App 推送。</li><li><strong>影像 / 电子档案</strong>：身份证照片、合同影像、电子回单。</li><li><strong>客服系统</strong>：在线客服、智能助手。</li><li><strong>数据平台 / 埋点</strong>：行为日志、用户画像、经营分析。</li></ul>
+<p><strong>一张表记住</strong>：账务找核心，跨行找支付，身份找认证，安全找风控，产品找业务系统，通知找短信推送。</p>
+<h2 id="sec-12">五、走一遍：登录一次手机银行发生了什么</h2>
+<p>你以为登录就是输密码？实际上至少七步：</p>
+<ol><li><strong>App 启动</strong>：检查版本、拉取配置、初始化安全组件。</li><li><strong>设备识别</strong>：采集设备指纹，判断是否常用设备。</li><li><strong>建立安全通道</strong>：HTTPS + 国密算法加密，校验证书，防中间人攻击。</li><li><strong>提交身份要素</strong>：密码 / 短信验证码 / 指纹或人脸，按风险等级决定要几种。</li><li><strong>网关转发</strong>：交易网关做协议适配和限流，API 网关做鉴权。</li><li><strong>统一认证校验</strong>：认证平台核对身份，可能调风控引擎判断这次登录是否异常。</li><li><strong>发放令牌</strong>：生成一个有时效的登录令牌（token），后面所有请求都带着它。</li></ol>
+<p>每一步都有监管的影子。JR/T 0092 要求身份认证采用适宜的验证要素，还要求「认证流程无法被绕过」——这就是第 6 步必须服务端说了算的原因：<strong>App 自己说「登录成功」不算数。</strong></p>
+<blockquote>常见误区：把登录令牌存在本地就完事。实际上令牌有时效、可吊销，敏感操作还要二次验证。这也是为什么你更换设备后经常要重新验证。</blockquote>
+<h2 id="sec-13">六、走一遍：一笔转账穿过了哪些系统</h2>
+<p>这个流程最能体现「上下游」。以行内转账为例：</p>
+<ol><li><strong>App 组装请求</strong>：收款人、金额、交易密码，用国密算法加密。</li><li><strong>网关校验</strong>：查令牌是否有效、App 签名是否正确、是否限流。</li><li><strong>业务能力层</strong>：交易中心接手，把请求标准化成内部格式。</li><li><strong>风控引擎实时判断</strong>：结合设备、地点、金额、历史行为打分；低风险放行，中风险要二次验证，高风险直接拦。</li><li><strong>ESB 路由</strong>：把标准化请求翻译成核心能懂的报文，转发到核心。</li><li><strong>核心记账</strong>：复式记账，付款账户减、收款账户加，同一事务完成。</li><li><strong>回写状态</strong>：核心返回成功，逐层回传到 App 显示「转账成功」。</li><li><strong>通知</strong>：短信平台和消息推送分别发通知。</li><li><strong>事后</strong>：这笔交易被写入日志，进入数据平台；如果命中规则，反洗钱系统生成报送记录；运营平台拿到一条埋点数据，用于分析功能使用情况。</li></ol>
+<p><strong>九个步骤里，App 真正参与的只有第 1 步和第 7 步的展示。</strong> 剩下全是后台系统在接力。</p>
+<p>如果是跨行转账，第 5 步之后还要多走一段：核心 → 行内支付系统 → IBPS/HVPS/银联/网联 → 对方银行 → 回执原路返回。这部分上一篇讲过。</p>
+<h2 id="sec-14">七、安全不是一层，是四道防线</h2>
+<p>手机银行的安全不是某一个模块，而是<strong>每一层都得有</strong>：</p>
+<table><thead><tr><th>防线</th><th>管什么</th><th>典型手段</th></tr></thead><tbody><tr><td>设备安全</td><td>手机本身可信吗</td><td>设备指纹、安全键盘、防截屏、TEE 可信执行环境</td></tr><tr><td>通信安全</td><td>传输途中会被偷看吗</td><td>HTTPS、国密算法、数字证书、防中间人</td></tr><tr><td>身份认证</td><td>你是不是你</td><td>口令、短信验证码、手势、生物识别、多因素认证</td></tr><tr><td>交易风控</td><td>这次操作本身可疑吗</td><td>实时反欺诈、行为分析、规则引擎 + 机器学习双轨</td></tr></tbody></table>
+<p>公开案例里，渤海银行把「FIDO + 数字证书」用于登录和大额转账，实现「数字证书 + 生物识别」的多层级防控；北京银行把近 200 个关键交易场景纳入实时风险监测。<strong>这些都是四道防线在不同银行的具体落地。</strong></p>
+<p>JR/T 0092 还从管理角度提了四个要求：<strong>设计、开发、发布、维护</strong>。比如发布时要「拥有独立的安装目录、唯一的应用标识符、明确的版本序号」，维护时要规范日常运维流程。<strong>也就是说，手机银行的系统边界不止是线上服务，还包括应用市场发版、热修复、灰度发布这一整套工程链路。</strong></p>
+<h2 id="sec-15">八、常见误区</h2>
+<table><thead><tr><th>误区</th><th>真相</th></tr></thead><tbody><tr><td>手机银行里显示余额，所以余额存在 App 里</td><td>余额是核心算完返回的结果，App 只负责画出来</td></tr><tr><td>转账是 App 直接调核心</td><td>中间还有网关、中台、风控、ESB，很少直连</td></tr><tr><td>App 说登录成功就是成功了</td><td>令牌由服务端发放，敏感操作还要二次验证</td></tr><tr><td>手机银行和网银是两套完全独立的系统</td><td>前端不同，但中台能力和后端系统大量复用</td></tr><tr><td>风控是核心系统的事</td><td>风控是外围系统，有权拦截，但无权记账</td></tr><tr><td>发版只是把包传应用市场</td><td>还有配置下发、灰度、热修复、版本管控的完整链路</td></tr><tr><td>开放银行和手机银行没关系</td><td>开放银行复用同一套金融能力，只是入口不同</td></tr></tbody></table>
+<h2 id="sec-16">九、术语小抄</h2>
+<ul><li><strong>ESB（企业服务总线）</strong>：银行内部的总机兼翻译官，统一转接渠道和后端系统。</li><li><strong>API 网关</strong>：管外部 API 的入口，负责鉴权、限流、路由。</li><li><strong>交易网关</strong>：管行内交易报文的接入，做协议适配和流量调度。</li><li><strong>中台 / 业务能力层</strong>：把用户、账户、认证、支付等共性能力沉淀下来，多渠道复用。</li><li><strong>令牌（token）</strong>：登录后发放的有时效的凭证，后续请求都靠它证明身份。</li><li><strong>国密算法</strong>：国家密码主管部门认可的密码算法，金融 App 的硬要求。</li><li><strong>TEE</strong>：可信执行环境，手机里的一块隔离区域，放指纹、密钥这类敏感数据。</li><li><strong>FIDO</strong>：一套在线身份认证标准，支持生物识别等无密码登录。</li><li><strong>设备指纹</strong>：把设备特征合成一个标识，用来识别是不是常用手机。</li><li><strong>风控引擎</strong>：实时给交易打分的系统，决定放行、验证还是拦截。</li><li><strong>埋点</strong>：在 App 里记录用户行为，给数据分析用。</li><li><strong>热修复</strong>：不发新版本就修掉线上 Bug 的技术。</li><li><strong>JR/T 0092—2019</strong>：移动金融客户端应用软件安全管理规范，手机银行按最严的「资金交易类」管。</li><li><strong>五统一</strong>：统一用户、统一账户、统一权限、统一视图、统一风控，江西农商案例里的建设标准。</li></ul>
+<h2 id="sec-17">十、权威出处</h2>
+<ol><li>中国人民银行 JR/T 0092—2019《移动金融客户端应用软件安全管理规范》——App 三类划分、手机银行属资金交易类、身份认证与数据安全要求。</li><li>电子银行网（2026-10-30）《江西农商联合银行：信创赋能·数智协同》——五层架构原文、ESB 对接 30 余个系统、五统一、风控与运营数据。</li><li>中国金融电脑 / 金科创新社《广西农商联合银行：新一代互联网金融平台》——端云一体化、App 层/核心服务层/底层基础层三层架构、四大核心服务。</li><li>三个皮匠报告《手机银行 APP：定义、发展历程、技术架构与竞争格局》——四层架构、安全体系四层、渤海银行与北京银行实践。</li><li>三个皮匠报告《银行应用》——2026 上半年 140 多款手机银行月活 9.59 亿等市场数据、典型转账流程。</li><li>人民银行清算总中心《持续推进支付体系高质量发展》——跨行支付清算基础设施口径。</li><li>简米科技《手机银行需要哪些服务器支撑》——接入层/应用层/数据层的工程视角（行业实践观点，非监管口径）。</li><li>上一篇《银行里几百套系统到底怎么连？》——三层两条线的整体框架。</li></ol>
+<hr>
+<p><strong>最后一句话</strong>：手机银行不是一个 App，是「一条流水线 + 四个方向」。流水线是网关 → 中台 → ESB → 后端系统；四个方向是上游谁来找它、下游它找谁、安全怎么护着它、运营怎么养着它。下次听到「手机银行系统」这个词，别再只想到手机屏幕——想到那条流水线，你就已经有上帝视角了。</p>
   </div>
   <div class="article-embeds">
-    <h2 id="sec-embeds">缓存三兄弟图解（六张图）</h2>
-<figure class="embed-figure"><figcaption><span>图 1 正常流程 / 图 2 三兄弟总览 / 图 3 穿透 / 图 4 击穿 / 图 5 雪崩 / 图 6 落地清单（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/cache-accidents.html" data-modal-title="缓存穿透、击穿、雪崩：三张图讲明白三种&quot;缓存没挡住&quot; · 图 1 正常流程 / 图 2 三兄弟总览 / 图 3 穿透 / 图 4 击穿 / 图 5 雪崩 / 图 6 落地清单（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 正常流程 / 图 2 三兄弟总览 / 图 3 穿透 / 图 4 击穿 / 图 5 雪崩 / 图 6 落地清单（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+    <h2 id="sec-embeds">手机银行架构与上下游图解（六张图）</h2>
+<figure class="embed-figure"><figcaption><span>图 1 · 定位 / 五层架构 / 上下游 / 登录流程 / 转账流程 / 安全发布（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/mobile-banking-architecture.html" data-modal-title="手机银行到底是个什么系统？给没接触过的程序员一张上下游地图 · 图 1 · 定位 / 五层架构 / 上下游 / 登录流程 / 转账流程 / 安全发布（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 定位 / 五层架构 / 上下游 / 登录流程 / 转账流程 / 安全发布（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
-&lt;title&gt;缓存穿透、击穿、雪崩 · 六张图讲明白&lt;/title&gt;
+&lt;title&gt;手机银行架构与上下游 · 六张图讲明白&lt;/title&gt;
 &lt;style&gt;
   :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 44px}
-  .hero{background:linear-gradient(135deg,#ff9500,#ff3b30 48%,#5856d6);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(180,60,40,.22)}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
   .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
   .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
   .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
@@ -531,450 +483,422 @@ id = 1001&#39; OR &#39;1&#39;=&#39;1</code></pre></div></div>
 &lt;/head&gt;
 &lt;body&gt;
 &lt;div class=&quot;hero&quot;&gt;
-  &lt;h1&gt;缓存三兄弟：查不到、刚好过期、一起过期&lt;/h1&gt;
-  &lt;p&gt;三种事故都是&quot;缓存没挡住，流量砸到数据库&quot;，但触发原因完全不同。六张图从正常流程讲到生产防线，先看图再看正文，一眼就能对上号。&lt;/p&gt;
+  &lt;h1&gt;手机银行架构与上下游：给程序员的一张地图&lt;/h1&gt;
+  &lt;p&gt;手机银行不是一个 App，是一条流水线。用「谁找它、它找谁、一笔钱怎么走」三个问题，把网关、中台、总线、核心串起来。&lt;/p&gt;
 &lt;/div&gt;
 &lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
 &lt;div class=&quot;nav&quot;&gt;
-  &lt;a href=&quot;#c1&quot;&gt;正常流程&lt;/a&gt;&lt;a href=&quot;#c2&quot;&gt;三兄弟总览&lt;/a&gt;&lt;a href=&quot;#c3&quot;&gt;穿透&lt;/a&gt;&lt;a href=&quot;#c4&quot;&gt;击穿&lt;/a&gt;&lt;a href=&quot;#c5&quot;&gt;雪崩&lt;/a&gt;&lt;a href=&quot;#c6&quot;&gt;落地清单&lt;/a&gt;
+  &lt;a href=&quot;#m1&quot;&gt;定位&lt;/a&gt;&lt;a href=&quot;#m2&quot;&gt;五层架构&lt;/a&gt;&lt;a href=&quot;#m3&quot;&gt;上下游全景&lt;/a&gt;&lt;a href=&quot;#m4&quot;&gt;登录流程&lt;/a&gt;&lt;a href=&quot;#m5&quot;&gt;转账流程&lt;/a&gt;&lt;a href=&quot;#m6&quot;&gt;安全与发布&lt;/a&gt;
 &lt;/div&gt;
 
-&lt;!-- 1 正常流程 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c1&quot;&gt;
+&lt;!-- 1 定位 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m1&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;先看正常情况：缓存是怎么替数据库挡枪的 &lt;span class=&quot;tag&quot;&gt;基准线&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;记住这一张图就够了：命中就直接返回；未命中才回源查数据库，查完顺手回写缓存，让下一次请求命中。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 430&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;defs&gt;
-      &lt;marker id=&quot;ca1b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ca1g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ca1p&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#5856d6&quot;/&gt;&lt;/marker&gt;
-    &lt;/defs&gt;
-    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;正常缓存：绝大多数请求应该停在 Redis 这一层&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;缓存命中 = 省掉一次数据库查询；未命中 = 回源一次，再写回缓存&lt;/text&gt;
-
-      &lt;rect x=&quot;44&quot; y=&quot;118&quot; width=&quot;150&quot; height=&quot;62&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
-      &lt;text x=&quot;119&quot; y=&quot;143&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;用户请求&lt;/text&gt;
-      &lt;text x=&quot;119&quot; y=&quot;163&quot; font-size=&quot;10.5&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;查商品 id=1001&lt;/text&gt;
-
-      &lt;rect x=&quot;272&quot; y=&quot;104&quot; width=&quot;210&quot; height=&quot;90&quot; rx=&quot;13&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#9cc3ff&quot; stroke-width=&quot;1.5&quot;/&gt;
-      &lt;text x=&quot;377&quot; y=&quot;134&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;Redis 缓存&lt;/text&gt;
-      &lt;text x=&quot;377&quot; y=&quot;156&quot; font-size=&quot;11&quot; fill=&quot;#3a4a63&quot; text-anchor=&quot;middle&quot;&gt;key: product:1001&lt;/text&gt;
-      &lt;text x=&quot;377&quot; y=&quot;176&quot; font-size=&quot;10.5&quot; fill=&quot;#5a6b85&quot; text-anchor=&quot;middle&quot;&gt;TTL = 300s&lt;/text&gt;
-
-      &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca1b)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M198,149 C222,149 240,149 266,149&quot;/&gt;
-      &lt;/g&gt;
-
-      &lt;rect x=&quot;592&quot; y=&quot;88&quot; width=&quot;190&quot; height=&quot;58&quot; rx=&quot;11&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;687&quot; y=&quot;111&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;命中：直接返回&lt;/text&gt;
-      &lt;text x=&quot;687&quot; y=&quot;131&quot; font-size=&quot;10.5&quot; fill=&quot;#5a7a68&quot; text-anchor=&quot;middle&quot;&gt;数据库完全不知道这次请求&lt;/text&gt;
-      &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca1g)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M486,132 C528,116 548,117 586,117&quot;/&gt;
-      &lt;/g&gt;
-      &lt;text x=&quot;508&quot; y=&quot;106&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;命中&lt;/text&gt;
-
-      &lt;rect x=&quot;592&quot; y=&quot;202&quot; width=&quot;190&quot; height=&quot;62&quot; rx=&quot;11&quot; fill=&quot;#fff4e5&quot; stroke=&quot;#ffd8a8&quot;/&gt;
-      &lt;text x=&quot;687&quot; y=&quot;226&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#b26a00&quot; text-anchor=&quot;middle&quot;&gt;未命中：回源查库&lt;/text&gt;
-      &lt;text x=&quot;687&quot; y=&quot;246&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3b&quot; text-anchor=&quot;middle&quot;&gt;SELECT * FROM product&lt;/text&gt;
-      &lt;g stroke=&quot;#ff9500&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca1g)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M377,198 C377,224 470,233 586,233&quot;/&gt;
-      &lt;/g&gt;
-      &lt;text x=&quot;418&quot; y=&quot;215&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#b26a00&quot;&gt;未命中&lt;/text&gt;
-
-      &lt;rect x=&quot;592&quot; y=&quot;298&quot; width=&quot;190&quot; height=&quot;58&quot; rx=&quot;11&quot; fill=&quot;#f3efff&quot; stroke=&quot;#d4c8ff&quot;/&gt;
-      &lt;text x=&quot;687&quot; y=&quot;321&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3fc9&quot; text-anchor=&quot;middle&quot;&gt;回写缓存 + TTL&lt;/text&gt;
-      &lt;text x=&quot;687&quot; y=&quot;341&quot; font-size=&quot;10.5&quot; fill=&quot;#6f6250&quot; text-anchor=&quot;middle&quot;&gt;下一次就能命中&lt;/text&gt;
-      &lt;g stroke=&quot;#5856d6&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca1p)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M687,266 L687,292&quot;/&gt;
-      &lt;/g&gt;
-
-      &lt;rect x=&quot;836&quot; y=&quot;202&quot; width=&quot;150&quot; height=&quot;62&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
-      &lt;text x=&quot;911&quot; y=&quot;226&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;返回结果&lt;/text&gt;
-      &lt;text x=&quot;911&quot; y=&quot;246&quot; font-size=&quot;10.5&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;用户拿到数据&lt;/text&gt;
-      &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca1g)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M786,233 C806,233 816,233 830,233&quot;/&gt;
-        &lt;path d=&quot;M786,327 C812,327 816,280 830,254&quot;/&gt;
-      &lt;/g&gt;
-
-      &lt;rect x=&quot;44&quot; y=&quot;330&quot; width=&quot;440&quot; height=&quot;54&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;351&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;关键前提&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;370&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;缓存里&quot;有&quot;数据，并且用户请求的是&quot;存在&quot;的数据。三个事故，就是把这两个前提打破。&lt;/text&gt;
-    &lt;/g&gt;
-  &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先看绿色路径，那是缓存该有的样子；再看橙色/紫色路径，一次未命中还没事，&lt;b&gt;大量未命中同时发生&lt;/b&gt;才是事故。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 2 总览 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c2&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;一图分清三兄弟：到底是谁没挡住 &lt;span class=&quot;tag&quot;&gt;总览&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;穿透是&quot;数据根本不存在&quot;，击穿是&quot;一个热点刚好过期&quot;，雪崩是&quot;一大片同时过期或缓存整体挂掉&quot;。范围不同，药方也不同。&lt;/p&gt;
-  &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 490&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;defs&gt;
-      &lt;marker id=&quot;ca2g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;
-    &lt;/defs&gt;
-    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;同一块数据库，三种打穿方式&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;横着看每一行：触发原因 → 缓存里发生了什么 → 数据库承受什么&lt;/text&gt;
-
-      &lt;text x=&quot;44&quot; y=&quot;98&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#9a9aa0&quot;&gt;事故&lt;/text&gt;
-      &lt;text x=&quot;262&quot; y=&quot;98&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#9a9aa0&quot;&gt;触发原因&lt;/text&gt;
-      &lt;text x=&quot;612&quot; y=&quot;98&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#9a9aa0&quot;&gt;缓存侧表现&lt;/text&gt;
-      &lt;text x=&quot;852&quot; y=&quot;98&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#9a9aa0&quot;&gt;数据库压力&lt;/text&gt;
-
-      &lt;!-- 穿透 --&gt;
-      &lt;rect x=&quot;44&quot; y=&quot;112&quot; width=&quot;180&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;138&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;穿透&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;158&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;Penetration&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#8e4b48&quot;&gt;查无此人&lt;/text&gt;
-
-      &lt;rect x=&quot;258&quot; y=&quot;112&quot; width=&quot;330&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-      &lt;text x=&quot;274&quot; y=&quot;138&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;请求的数据根本不存在&lt;/text&gt;
-      &lt;text x=&quot;274&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;例如随机 id、被删掉的商品、恶意构造的 key&lt;/text&gt;
-      &lt;text x=&quot;274&quot; y=&quot;181&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;缓存没东西可存，DB 也查不到，白白查一次&lt;/text&gt;
-
-      &lt;rect x=&quot;608&quot; y=&quot;112&quot; width=&quot;220&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-      &lt;text x=&quot;624&quot; y=&quot;138&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;永远是 miss&lt;/text&gt;
-      &lt;text x=&quot;624&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;因为&quot;不存在&quot;没被记下来&lt;/text&gt;
-      &lt;text x=&quot;624&quot; y=&quot;181&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;每次都穿透到 DB&lt;/text&gt;
-
-      &lt;rect x=&quot;848&quot; y=&quot;112&quot; width=&quot;148&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;866&quot; y=&quot;140&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;持续小刀割&lt;/text&gt;
-      &lt;text x=&quot;866&quot; y=&quot;162&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;量未必很大&lt;/text&gt;
-      &lt;text x=&quot;866&quot; y=&quot;182&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;但一直有无效查询&lt;/text&gt;
-
-      &lt;!-- 击穿 --&gt;
-      &lt;rect x=&quot;44&quot; y=&quot;220&quot; width=&quot;180&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#fff8e6&quot; stroke=&quot;#ffd8a8&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;246&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#b26a00&quot;&gt;击穿&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;266&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3b&quot;&gt;Breakdown / Stampede&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;286&quot; font-size=&quot;10&quot; fill=&quot;#8a6a3b&quot;&gt;一个人恰好下班&lt;/text&gt;
-
-      &lt;rect x=&quot;258&quot; y=&quot;220&quot; width=&quot;330&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-      &lt;text x=&quot;274&quot; y=&quot;246&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;某个热点 key 到期了&lt;/text&gt;
-      &lt;text x=&quot;274&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;它就在这秒过期，恰好几万人都来查它&lt;/text&gt;
-      &lt;text x=&quot;274&quot; y=&quot;289&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;数据本身存在，只是缓存空窗&lt;/text&gt;
-
-      &lt;rect x=&quot;608&quot; y=&quot;220&quot; width=&quot;220&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-      &lt;text x=&quot;624&quot; y=&quot;246&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一个 key 的 miss 风暴&lt;/text&gt;
-      &lt;text x=&quot;624&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;所有并发请求同时回源&lt;/text&gt;
-      &lt;text x=&quot;624&quot; y=&quot;289&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;重复查同一行&lt;/text&gt;
-
-      &lt;rect x=&quot;848&quot; y=&quot;220&quot; width=&quot;148&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#fff8e6&quot; stroke=&quot;#ffd8a8&quot;/&gt;
-      &lt;text x=&quot;866&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#b26a00&quot;&gt;瞬间尖刺&lt;/text&gt;
-      &lt;text x=&quot;866&quot; y=&quot;270&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3b&quot;&gt;峰值极高&lt;/text&gt;
-      &lt;text x=&quot;866&quot; y=&quot;290&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3b&quot;&gt;过去就恢复&lt;/text&gt;
-
-      &lt;!-- 雪崩 --&gt;
-      &lt;rect x=&quot;44&quot; y=&quot;328&quot; width=&quot;180&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#f3efff&quot; stroke=&quot;#d4c8ff&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;354&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#5b3fc9&quot;&gt;雪崩&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;374&quot; font-size=&quot;10.5&quot; fill=&quot;#6f6250&quot;&gt;Avalanche&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;394&quot; font-size=&quot;10&quot; fill=&quot;#6f6250&quot;&gt;整条街同时停电&lt;/text&gt;
-
-      &lt;rect x=&quot;258&quot; y=&quot;328&quot; width=&quot;330&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-      &lt;text x=&quot;274&quot; y=&quot;354&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;大片 key 同时失效 / 缓存挂了&lt;/text&gt;
-      &lt;text x=&quot;274&quot; y=&quot;376&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;TTL 设成一样、批量刷新、Redis 宕机&lt;/text&gt;
-      &lt;text x=&quot;274&quot; y=&quot;397&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;影响面是整个缓存层，不是一个点&lt;/text&gt;
-
-      &lt;rect x=&quot;608&quot; y=&quot;328&quot; width=&quot;220&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
-      &lt;text x=&quot;624&quot; y=&quot;354&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;全量 miss&lt;/text&gt;
-      &lt;text x=&quot;624&quot; y=&quot;376&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;所有请求一起找 DB&lt;/text&gt;
-      &lt;text x=&quot;624&quot; y=&quot;397&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;像雪块一起砸下来&lt;/text&gt;
-
-      &lt;rect x=&quot;848&quot; y=&quot;328&quot; width=&quot;148&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#f3efff&quot; stroke=&quot;#d4c8ff&quot;/&gt;
-      &lt;text x=&quot;866&quot; y=&quot;356&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3fc9&quot;&gt;洪峰&lt;/text&gt;
-      &lt;text x=&quot;866&quot; y=&quot;378&quot; font-size=&quot;10.5&quot; fill=&quot;#6f6250&quot;&gt;可能压垮 DB&lt;/text&gt;
-      &lt;text x=&quot;866&quot; y=&quot;398&quot; font-size=&quot;10.5&quot; fill=&quot;#6f6250&quot;&gt;恢复慢&lt;/text&gt;
-
-      &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.4&quot; marker-end=&quot;url(#ca2g)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M228,156 L252,156&quot;/&gt;&lt;path d=&quot;M592,156 L602,156&quot;/&gt;&lt;path d=&quot;M832,156 L842,156&quot;/&gt;
-        &lt;path d=&quot;M228,264 L252,264&quot;/&gt;&lt;path d=&quot;M592,264 L602,264&quot;/&gt;&lt;path d=&quot;M832,264 L842,264&quot;/&gt;
-        &lt;path d=&quot;M228,372 L252,372&quot;/&gt;&lt;path d=&quot;M592,372 L602,372&quot;/&gt;&lt;path d=&quot;M832,372 L842,372&quot;/&gt;
-      &lt;/g&gt;
-
-      &lt;rect x=&quot;44&quot; y=&quot;440&quot; width=&quot;952&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
-      &lt;text x=&quot;58&quot; y=&quot;462&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;分辨口诀：&lt;tspan font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;穿透看&quot;有没有&quot;&lt;/tspan&gt;，&lt;tspan font-weight=&quot;700&quot; fill=&quot;#b26a00&quot;&gt;击穿看&quot;几个 key&quot;&lt;/tspan&gt;，&lt;tspan font-weight=&quot;700&quot; fill=&quot;#5b3fc9&quot;&gt;雪崩看&quot;是不是一片&quot;&lt;/tspan&gt;。&lt;/text&gt;
-    &lt;/g&gt;
-  &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么记：&lt;/b&gt;穿透是&quot;查不到&quot;，击穿是&quot;单点爆&quot;，雪崩是&quot;全面爆&quot;。三种情况的 DB 都会 QPS 突增，但来源完全不同，解法不能混用。&lt;/div&gt;
-&lt;/div&gt;
-
-&lt;!-- 3 穿透 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c3&quot;&gt;
-  &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;穿透：数据库反复被问&quot;这个人存不存在&quot; &lt;span class=&quot;tag&quot;&gt;查无此人&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;缓存和数据库都没有这个数据。请求每次都穿过缓存打到数据库，数据库每次都回答&quot;没有&quot;，然后请求继续来。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;定位：手机银行是门脸，不是账房 &lt;span class=&quot;tag&quot;&gt;总览&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;你看到的余额，是核心算完返回来的结果；App 只负责把它画在屏幕上。&lt;/p&gt;
   &lt;/div&gt;
   &lt;svg viewBox=&quot;0 0 1040 530&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;defs&gt;
-      &lt;marker id=&quot;ca3r&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#ff3b30&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ca3g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#34c759&quot;/&gt;&lt;/marker&gt;
-    &lt;/defs&gt;
     &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;上半：事故路径　下半：两道防线&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;穿透最阴险的地方：DB 没报错、慢查询也不明显，只是无效查询一直有&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;手机银行在银行版图里的位置&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;它属于渠道层，和网银、柜面、ATM 并列；后面是一整条流水线&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;92&quot; width=&quot;952&quot; height=&quot;178&quot; rx=&quot;13&quot; fill=&quot;#fff7f6&quot; stroke=&quot;#ffd2cd&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;116&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;事故路径&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;90&quot; width=&quot;150&quot; height=&quot;80&quot; rx=&quot;11&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;119&quot; y=&quot;120&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;你和用户&lt;/text&gt;
+      &lt;text x=&quot;119&quot; y=&quot;146&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;手指点一下屏幕&lt;/text&gt;
+      &lt;path d=&quot;M196,130 L226,130&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr)&quot;/&gt;
 
-      &lt;rect x=&quot;62&quot; y=&quot;136&quot; width=&quot;150&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;137&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;随机 / 不存在 id&lt;/text&gt;
-      &lt;text x=&quot;137&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;id = -1, 99999999&lt;/text&gt;
+      &lt;rect x=&quot;228&quot; y=&quot;90&quot; width=&quot;170&quot; height=&quot;80&quot; rx=&quot;11&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;313&quot; y=&quot;118&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;手机银行 App&lt;/text&gt;
+      &lt;text x=&quot;313&quot; y=&quot;141&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;界面渲染 · 端侧校验&lt;/text&gt;
+      &lt;text x=&quot;313&quot; y=&quot;160&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;不存余额、不记账&lt;/text&gt;
+      &lt;path d=&quot;M400,130 L430,130&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr)&quot;/&gt;
 
-      &lt;rect x=&quot;268&quot; y=&quot;136&quot; width=&quot;150&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;343&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;缓存 miss&lt;/text&gt;
-      &lt;text x=&quot;343&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;key 本来就不存在&lt;/text&gt;
+      &lt;rect x=&quot;432&quot; y=&quot;90&quot; width=&quot;150&quot; height=&quot;80&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;507&quot; y=&quot;120&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;网关&lt;/text&gt;
+      &lt;text x=&quot;507&quot; y=&quot;146&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;鉴权、限流、路由&lt;/text&gt;
+      &lt;path d=&quot;M584,130 L614,130&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr)&quot;/&gt;
 
-      &lt;rect x=&quot;474&quot; y=&quot;136&quot; width=&quot;150&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;549&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;查数据库&lt;/text&gt;
-      &lt;text x=&quot;549&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;SELECT → 0 row&lt;/text&gt;
+      &lt;rect x=&quot;616&quot; y=&quot;90&quot; width=&quot;160&quot; height=&quot;80&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;696&quot; y=&quot;118&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;业务中台&lt;/text&gt;
+      &lt;text x=&quot;696&quot; y=&quot;141&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;用户 · 账户 · 交易中心&lt;/text&gt;
+      &lt;text x=&quot;696&quot; y=&quot;160&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;判断在这里做&lt;/text&gt;
+      &lt;path d=&quot;M778,130 L808,130&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr)&quot;/&gt;
 
-      &lt;rect x=&quot;680&quot; y=&quot;136&quot; width=&quot;150&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;755&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;返回空&lt;/text&gt;
-      &lt;text x=&quot;755&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;缓存里还是没东西&lt;/text&gt;
+      &lt;rect x=&quot;810&quot; y=&quot;90&quot; width=&quot;182&quot; height=&quot;80&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;901&quot; y=&quot;118&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot; text-anchor=&quot;middle&quot;&gt;企业服务总线 ESB&lt;/text&gt;
+      &lt;text x=&quot;901&quot; y=&quot;141&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;翻译报文、转接系统&lt;/text&gt;
+      &lt;text x=&quot;901&quot; y=&quot;160&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;银行的「总机」&lt;/text&gt;
 
-      &lt;rect x=&quot;862&quot; y=&quot;128&quot; width=&quot;112&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#ff3b30&quot;/&gt;
-      &lt;text x=&quot;918&quot; y=&quot;157&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#ffffff&quot; text-anchor=&quot;middle&quot;&gt;下一个请求&lt;/text&gt;
-      &lt;text x=&quot;918&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#ffe5e2&quot; text-anchor=&quot;middle&quot;&gt;再来一遍 ↺&lt;/text&gt;
+      &lt;path d=&quot;M901,172 L901,206&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr)&quot;/&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;208&quot; width=&quot;948&quot; height=&quot;94&quot; rx=&quot;12&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;234&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;后端系统（手机银行自己不直连，都通过 ESB）&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;262&quot; font-size=&quot;11&quot; fill=&quot;#48484a&quot;&gt;核心记账 · 支付清算 · 信贷 · 理财 · 票据 · 风控 · 反洗钱 · ECIF · 统一认证 · 短信推送 · 影像 · 数据平台&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;286&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;公开案例：一家农商联合银行通过 ESB 对接行内 30 余个业务系统&lt;/text&gt;
 
-      &lt;g stroke=&quot;#ff3b30&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca3r)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M216,164 L262,164&quot;/&gt;&lt;path d=&quot;M422,164 L468,164&quot;/&gt;&lt;path d=&quot;M628,164 L674,164&quot;/&gt;&lt;path d=&quot;M834,164 L856,164&quot;/&gt;
-        &lt;path d=&quot;M918,204 C918,228 137,228 137,190&quot;/&gt;
-      &lt;/g&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;326&quot; width=&quot;948&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;352&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话边界，记住就不会乱&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;380&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;界面归 App · 判断归中台 · 记账归核心&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;402&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;手机银行属于渠道层：只收请求、做端侧安全校验、把结果画给用户看&lt;/text&gt;
 
-      &lt;rect x=&quot;62&quot; y=&quot;216&quot; width=&quot;816&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffd2cd&quot;/&gt;
-      &lt;text x=&quot;76&quot; y=&quot;238&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;因为&quot;查不到&quot;这个结果没被缓存，所以下一个同样的请求还会重复走一遍；换个随机 id，又走一遍。&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;438&quot; width=&quot;948&quot; height=&quot;72&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;464&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;监管口径：JR/T 0092—2019 把手机银行归为「资金交易类客户端应用软件」&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;490&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;要求符合资金交易、信息保护等所有技术及管理安全要求 —— 既要跑得快，又绝对不能出错&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;292&quot; width=&quot;952&quot; height=&quot;218&quot; rx=&quot;13&quot; fill=&quot;#f4fbf6&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;316&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;两道防线（推荐一起上）&lt;/text&gt;
-
-      &lt;rect x=&quot;62&quot; y=&quot;336&quot; width=&quot;450&quot; height=&quot;152&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;80&quot; y=&quot;362&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;防线 1：布隆过滤器 Bloom Filter&lt;/text&gt;
-      &lt;text x=&quot;80&quot; y=&quot;386&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;先问它&quot;这个 id 可能存在吗？&quot;&lt;/text&gt;
-      &lt;text x=&quot;80&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;说&quot;不存在&quot; → 直接返回，连缓存都不查&lt;/text&gt;
-      &lt;text x=&quot;80&quot; y=&quot;434&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;说&quot;存在&quot; → 继续走正常流程（可能误判）&lt;/text&gt;
-      &lt;rect x=&quot;80&quot; y=&quot;450&quot; width=&quot;414&quot; height=&quot;24&quot; rx=&quot;6&quot; fill=&quot;#e9f8ef&quot;/&gt;
-      &lt;text x=&quot;90&quot; y=&quot;466&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;口诀：说没有一定没有，说有不一定有&lt;/text&gt;
-
-      &lt;rect x=&quot;528&quot; y=&quot;336&quot; width=&quot;450&quot; height=&quot;152&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;546&quot; y=&quot;362&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;防线 2：空值缓存（缓存&quot;查无此人&quot;）&lt;/text&gt;
-      &lt;text x=&quot;546&quot; y=&quot;386&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;DB 返回 0 行，也往缓存写一条占位值&lt;/text&gt;
-      &lt;text x=&quot;546&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;例如 product:1001 = null，TTL 30~120 秒&lt;/text&gt;
-      &lt;text x=&quot;546&quot; y=&quot;434&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;TTL 要短，否则新建的商品迟迟查不到&lt;/text&gt;
-      &lt;rect x=&quot;546&quot; y=&quot;450&quot; width=&quot;414&quot; height=&quot;24&quot; rx=&quot;6&quot; fill=&quot;#e9f8ef&quot;/&gt;
-      &lt;text x=&quot;556&quot; y=&quot;466&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;适合兜底：布隆误判、或者没上布隆时先用&lt;/text&gt;
-
-      &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca3g)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M286,264 L286,286&quot;/&gt;&lt;path d=&quot;M754,264 L754,286&quot;/&gt;
-      &lt;/g&gt;
+      &lt;defs&gt;&lt;marker id=&quot;mArr&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
     &lt;/g&gt;
   &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上半部分盯那条红色回环——它表示&quot;白查一次，下次继续白查&quot;。下半部分两道防线分别拦在不同位置：布隆在缓存前，空值在缓存里。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上面这条流水线从左到右读：用户 → App → 网关 → 中台 → ESB → 后端系统。注意第 2 格下面那行小字「不存余额、不记账」，这是手机银行最重要的边界。中间那句「界面归 App、判断归中台、记账归核心」是全文的口诀，后面几张图都在展开它。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 4 击穿 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c4&quot;&gt;
+&lt;!-- 2 五层架构 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m2&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;击穿：一个热点 key 过期，几万人同时扑向数据库 &lt;span class=&quot;tag&quot;&gt;单点爆&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;数据本身存在，问题出在&quot;过期的那一瞬间&quot;。原本由缓存扛住的热门查询，突然全部改成查数据库。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;五层架构：一家真实银行怎么搭 &lt;span class=&quot;tag&quot;&gt;架构&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;用江西农商联合银行公开案例的五层划分做样本，逐层翻译成人话。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 530&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;defs&gt;
-      &lt;marker id=&quot;ca4r&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#ff3b30&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ca4g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#34c759&quot;/&gt;&lt;/marker&gt;
-    &lt;/defs&gt;
+  &lt;svg viewBox=&quot;0 0 1040 640&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
     &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;上半：过期瞬间的尖刺　下半：把并发收成一次&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;击穿通常来得快、去得也快，但峰值足够把数据库打挂&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;从前端到后端，一共五层&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;原文：前端应用层 / 网关接入层 / 业务能力层 / 平台支撑中间件层 / 后端系统对接层&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;92&quot; width=&quot;952&quot; height=&quot;178&quot; rx=&quot;13&quot; fill=&quot;#fff7f6&quot; stroke=&quot;#ffd2cd&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;116&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;事故路径&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;952&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;150&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#d8ebff&quot;/&gt;
+      &lt;text x=&quot;119&quot; y=&quot;120&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;① 前端应用层&lt;/text&gt;
+      &lt;text x=&quot;119&quot; y=&quot;146&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;用户看得见&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;120&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;承载 App 页面和业务场景&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;144&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;大白话：菜单、按钮、页面都在这层，兼容 iOS、Android、鸿蒙、H5&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;166&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;公开案例：mPaaS + Vue3 框架，预留小程序等多端扩展&lt;/text&gt;
 
-      &lt;rect x=&quot;62&quot; y=&quot;136&quot; width=&quot;160&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;142&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;热点 key 到期&lt;/text&gt;
-      &lt;text x=&quot;142&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;product:1001 被删&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;194&quot; width=&quot;952&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;194&quot; width=&quot;150&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#e5dfff&quot;/&gt;
+      &lt;text x=&quot;119&quot; y=&quot;226&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;② 网关接入层&lt;/text&gt;
+      &lt;text x=&quot;119&quot; y=&quot;252&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;门口的保安兼调度&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;226&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;统一承接请求、流量调度、协议适配、全链路安全管控&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;250&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;大白话：先查令牌、再看限流、最后决定把请求转给谁&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;272&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;公开案例：交易网关 + API 网关双网关&lt;/text&gt;
 
-      &lt;rect x=&quot;278&quot; y=&quot;136&quot; width=&quot;160&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;358&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;1000 个请求同时来&lt;/text&gt;
-      &lt;text x=&quot;358&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;都在同一毫秒 miss&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;300&quot; width=&quot;952&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;300&quot; width=&quot;150&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#d9f5e2&quot;/&gt;
+      &lt;text x=&quot;119&quot; y=&quot;332&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;③ 业务能力层&lt;/text&gt;
+      &lt;text x=&quot;119&quot; y=&quot;358&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;可复用的业务积木&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;332&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;沉淀用户、账户、认证、审批、支付、电子合约等能力&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;356&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;大白话：一次建设、多端复用，App 和网银共用同一块积木&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;378&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;这就是常说的「中台」，判断逻辑大多在这一层&lt;/text&gt;
 
-      &lt;rect x=&quot;494&quot; y=&quot;136&quot; width=&quot;160&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;574&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;1000 次 DB 查询&lt;/text&gt;
-      &lt;text x=&quot;574&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;查的是同一行数据&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;406&quot; width=&quot;952&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;406&quot; width=&quot;150&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#ffeacc&quot;/&gt;
+      &lt;text x=&quot;119&quot; y=&quot;438&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot; text-anchor=&quot;middle&quot;&gt;④ 平台支撑层&lt;/text&gt;
+      &lt;text x=&quot;119&quot; y=&quot;464&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;地基和水管&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;438&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;微服务框架、分布式数据库、缓存、消息队列&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;462&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;大白话：不让系统在高并发时崩掉，也不让每个请求都直接压数据库&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;484&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;公开案例：SOFA 框架、国产数据库、Redis、MQ，全栈信创适配&lt;/text&gt;
 
-      &lt;rect x=&quot;710&quot; y=&quot;136&quot; width=&quot;160&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ff3b30&quot;/&gt;
-      &lt;text x=&quot;790&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#ffffff&quot; text-anchor=&quot;middle&quot;&gt;数据库尖刺&lt;/text&gt;
-      &lt;text x=&quot;790&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#ffe5e2&quot; text-anchor=&quot;middle&quot;&gt;连接池打满 / 超时&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;512&quot; width=&quot;952&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;512&quot; width=&quot;150&quot; height=&quot;94&quot; rx=&quot;10&quot; fill=&quot;#ffdada&quot;/&gt;
+      &lt;text x=&quot;119&quot; y=&quot;544&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;⑤ 后端系统对接层&lt;/text&gt;
+      &lt;text x=&quot;119&quot; y=&quot;570&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;插线板&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;544&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;依托企业服务总线对接核心、信贷、票据、支付等系统&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;568&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;大白话：App 不认识 30 多个系统，ESB 替它认识&lt;/text&gt;
+      &lt;text x=&quot;210&quot; y=&quot;590&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;没有 ESB，N 个渠道 × M 个系统 = 一堆意大利面；有了 ESB 变成 N + M&lt;/text&gt;
 
-      &lt;rect x=&quot;862&quot; y=&quot;128&quot; width=&quot;112&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;918&quot; y=&quot;157&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;缓存还没回写&lt;/text&gt;
-      &lt;text x=&quot;918&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;请求已堆满&lt;/text&gt;
-
-      &lt;g stroke=&quot;#ff3b30&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca4r)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M226,164 L272,164&quot;/&gt;&lt;path d=&quot;M442,164 L488,164&quot;/&gt;&lt;path d=&quot;M658,164 L704,164&quot;/&gt;&lt;path d=&quot;M874,164 L856,164&quot;/&gt;
-      &lt;/g&gt;
-
-      &lt;rect x=&quot;62&quot; y=&quot;216&quot; width=&quot;816&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffd2cd&quot;/&gt;
-      &lt;text x=&quot;76&quot; y=&quot;238&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;关键不是&quot;查一次数据库&quot;，而是&quot;同一时刻查了一千次数据库&quot;——这些请求本可以合并成一次。&lt;/text&gt;
-
-      &lt;rect x=&quot;44&quot; y=&quot;292&quot; width=&quot;952&quot; height=&quot;218&quot; rx=&quot;13&quot; fill=&quot;#f4fbf6&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;316&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;两种常用药方&lt;/text&gt;
-
-      &lt;rect x=&quot;62&quot; y=&quot;336&quot; width=&quot;450&quot; height=&quot;152&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;80&quot; y=&quot;362&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;药方 1：互斥锁 / single-flight&lt;/text&gt;
-      &lt;text x=&quot;80&quot; y=&quot;386&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;只让第一个 miss 的请求拿锁去查 DB&lt;/text&gt;
-      &lt;text x=&quot;80&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;其他请求等一会儿，读它写回的缓存&lt;/text&gt;
-      &lt;text x=&quot;80&quot; y=&quot;434&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;Redis 里常用 SET key value NX PX 抢锁&lt;/text&gt;
-      &lt;rect x=&quot;80&quot; y=&quot;450&quot; width=&quot;414&quot; height=&quot;24&quot; rx=&quot;6&quot; fill=&quot;#e9f8ef&quot;/&gt;
-      &lt;text x=&quot;90&quot; y=&quot;466&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;锁 TTL 要大于最慢一次 DB 查询，且只能由持锁人释放&lt;/text&gt;
-
-      &lt;rect x=&quot;528&quot; y=&quot;336&quot; width=&quot;450&quot; height=&quot;152&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;546&quot; y=&quot;362&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;药方 2：逻辑过期 + 后台刷新&lt;/text&gt;
-      &lt;text x=&quot;546&quot; y=&quot;386&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;缓存里的值不真正删除，只标记&quot;已过期&quot;&lt;/text&gt;
-      &lt;text x=&quot;546&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;请求先拿旧值返回，同时触发一次异步刷新&lt;/text&gt;
-      &lt;text x=&quot;546&quot; y=&quot;434&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;用户不等数据库，数据库也不会被挤爆&lt;/text&gt;
-      &lt;rect x=&quot;546&quot; y=&quot;450&quot; width=&quot;414&quot; height=&quot;24&quot; rx=&quot;6&quot; fill=&quot;#e9f8ef&quot;/&gt;
-      &lt;text x=&quot;556&quot; y=&quot;466&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;代价：短时间内可能读到旧数据，要评估业务容忍度&lt;/text&gt;
-
-      &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca4g)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M286,264 L286,286&quot;/&gt;&lt;path d=&quot;M754,264 L754,286&quot;/&gt;
-      &lt;/g&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;620&quot; width=&quot;952&quot; height=&quot;0&quot; fill=&quot;none&quot;/&gt;
     &lt;/g&gt;
   &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;红色路径里&quot;1000 个请求&quot;和&quot;1000 次查询&quot;是同一个数量级，这就是击穿；绿色路径把 1000 次压成 1 次 + 999 次等待，尖刺就消失了。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;五层从上往下读，每层看两件事：左边那格是层名和比喻，右边第一行是它真正的职责，第二行是公开案例里的技术选型。特别看第 ⑤ 层的 ESB——「App 不认识 30 多个系统，ESB 替它认识」是这层最值钱的一句话。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 5 雪崩 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c5&quot;&gt;
+&lt;!-- 3 上下游全景 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m3&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;雪崩：一大片 key 同时失效，缓存层整体失守 &lt;span class=&quot;tag&quot;&gt;全面爆&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;击穿是一个点，雪崩是一整片。可能是 TTL 设得太齐，也可能是缓存集群故障，结果都是请求成批涌向数据库。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;上下游全景：谁找它，它找谁 &lt;span class=&quot;tag&quot;&gt;关系图&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;上游是给它派活的，下游是被它调用的。中间是手机银行自己。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 545&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;defs&gt;
-      &lt;marker id=&quot;ca5r&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#ff3b30&quot;/&gt;&lt;/marker&gt;
-      &lt;marker id=&quot;ca5g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#34c759&quot;/&gt;&lt;/marker&gt;
-    &lt;/defs&gt;
+  &lt;svg viewBox=&quot;0 0 1040 670&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
     &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;上半：雪崩怎么形成　下半：四层防线&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;雪崩恢复慢，因为缓存空了之后要重新预热，数据库要同时承受回源和线上流量&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;上游四家：给它派活的&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;不只是用户点击，运营配置、第三方调用、监管采集都会驱动它&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;92&quot; width=&quot;952&quot; height=&quot;178&quot; rx=&quot;13&quot; fill=&quot;#fff7f6&quot; stroke=&quot;#ffd2cd&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;116&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;事故路径&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;82&quot; width=&quot;222&quot; height=&quot;76&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;155&quot; y=&quot;108&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;客户&lt;/text&gt;
+      &lt;text x=&quot;155&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;查余额、转账、买理财&lt;/text&gt;
+      &lt;rect x=&quot;286&quot; y=&quot;82&quot; width=&quot;222&quot; height=&quot;76&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;397&quot; y=&quot;108&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;运营 / 营销平台&lt;/text&gt;
+      &lt;text x=&quot;397&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;活动配置、弹窗、功能开关&lt;/text&gt;
+      &lt;rect x=&quot;528&quot; y=&quot;82&quot; width=&quot;222&quot; height=&quot;76&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;639&quot; y=&quot;108&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;开放银行 / 第三方&lt;/text&gt;
+      &lt;text x=&quot;639&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;API 调用同一套能力&lt;/text&gt;
+      &lt;rect x=&quot;770&quot; y=&quot;82&quot; width=&quot;222&quot; height=&quot;76&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;881&quot; y=&quot;108&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;监管 / 运维&lt;/text&gt;
+      &lt;text x=&quot;881&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;报送、日志、安全策略&lt;/text&gt;
 
-      &lt;rect x=&quot;62&quot; y=&quot;136&quot; width=&quot;176&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;150&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;TTL 设成一样&lt;/text&gt;
-      &lt;text x=&quot;150&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;或缓存集群故障&lt;/text&gt;
+      &lt;path d=&quot;M155,160 L155,182 L520,182 L520,206&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr2)&quot;/&gt;
+      &lt;path d=&quot;M397,160 L397,182&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot;/&gt;
+      &lt;path d=&quot;M639,160 L639,182&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot;/&gt;
+      &lt;path d=&quot;M881,160 L881,182 L520,182&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot;/&gt;
 
-      &lt;rect x=&quot;294&quot; y=&quot;136&quot; width=&quot;176&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;382&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;大片 key 同时失效&lt;/text&gt;
-      &lt;text x=&quot;382&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;不是一两个，是一片&lt;/text&gt;
+      &lt;rect x=&quot;380&quot; y=&quot;208&quot; width=&quot;280&quot; height=&quot;86&quot; rx=&quot;12&quot; fill=&quot;#5856d6&quot; stroke=&quot;#4745b8&quot;/&gt;
+      &lt;text x=&quot;520&quot; y=&quot;240&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;手机银行&lt;/text&gt;
+      &lt;text x=&quot;520&quot; y=&quot;266&quot; font-size=&quot;10.5&quot; fill=&quot;#e8e7ff&quot; text-anchor=&quot;middle&quot;&gt;App + 网关 + 中台（渠道层）&lt;/text&gt;
+      &lt;text x=&quot;520&quot; y=&quot;284&quot; font-size=&quot;10&quot; fill=&quot;#e8e7ff&quot; text-anchor=&quot;middle&quot;&gt;只受理、只渲染、不做最终记账&lt;/text&gt;
 
-      &lt;rect x=&quot;526&quot; y=&quot;136&quot; width=&quot;176&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c4&quot;/&gt;
-      &lt;text x=&quot;614&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;命中率骤降&lt;/text&gt;
-      &lt;text x=&quot;614&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;所有请求都成 miss&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;330&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;下游六堆：它去找的六类系统&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;348&quot; width=&quot;300&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;374&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;① 账务类 · 核心系统&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;398&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;余额、明细、转账、还款&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;420&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;最重要、最不能出错的下游&lt;/text&gt;
+      &lt;rect x=&quot;370&quot; y=&quot;348&quot; width=&quot;300&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;388&quot; y=&quot;374&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;② 支付类 · 清算网络&lt;/text&gt;
+      &lt;text x=&quot;388&quot; y=&quot;398&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;行内支付、IBPS / HVPS&lt;/text&gt;
+      &lt;text x=&quot;388&quot; y=&quot;420&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;银联、网联、扫码支付&lt;/text&gt;
+      &lt;rect x=&quot;696&quot; y=&quot;348&quot; width=&quot;296&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;714&quot; y=&quot;374&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;③ 身份类 · ECIF / 认证&lt;/text&gt;
+      &lt;text x=&quot;714&quot; y=&quot;398&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;客户号、密码、短信、生物识别&lt;/text&gt;
+      &lt;text x=&quot;714&quot; y=&quot;420&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;实名核验、设备绑定&lt;/text&gt;
 
-      &lt;rect x=&quot;758&quot; y=&quot;136&quot; width=&quot;216&quot; height=&quot;56&quot; rx=&quot;10&quot; fill=&quot;#ff3b30&quot;/&gt;
-      &lt;text x=&quot;866&quot; y=&quot;158&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#ffffff&quot; text-anchor=&quot;middle&quot;&gt;数据库洪峰&lt;/text&gt;
-      &lt;text x=&quot;866&quot; y=&quot;177&quot; font-size=&quot;10&quot; fill=&quot;#ffe5e2&quot; text-anchor=&quot;middle&quot;&gt;慢查询 / 连接池耗尽 / 宕机&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;452&quot; width=&quot;300&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;478&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;④ 风控类 · 反欺诈/反洗钱&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;502&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;实时打分、拦截、二次验证&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;524&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;有权拦，无权记账&lt;/text&gt;
+      &lt;rect x=&quot;370&quot; y=&quot;452&quot; width=&quot;300&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;388&quot; y=&quot;478&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;⑤ 产品类 · 专业业务系统&lt;/text&gt;
+      &lt;text x=&quot;388&quot; y=&quot;502&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;信贷、理财、票据、贵金属&lt;/text&gt;
+      &lt;text x=&quot;388&quot; y=&quot;524&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;每个产品页背后都有一个系统&lt;/text&gt;
+      &lt;rect x=&quot;696&quot; y=&quot;452&quot; width=&quot;296&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;714&quot; y=&quot;478&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;⑥ 支撑类 · 通知/影像/数据&lt;/text&gt;
+      &lt;text x=&quot;714&quot; y=&quot;502&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;短信、推送、电子回单、客服&lt;/text&gt;
+      &lt;text x=&quot;714&quot; y=&quot;524&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;埋点、画像、经营分析&lt;/text&gt;
 
-      &lt;g stroke=&quot;#ff3b30&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca5r)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M242,164 L288,164&quot;/&gt;&lt;path d=&quot;M474,164 L520,164&quot;/&gt;&lt;path d=&quot;M706,164 L752,164&quot;/&gt;
-      &lt;/g&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;562&quot; width=&quot;948&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;588&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话记住六个下游&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;616&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;账务找核心 · 跨行找支付 · 身份找认证 · 安全找风控 · 产品找业务系统 · 通知找短信推送&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;638&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;这些调用大多数不直连，而是经网关 → 中台 → ESB 转接&lt;/text&gt;
 
-      &lt;rect x=&quot;62&quot; y=&quot;216&quot; width=&quot;816&quot; height=&quot;34&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffd2cd&quot;/&gt;
-      &lt;text x=&quot;76&quot; y=&quot;238&quot; font-size=&quot;10.5&quot; fill=&quot;#8e4b48&quot;&gt;雪崩比击穿难救：击穿只缺一个 key，雪崩是整个缓存层短期失效，预热和限流都得提前准备好。&lt;/text&gt;
-
-      &lt;rect x=&quot;44&quot; y=&quot;292&quot; width=&quot;952&quot; height=&quot;233&quot; rx=&quot;13&quot; fill=&quot;#f4fbf6&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;316&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;四层防线（从便宜到兜底）&lt;/text&gt;
-
-      &lt;rect x=&quot;62&quot; y=&quot;336&quot; width=&quot;222&quot; height=&quot;166&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;76&quot; y=&quot;360&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;① TTL 抖动&lt;/text&gt;
-      &lt;text x=&quot;76&quot; y=&quot;384&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;ttl = 基础值 + 随机数&lt;/text&gt;
-      &lt;text x=&quot;76&quot; y=&quot;406&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;比如 300s + 0~60s&lt;/text&gt;
-      &lt;text x=&quot;76&quot; y=&quot;430&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;让过期时间散开，&lt;/text&gt;
-      &lt;text x=&quot;76&quot; y=&quot;450&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;不要整点集体阵亡。&lt;/text&gt;
-      &lt;text x=&quot;76&quot; y=&quot;478&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;成本最低，先做这个&lt;/text&gt;
-
-      &lt;rect x=&quot;298&quot; y=&quot;336&quot; width=&quot;222&quot; height=&quot;166&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;312&quot; y=&quot;360&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;② 多级缓存&lt;/text&gt;
-      &lt;text x=&quot;312&quot; y=&quot;384&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;进程内缓存 + Redis&lt;/text&gt;
-      &lt;text x=&quot;312&quot; y=&quot;406&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;Redis 挂了，本地缓存&lt;/text&gt;
-      &lt;text x=&quot;312&quot; y=&quot;430&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;还能挡一小会儿。&lt;/text&gt;
-      &lt;text x=&quot;312&quot; y=&quot;450&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;注意本地缓存的失效&lt;/text&gt;
-      &lt;text x=&quot;312&quot; y=&quot;478&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;要多实例广播或更短 TTL&lt;/text&gt;
-
-      &lt;rect x=&quot;534&quot; y=&quot;336&quot; width=&quot;222&quot; height=&quot;166&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;548&quot; y=&quot;360&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;③ 熔断 / 降级&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;384&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;DB 压力超标就跳闸&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;406&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;直接返回兜底数据，&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;430&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;例如&quot;服务繁忙，稍后再试&quot;。&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;450&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;宁可少卖几单，&lt;/text&gt;
-      &lt;text x=&quot;548&quot; y=&quot;478&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;也别让数据库彻底挂掉&lt;/text&gt;
-
-      &lt;rect x=&quot;770&quot; y=&quot;336&quot; width=&quot;208&quot; height=&quot;166&quot; rx=&quot;11&quot; fill=&quot;#ffffff&quot; stroke=&quot;#bfe8cf&quot;/&gt;
-      &lt;text x=&quot;784&quot; y=&quot;360&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;④ 缓存高可用&lt;/text&gt;
-      &lt;text x=&quot;784&quot; y=&quot;384&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;Redis 主从 / 哨兵 / 集群&lt;/text&gt;
-      &lt;text x=&quot;784&quot; y=&quot;406&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;避免单点故障&lt;/text&gt;
-      &lt;text x=&quot;784&quot; y=&quot;430&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;提前预热热点数据，&lt;/text&gt;
-      &lt;text x=&quot;784&quot; y=&quot;450&quot; font-size=&quot;10.5&quot; fill=&quot;#3f6b52&quot;&gt;别等流量来了才装。&lt;/text&gt;
-      &lt;text x=&quot;784&quot; y=&quot;478&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;兜住&quot;缓存整体挂掉&quot;这一类&lt;/text&gt;
-
-      &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.6&quot; marker-end=&quot;url(#ca5g)&quot; fill=&quot;none&quot;&gt;
-        &lt;path d=&quot;M382,270 L382,286&quot;/&gt;
-      &lt;/g&gt;
+      &lt;defs&gt;&lt;marker id=&quot;mArr2&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
     &lt;/g&gt;
   &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;四层防线不是四选一。TTL 抖动防&quot;一起过期&quot;，多级缓存和 Redis 高可用防&quot;缓存整体不可用&quot;，熔断是最后的保险丝。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先看上半部分：上游四家不只是客户，还有运营平台、开放银行和监管运维——这解释了为什么首页换个 banner 不需要发版。下半部分六个下游按调用目的分组，最后那句口诀可以直接拿去用。中间的紫色方块是手机银行自己，注意它写的是「只受理、只渲染、不做最终记账」。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 6 落地 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;c6&quot;&gt;
+&lt;!-- 4 登录流程 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m4&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;落到代码和监控：一张清单直接抄 &lt;span class=&quot;tag&quot;&gt;落地&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;伪代码只是骨架，真正上线前还要看指标。没有监控，三种事故在 Dashboard 上长得几乎一样：DB QPS 突然升高。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;登录一次手机银行发生了什么 &lt;span class=&quot;tag&quot;&gt;流程图&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;不是输个密码就完事，至少有七步，而且服务端说了算。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 450&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+  &lt;svg viewBox=&quot;0 0 1040 620&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
     &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;把三张药方拼成一条读路径&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;这不是完整实现，只是为了看清每一步挡住的是哪一种事故&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;登录七步：从点开 App 到拿到令牌&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;从左到右、再从上到下读&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;92&quot; width=&quot;580&quot; height=&quot;292&quot; rx=&quot;13&quot; fill=&quot;#1d1d20&quot;/&gt;
-      &lt;text x=&quot;66&quot; y=&quot;122&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#9a9aa0&quot;&gt;read-through（伪代码）&lt;/text&gt;
-      &lt;g font-family=&quot;ui-monospace,SFMono-Regular,Menlo,Consolas,monospace&quot; font-size=&quot;12&quot;&gt;
-        &lt;text x=&quot;66&quot; y=&quot;156&quot; fill=&quot;#ff9f0a&quot;&gt;ttl&lt;/text&gt;&lt;text x=&quot;102&quot; y=&quot;156&quot; fill=&quot;#f2f2f7&quot;&gt; = base + random(0, jitter)&lt;/text&gt;
-        &lt;text x=&quot;66&quot; y=&quot;182&quot; fill=&quot;#7d8ca3&quot;&gt;// ↑ 打散过期，防雪崩&lt;/text&gt;
-        &lt;text x=&quot;66&quot; y=&quot;214&quot; fill=&quot;#5ac8fa&quot;&gt;if&lt;/text&gt;&lt;text x=&quot;94&quot; y=&quot;214&quot; fill=&quot;#f2f2f7&quot;&gt; !bloom.mightExist(id):&lt;/text&gt;
-        &lt;text x=&quot;90&quot; y=&quot;238&quot; fill=&quot;#ff9f0a&quot;&gt;return&lt;/text&gt;&lt;text x=&quot;150&quot; y=&quot;238&quot; fill=&quot;#f2f2f7&quot;&gt; null  // 防穿透&lt;/text&gt;
-        &lt;text x=&quot;66&quot; y=&quot;270&quot; fill=&quot;#5ac8fa&quot;&gt;if&lt;/text&gt;&lt;text x=&quot;94&quot; y=&quot;270&quot; fill=&quot;#f2f2f7&quot;&gt; cache.hit(key):&lt;/text&gt;
-        &lt;text x=&quot;90&quot; y=&quot;294&quot; fill=&quot;#ff9f0a&quot;&gt;return&lt;/text&gt;&lt;text x=&quot;150&quot; y=&quot;294&quot; fill=&quot;#f2f2f7&quot;&gt; cache.value&lt;/text&gt;
-        &lt;text x=&quot;66&quot; y=&quot;326&quot; fill=&quot;#5ac8fa&quot;&gt;if&lt;/text&gt;&lt;text x=&quot;94&quot; y=&quot;326&quot; fill=&quot;#f2f2f7&quot;&gt; lock.tryAcquire(key):&lt;/text&gt;
-        &lt;text x=&quot;90&quot; y=&quot;350&quot; fill=&quot;#f2f2f7&quot;&gt;v = db.query(id)&lt;/text&gt;
-        &lt;text x=&quot;90&quot; y=&quot;374&quot; fill=&quot;#f2f2f7&quot;&gt;cache.set(key, v ?: NULL, ttl)&lt;/text&gt;
-      &lt;/g&gt;
+      &lt;rect x=&quot;26&quot; y=&quot;88&quot; width=&quot;222&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;42&quot; y=&quot;112&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;第 1 步&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;136&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;App 启动&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;160&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;检查版本、拉取配置&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;180&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;初始化安全组件&lt;/text&gt;
+      &lt;rect x=&quot;280&quot; y=&quot;88&quot; width=&quot;222&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;296&quot; y=&quot;112&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;第 2 步&lt;/text&gt;
+      &lt;text x=&quot;296&quot; y=&quot;136&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;设备识别&lt;/text&gt;
+      &lt;text x=&quot;296&quot; y=&quot;160&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;采集设备指纹&lt;/text&gt;
+      &lt;text x=&quot;296&quot; y=&quot;180&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;判断是否常用设备&lt;/text&gt;
+      &lt;rect x=&quot;534&quot; y=&quot;88&quot; width=&quot;222&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;550&quot; y=&quot;112&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;第 3 步&lt;/text&gt;
+      &lt;text x=&quot;550&quot; y=&quot;136&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;建立安全通道&lt;/text&gt;
+      &lt;text x=&quot;550&quot; y=&quot;160&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;HTTPS + 国密算法加密&lt;/text&gt;
+      &lt;text x=&quot;550&quot; y=&quot;180&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;校验证书，防中间人&lt;/text&gt;
+      &lt;rect x=&quot;788&quot; y=&quot;88&quot; width=&quot;222&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;804&quot; y=&quot;112&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;第 4 步&lt;/text&gt;
+      &lt;text x=&quot;804&quot; y=&quot;136&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;提交身份要素&lt;/text&gt;
+      &lt;text x=&quot;804&quot; y=&quot;160&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;密码 / 短信码 / 指纹人脸&lt;/text&gt;
+      &lt;text x=&quot;804&quot; y=&quot;180&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;按风险等级决定几种&lt;/text&gt;
+      &lt;path d=&quot;M250,140 L278,140&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr3)&quot;/&gt;
+      &lt;path d=&quot;M504,140 L532,140&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr3)&quot;/&gt;
+      &lt;path d=&quot;M758,140 L786,140&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr3)&quot;/&gt;
+      &lt;path d=&quot;M899,196 L899,220&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr3)&quot;/&gt;
 
-      &lt;rect x=&quot;648&quot; y=&quot;92&quot; width=&quot;348&quot; height=&quot;292&quot; rx=&quot;13&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
-      &lt;text x=&quot;668&quot; y=&quot;122&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;必须盯的四个指标&lt;/text&gt;
-      &lt;text x=&quot;668&quot; y=&quot;154&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;① 缓存命中率&lt;/text&gt;
-      &lt;text x=&quot;668&quot; y=&quot;173&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;突然掉，说明 miss 变多&lt;/text&gt;
-      &lt;text x=&quot;668&quot; y=&quot;204&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#ff3b30&quot;&gt;② DB QPS 与连接池&lt;/text&gt;
-      &lt;text x=&quot;668&quot; y=&quot;223&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;突增 + 等待数涨 = 正在被打穿&lt;/text&gt;
-      &lt;text x=&quot;668&quot; y=&quot;254&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#5856d6&quot;&gt;③ 锁等待 / single-flight 计数&lt;/text&gt;
-      &lt;text x=&quot;668&quot; y=&quot;273&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;等待多说明热点 key 在打架&lt;/text&gt;
-      &lt;text x=&quot;668&quot; y=&quot;304&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#34c759&quot;&gt;④ 空值 key 比例&lt;/text&gt;
-      &lt;text x=&quot;668&quot; y=&quot;323&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;突然高，多半在被穿透&lt;/text&gt;
-      &lt;rect x=&quot;668&quot; y=&quot;344&quot; width=&quot;308&quot; height=&quot;26&quot; rx=&quot;7&quot; fill=&quot;#f2f2f7&quot;/&gt;
-      &lt;text x=&quot;678&quot; y=&quot;361&quot; font-size=&quot;10&quot; fill=&quot;#4a4a4f&quot;&gt;先定位是哪一种，再上对应的药方。&lt;/text&gt;
+      &lt;rect x=&quot;544&quot; y=&quot;222&quot; width=&quot;222&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;560&quot; y=&quot;246&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;第 5 步&lt;/text&gt;
+      &lt;text x=&quot;560&quot; y=&quot;270&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;网关转发&lt;/text&gt;
+      &lt;text x=&quot;560&quot; y=&quot;294&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;交易网关做协议适配&lt;/text&gt;
+      &lt;text x=&quot;560&quot; y=&quot;314&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;API 网关鉴权、限流&lt;/text&gt;
+      &lt;rect x=&quot;290&quot; y=&quot;222&quot; width=&quot;222&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;306&quot; y=&quot;246&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;第 6 步&lt;/text&gt;
+      &lt;text x=&quot;306&quot; y=&quot;270&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;统一认证校验&lt;/text&gt;
+      &lt;text x=&quot;306&quot; y=&quot;294&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;核对身份要素&lt;/text&gt;
+      &lt;text x=&quot;306&quot; y=&quot;314&quot; font-size=&quot;10&quot; fill=&quot;#c62828&quot;&gt;可能调风控判异常&lt;/text&gt;
+      &lt;rect x=&quot;36&quot; y=&quot;222&quot; width=&quot;222&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;52&quot; y=&quot;246&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;第 7 步&lt;/text&gt;
+      &lt;text x=&quot;52&quot; y=&quot;270&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;发放令牌&lt;/text&gt;
+      &lt;text x=&quot;52&quot; y=&quot;294&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;有时效、可吊销&lt;/text&gt;
+      &lt;text x=&quot;52&quot; y=&quot;314&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;后续请求都带着它&lt;/text&gt;
+      &lt;path d=&quot;M542,274 L514,274&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr3)&quot;/&gt;
+      &lt;path d=&quot;M288,274 L260,274&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr3)&quot;/&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;400&quot; width=&quot;952&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#9cc3ff&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;422&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;决策树：&lt;/text&gt;
-      &lt;text x=&quot;128&quot; y=&quot;422&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;查不到 → 空值 + 布隆　｜　一个热 key 过期 → 单飞锁 + 逻辑过期　｜　大片 key 或缓存挂 → TTL 抖动 + 多级缓存 + 熔断&lt;/text&gt;
+      &lt;rect x=&quot;26&quot; y=&quot;352&quot; width=&quot;984&quot; height=&quot;102&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;46&quot; y=&quot;378&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;为什么必须服务端说了算&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;404&quot; font-size=&quot;11&quot; fill=&quot;#48484a&quot;&gt;JR/T 0092 要求认证流程「无法被绕过」—— App 自己说「登录成功」不算数。&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;428&quot; font-size=&quot;11&quot; fill=&quot;#48484a&quot;&gt;令牌由服务端发放、有时效、可吊销；换设备或敏感操作要重新验证。&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;448&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;常见误区：把令牌存在本地就完事。实际上服务端随时可以让它失效。&lt;/text&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;474&quot; width=&quot;984&quot; height=&quot;126&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;46&quot; y=&quot;500&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;监管要求的验证要素（JR/T 0092 原文列举）&lt;/text&gt;
+      &lt;rect x=&quot;46&quot; y=&quot;516&quot; width=&quot;222&quot; height=&quot;64&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;157&quot; y=&quot;542&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;口令&lt;/text&gt;
+      &lt;text x=&quot;157&quot; y=&quot;564&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;最基础的要素&lt;/text&gt;
+      &lt;rect x=&quot;292&quot; y=&quot;516&quot; width=&quot;222&quot; height=&quot;64&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;403&quot; y=&quot;542&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;短信验证码&lt;/text&gt;
+      &lt;text x=&quot;403&quot; y=&quot;564&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;要调短信平台&lt;/text&gt;
+      &lt;rect x=&quot;538&quot; y=&quot;516&quot; width=&quot;222&quot; height=&quot;64&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;649&quot; y=&quot;542&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;手势密码&lt;/text&gt;
+      &lt;text x=&quot;649&quot; y=&quot;564&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;本地轨迹比对&lt;/text&gt;
+      &lt;rect x=&quot;784&quot; y=&quot;516&quot; width=&quot;222&quot; height=&quot;64&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;895&quot; y=&quot;542&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;生物特征识别&lt;/text&gt;
+      &lt;text x=&quot;895&quot; y=&quot;564&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;指纹 / 人脸，配 TEE&lt;/text&gt;
+
+      &lt;defs&gt;&lt;marker id=&quot;mArr3&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
     &lt;/g&gt;
   &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;代码里每一条防线都有注释标出它防谁。上线后先看命中率和 DB QPS，再决定要不要加锁、加布隆或加抖动——别三种药一起灌。&lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上排四步、下排三步，注意箭头在第二排是反方向的（从右往左），顺着箭头读就不会乱。第 6 步是全图重点：认证必须由服务端说了算，App 自己说成功不算数。下面是监管列举的四种验证要素，实际银行会按风险等级组合使用。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 5 转账流程 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m5&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;一笔转账穿过了哪些系统 &lt;span class=&quot;tag&quot;&gt;流程图&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;九个步骤里，App 真正参与的只有第 1 步和第 7 步的展示。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 690&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;行内转账九步：从点按钮到事后分析&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;先读上排五步，再读下排四步&lt;/text&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;86&quot; width=&quot;182&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;42&quot; y=&quot;110&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;① App&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;134&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;组装请求&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;158&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;收款人、金额、密码&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;176&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;国密算法加密&lt;/text&gt;
+      &lt;rect x=&quot;228&quot; y=&quot;86&quot; width=&quot;182&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;244&quot; y=&quot;110&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;② 网关&lt;/text&gt;
+      &lt;text x=&quot;244&quot; y=&quot;134&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;校验请求&lt;/text&gt;
+      &lt;text x=&quot;244&quot; y=&quot;158&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;令牌有效吗&lt;/text&gt;
+      &lt;text x=&quot;244&quot; y=&quot;176&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;App 签名、限流&lt;/text&gt;
+      &lt;rect x=&quot;430&quot; y=&quot;86&quot; width=&quot;182&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;446&quot; y=&quot;110&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;③ 交易中心&lt;/text&gt;
+      &lt;text x=&quot;446&quot; y=&quot;134&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;标准化请求&lt;/text&gt;
+      &lt;text x=&quot;446&quot; y=&quot;158&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;转成内部格式&lt;/text&gt;
+      &lt;text x=&quot;446&quot; y=&quot;176&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;准备往下派&lt;/text&gt;
+      &lt;rect x=&quot;632&quot; y=&quot;86&quot; width=&quot;182&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;648&quot; y=&quot;110&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;④ 风控引擎&lt;/text&gt;
+      &lt;text x=&quot;648&quot; y=&quot;134&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;实时打分&lt;/text&gt;
+      &lt;text x=&quot;648&quot; y=&quot;158&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;设备、地点、金额&lt;/text&gt;
+      &lt;text x=&quot;648&quot; y=&quot;176&quot; font-size=&quot;10&quot; fill=&quot;#c62828&quot;&gt;放行 / 验证 / 拦截&lt;/text&gt;
+      &lt;rect x=&quot;834&quot; y=&quot;86&quot; width=&quot;176&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;850&quot; y=&quot;110&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑤ ESB&lt;/text&gt;
+      &lt;text x=&quot;850&quot; y=&quot;134&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;翻译并路由&lt;/text&gt;
+      &lt;text x=&quot;850&quot; y=&quot;158&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;转成核心报文&lt;/text&gt;
+      &lt;text x=&quot;850&quot; y=&quot;176&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;转发到核心&lt;/text&gt;
+      &lt;path d=&quot;M210,136 L226,136&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr4)&quot;/&gt;
+      &lt;path d=&quot;M412,136 L428,136&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr4)&quot;/&gt;
+      &lt;path d=&quot;M614,136 L630,136&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr4)&quot;/&gt;
+      &lt;path d=&quot;M816,136 L832,136&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr4)&quot;/&gt;
+
+      &lt;rect x=&quot;834&quot; y=&quot;210&quot; width=&quot;176&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;850&quot; y=&quot;234&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑥ 核心&lt;/text&gt;
+      &lt;text x=&quot;850&quot; y=&quot;258&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;记账&lt;/text&gt;
+      &lt;text x=&quot;850&quot; y=&quot;282&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;借贷两边同时记&lt;/text&gt;
+      &lt;text x=&quot;850&quot; y=&quot;300&quot; font-size=&quot;10&quot; fill=&quot;#c62828&quot;&gt;同一事务完成&lt;/text&gt;
+      &lt;rect x=&quot;632&quot; y=&quot;210&quot; width=&quot;182&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;648&quot; y=&quot;234&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑦ 回写状态&lt;/text&gt;
+      &lt;text x=&quot;648&quot; y=&quot;258&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;逐层返回结果&lt;/text&gt;
+      &lt;text x=&quot;648&quot; y=&quot;282&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;App 显示成功&lt;/text&gt;
+      &lt;text x=&quot;648&quot; y=&quot;300&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;App 只参与展示&lt;/text&gt;
+      &lt;rect x=&quot;430&quot; y=&quot;210&quot; width=&quot;182&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;446&quot; y=&quot;234&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑧ 通知&lt;/text&gt;
+      &lt;text x=&quot;446&quot; y=&quot;258&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;短信 + 推送&lt;/text&gt;
+      &lt;text x=&quot;446&quot; y=&quot;282&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;交易通知&lt;/text&gt;
+      &lt;text x=&quot;446&quot; y=&quot;300&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;App 消息推送&lt;/text&gt;
+      &lt;rect x=&quot;228&quot; y=&quot;210&quot; width=&quot;182&quot; height=&quot;100&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;244&quot; y=&quot;234&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑨ 事后&lt;/text&gt;
+      &lt;text x=&quot;244&quot; y=&quot;258&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;日志与报送&lt;/text&gt;
+      &lt;text x=&quot;244&quot; y=&quot;282&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;数据平台、埋点&lt;/text&gt;
+      &lt;text x=&quot;244&quot; y=&quot;300&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;反洗钱报送&lt;/text&gt;
+      &lt;path d=&quot;M922,188 L922,208&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr4)&quot;/&gt;
+      &lt;path d=&quot;M832,260 L816,260&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr4)&quot;/&gt;
+      &lt;path d=&quot;M630,260 L614,260&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr4)&quot;/&gt;
+      &lt;path d=&quot;M428,260 L412,260&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#mArr4)&quot;/&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;334&quot; width=&quot;984&quot; height=&quot;86&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;46&quot; y=&quot;360&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;最关键的一句&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;386&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;九步里 App 真正参与的只有第 ① 步和第 ⑦ 步的展示，其余全是后台接力。&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;408&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;所以「转账失败」要分清：是卡在网关、被风控拦了、ESB 路由错了，还是核心记账没成功。&lt;/text&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;440&quot; width=&quot;984&quot; height=&quot;86&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;46&quot; y=&quot;466&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;风控的三档决策&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;492&quot; font-size=&quot;11&quot; fill=&quot;#48484a&quot;&gt;低风险 → 直接放行　｜　中风险 → 要二次验证（短信 / 人脸）　｜　高风险 → 直接拦截&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;514&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;公开案例：有银行把近 200 个关键交易场景纳入实时风险监测，用「专家规则 + 机器学习模型」双轨决策&lt;/text&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;546&quot; width=&quot;984&quot; height=&quot;124&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;46&quot; y=&quot;572&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;如果是跨行转账，第 ⑤ 步之后多走一段&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;600&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;核心 → 行内支付系统 → IBPS / HVPS / 银联 / 网联 → 对方银行 → 回执原路返回&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;628&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;跨行的钱最终在央行的账户上完成清算，这就是手机银行必须接支付清算网络的原因。&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;652&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;回执回来后，第 ⑦ ⑧ ⑨ 步照常进行；双方日终还要和央行账户对账。&lt;/text&gt;
+
+      &lt;defs&gt;&lt;marker id=&quot;mArr4&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上排五步从左到右，下排四步从右往左（注意箭头方向），连起来就是一笔钱走过的完整路径。第 ④ 步风控的三档决策要重点看——它有权拦，但无权记账。最下面那段是跨行分支：手机银行自己不管跨行，它把请求交给核心和支付系统，后者去和央行网络对话。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 6 安全与发布 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;m6&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;安全不是一层，发布也不是发个包 &lt;span class=&quot;tag&quot;&gt;工程视角&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;左边是四道安全防线，右边是端云一体的发布链路。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 620&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;四道安全防线：每一层都得有&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;60&quot; width=&quot;470&quot; height=&quot;76&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;86&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 设备安全 —— 手机本身可信吗&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;110&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;设备指纹、安全键盘、防截屏、TEE 可信执行环境&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;146&quot; width=&quot;470&quot; height=&quot;76&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;172&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;② 通信安全 —— 传输会被偷看吗&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;HTTPS、国密算法、数字证书、防中间人攻击&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;232&quot; width=&quot;470&quot; height=&quot;76&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;258&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;③ 身份认证 —— 你是不是你&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;282&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;口令、短信码、手势、生物识别、多因素认证&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;318&quot; width=&quot;470&quot; height=&quot;76&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;344&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;④ 交易风控 —— 这次操作可疑吗&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;368&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;实时反欺诈、行为分析、规则引擎 + 机器学习双轨&lt;/text&gt;
+
+      &lt;text x=&quot;546&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;端云一体：发布是一条链路&lt;/text&gt;
+      &lt;rect x=&quot;546&quot; y=&quot;60&quot; width=&quot;446&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;564&quot; y=&quot;86&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;研发侧&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;110&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;iOS / Android / 鸿蒙多端 IDE + H5 框架，一套体系覆盖多端&lt;/text&gt;
+      &lt;rect x=&quot;546&quot; y=&quot;142&quot; width=&quot;446&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;564&quot; y=&quot;168&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;App 层&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;192&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;登录、转账、理财等场景 + H5容器 / 小程序容器 / 扫一扫&lt;/text&gt;
+      &lt;rect x=&quot;546&quot; y=&quot;224&quot; width=&quot;446&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;564&quot; y=&quot;250&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;核心服务层（云端）&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;274&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;网关、消息推送、应用管控、数据同步四大服务&lt;/text&gt;
+      &lt;rect x=&quot;546&quot; y=&quot;306&quot; width=&quot;446&quot; height=&quot;88&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;564&quot; y=&quot;332&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;发布与运维&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;356&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;版本管控、灰度发布、配置下发、热修复&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;380&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;全链路分析、运维监控、智能诊断&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;414&quot; width=&quot;948&quot; height=&quot;86&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;440&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;JR/T 0092 的四项管理要求：不止管代码，还管全生命周期&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;466&quot; font-size=&quot;11&quot; fill=&quot;#48484a&quot;&gt;设计：安全、可靠、易用、可维护、可扩展　｜　开发：严格流程、编码安全规范、完整测试&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;490&quot; font-size=&quot;11&quot; fill=&quot;#48484a&quot;&gt;发布：独立安装目录、唯一应用标识符、明确版本序号　｜　维护：规范日常运维流程&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;520&quot; width=&quot;948&quot; height=&quot;80&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;546&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话记住&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;572&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;安全是四道防线，一层都不能少；发布是一条链路，不是把包传应用市场&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;592&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;真实案例：渤海银行「FIDO + 数字证书」用于登录和大额转账；北京银行近 200 个交易场景实时风控&lt;/text&gt;
+
+      &lt;defs&gt;&lt;marker id=&quot;mArr5&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;左边四道防线从上到下读，记住「安全不是某一层的事，是每层都要有」。右边是端云一体的发布链路，重点看「核心服务层」的四大服务和底下的发布运维。中间紫色框说明监管管的是全生命周期——设计、开发、发布、维护都在里面。&lt;/div&gt;
 &lt;/div&gt;
 
 &lt;script&gt;
@@ -1057,17 +981,17 @@ id = 1001&#39; OR &#39;1&#39;=&#39;1</code></pre></div></div>
 &lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;
-" sandbox="allow-scripts" loading="lazy" style="height:1150px"></iframe></figure>
+" sandbox="allow-scripts" loading="lazy" style="height:1300px"></iframe></figure>
   </div>
 </article>
-<nav class="toc" aria-label="文章目录"><div class="toc-head"><span class="toc-title">本页目录</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a></div><div class="toc-group"><a href="#sec-1" class="">先把基准线立住：缓存本来是怎么挡数据库的</a></div><div class="toc-group"><a href="#sec-2" class="">穿透：数据库反复被问&quot;这个人存不存在&quot;</a><a href="#sec-3" class="lv3">它到底是什么</a><a href="#sec-4" class="lv3">为什么它特别容易被忽略</a><a href="#sec-5" class="lv3">两道防线</a><a href="#sec-6" class="lv3">这里有个坑</a></div><div class="toc-group"><a href="#sec-7" class="">击穿：一个热点 key 过期，几万人同时扑向数据库</a><a href="#sec-8" class="lv3">它到底是什么</a><a href="#sec-9" class="lv3">它和穿透到底差在哪</a><a href="#sec-10" class="lv3">药方 1：互斥锁 / single-flight</a><a href="#sec-11" class="lv3">药方 2：逻辑过期 + 后台刷新</a></div><div class="toc-group"><a href="#sec-12" class="">雪崩：一大片 key 同时失效，缓存层整体失守</a><a href="#sec-13" class="lv3">它到底是什么</a><a href="#sec-14" class="lv3">它和击穿到底差在哪</a><a href="#sec-15" class="lv3">四层防线</a></div><div class="toc-group"><a href="#sec-16" class="">三者放一起对照</a></div><div class="toc-group"><a href="#sec-17" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-18" class="">生产上怎么定位：别三种药一起灌</a></div><div class="toc-group"><a href="#sec-19" class="">参考资料</a></div><div class="toc-group"><a href="#sec-embeds" class="">缓存三兄弟图解（六张图）</a></div></nav>
+<nav class="toc" aria-label="文章目录"><div class="toc-head"><span class="toc-title">本页目录</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a></div><div class="toc-group"><a href="#sec-1" class="">先看一组真实数字和一条监管红线</a></div><div class="toc-group"><a href="#sec-2" class="">一、定位：手机银行是门脸，不是账房</a></div><div class="toc-group"><a href="#sec-3" class="">二、五层架构：一家真实银行是怎么搭的</a></div><div class="toc-group"><a href="#sec-4" class="">三、上游：谁会来找手机银行</a></div><div class="toc-group"><a href="#sec-5" class="">四、下游：手机银行会跟哪些系统打交道</a><a href="#sec-6" class="lv3">1. 账务类：核心系统</a><a href="#sec-7" class="lv3">2. 支付类：支付清算 / 银联 / 网联 / 央行</a><a href="#sec-8" class="lv3">3. 身份与客户类：ECIF、统一认证、证件核验</a><a href="#sec-9" class="lv3">4. 风控安全类：反欺诈、反洗钱、风控引擎</a><a href="#sec-10" class="lv3">5. 产品与业务类：信贷、理财、票据、贵金属</a><a href="#sec-11" class="lv3">6. 支撑类：短信、推送、影像、客服、数据平台</a></div><div class="toc-group"><a href="#sec-12" class="">五、走一遍：登录一次手机银行发生了什么</a></div><div class="toc-group"><a href="#sec-13" class="">六、走一遍：一笔转账穿过了哪些系统</a></div><div class="toc-group"><a href="#sec-14" class="">七、安全不是一层，是四道防线</a></div><div class="toc-group"><a href="#sec-15" class="">八、常见误区</a></div><div class="toc-group"><a href="#sec-16" class="">九、术语小抄</a></div><div class="toc-group"><a href="#sec-17" class="">十、权威出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">手机银行架构与上下游图解（六张图）</a></div></nav>
 </div>
 </main>
 <div class="detail-actions"><a class="back-fab" href="../index.html" aria-label="返回文章列表"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>返回列表</a><button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button></div><div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
   <div class="toc-backdrop" data-toc-close></div>
   <div class="toc-panel">
-    <div class="toc-panel-head"><span>本页目录 · 20 节</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
-    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先把基准线立住：缓存本来是怎么挡数据库的</a></div><div class="toc-group"><a href="#sec-2" class="">穿透：数据库反复被问&quot;这个人存不存在&quot;</a><a href="#sec-3" class="lv3">它到底是什么</a><a href="#sec-4" class="lv3">为什么它特别容易被忽略</a><a href="#sec-5" class="lv3">两道防线</a><a href="#sec-6" class="lv3">这里有个坑</a></div><div class="toc-group"><a href="#sec-7" class="">击穿：一个热点 key 过期，几万人同时扑向数据库</a><a href="#sec-8" class="lv3">它到底是什么</a><a href="#sec-9" class="lv3">它和穿透到底差在哪</a><a href="#sec-10" class="lv3">药方 1：互斥锁 / single-flight</a><a href="#sec-11" class="lv3">药方 2：逻辑过期 + 后台刷新</a></div><div class="toc-group"><a href="#sec-12" class="">雪崩：一大片 key 同时失效，缓存层整体失守</a><a href="#sec-13" class="lv3">它到底是什么</a><a href="#sec-14" class="lv3">它和击穿到底差在哪</a><a href="#sec-15" class="lv3">四层防线</a></div><div class="toc-group"><a href="#sec-16" class="">三者放一起对照</a></div><div class="toc-group"><a href="#sec-17" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-18" class="">生产上怎么定位：别三种药一起灌</a></div><div class="toc-group"><a href="#sec-19" class="">参考资料</a></div><div class="toc-group"><a href="#sec-embeds" class="">缓存三兄弟图解（六张图）</a></div></nav>
+    <div class="toc-panel-head"><span>本页目录 · 18 节</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先看一组真实数字和一条监管红线</a></div><div class="toc-group"><a href="#sec-2" class="">一、定位：手机银行是门脸，不是账房</a></div><div class="toc-group"><a href="#sec-3" class="">二、五层架构：一家真实银行是怎么搭的</a></div><div class="toc-group"><a href="#sec-4" class="">三、上游：谁会来找手机银行</a></div><div class="toc-group"><a href="#sec-5" class="">四、下游：手机银行会跟哪些系统打交道</a><a href="#sec-6" class="lv3">1. 账务类：核心系统</a><a href="#sec-7" class="lv3">2. 支付类：支付清算 / 银联 / 网联 / 央行</a><a href="#sec-8" class="lv3">3. 身份与客户类：ECIF、统一认证、证件核验</a><a href="#sec-9" class="lv3">4. 风控安全类：反欺诈、反洗钱、风控引擎</a><a href="#sec-10" class="lv3">5. 产品与业务类：信贷、理财、票据、贵金属</a><a href="#sec-11" class="lv3">6. 支撑类：短信、推送、影像、客服、数据平台</a></div><div class="toc-group"><a href="#sec-12" class="">五、走一遍：登录一次手机银行发生了什么</a></div><div class="toc-group"><a href="#sec-13" class="">六、走一遍：一笔转账穿过了哪些系统</a></div><div class="toc-group"><a href="#sec-14" class="">七、安全不是一层，是四道防线</a></div><div class="toc-group"><a href="#sec-15" class="">八、常见误区</a></div><div class="toc-group"><a href="#sec-16" class="">九、术语小抄</a></div><div class="toc-group"><a href="#sec-17" class="">十、权威出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">手机银行架构与上下游图解（六张图）</a></div></nav>
   </div>
 </div>
 

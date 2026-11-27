@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>核心系统架构与上下游 · 六张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#c62828,#ff6b35 50%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(180,70,40,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--red);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>核心系统架构与上下游：给程序员的一张地图</h1>
+  <p>核心不是「最大的系统」，是「唯一敢说这笔账算数的系统」。用五个房间、三层账、联机加日终，把它拆开看一遍。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#k1">定位</a><a href="#k2">五个房间</a><a href="#k3">三层账</a><a href="#k4">联机与日终</a><a href="#k5">上下游</a><a href="#k6">瘦核心与改造</a>
+</div>
+
+<!-- 1 定位 -->
+<div class="card" id="k1">
+  <div class="card-head">
+    <h2><span class="num">1</span>定位：核心是账房，不是大脑 <span class="tag">总览</span></h2>
+    <p>渠道负责说，外围负责算业务，核心负责认账。全行只有一本账，就在核心。</p>
+  </div>
+  <svg viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">核心系统在银行版图里的位置</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">三层各管一段：越往下，越不能出错</text>
+
+      <rect x="44" y="88" width="292" height="140" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="116" font-size="13" font-weight="700" fill="#0a58ca">渠道层 · 只受理，不记账</text>
+      <text x="64" y="143" font-size="11" fill="#48484a">手机银行 / 网银 / 柜面 / ATM</text>
+      <text x="64" y="166" font-size="11" fill="#48484a">收请求、做端侧校验、画结果</text>
+      <text x="64" y="189" font-size="10.5" fill="#6e6e73">不存余额、不做决策</text>
+      <text x="64" y="212" font-size="10.5" fill="#0a58ca">换了 App，账一分不动</text>
+
+      <rect x="374" y="88" width="292" height="140" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="394" y="116" font-size="13" font-weight="700" fill="#5b3a9e">外围层 · 算业务，不动账</text>
+      <text x="394" y="143" font-size="11" fill="#48484a">信贷 / 理财 / 风控 / CRM / 支付</text>
+      <text x="394" y="166" font-size="11" fill="#48484a">审批、规则、流程、营销</text>
+      <text x="394" y="189" font-size="10.5" fill="#6e6e73">决定「能不能办」</text>
+      <text x="394" y="212" font-size="10.5" fill="#5b3a9e">不决定「这一笔怎么记」</text>
+
+      <rect x="704" y="88" width="292" height="140" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="724" y="116" font-size="13" font-weight="700" fill="#c62828">核心层 · 记账，只此一家</text>
+      <text x="724" y="143" font-size="11" fill="#48484a">账户 / 存款 / 贷款 / 支付 / 总账</text>
+      <text x="724" y="166" font-size="11" fill="#48484a">记账、核算、出总账</text>
+      <text x="724" y="189" font-size="10.5" fill="#6e6e73">全行唯一敢说「这笔算数」</text>
+      <text x="724" y="212" font-size="10.5" fill="#c62828">错了不是 bug，是事故</text>
+
+      <path d="M336,158 L374,158" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#kArr1)"/>
+      <path d="M666,158 L704,158" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#kArr1)"/>
+
+      <text x="44" y="272" font-size="13" font-weight="700" fill="#1d1d1f">核心不做决策，只回答三个问题</text>
+
+      <rect x="44" y="288" width="292" height="112" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="64" y="316" font-size="12.5" font-weight="700" fill="#1d1d1f">钱记在谁头上？</text>
+      <text x="64" y="343" font-size="11" fill="#48484a">账户：客户号、存款户、贷款户</text>
+      <text x="64" y="366" font-size="11" fill="#48484a">还有一堆不对客的内部户</text>
+      <text x="64" y="389" font-size="10.5" fill="#6e6e73">这是「归属」问题</text>
+
+      <rect x="374" y="288" width="292" height="112" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="394" y="316" font-size="12.5" font-weight="700" fill="#1d1d1f">这一笔怎么记？</text>
+      <text x="394" y="343" font-size="11" fill="#48484a">账务：借贷分录、余额、事务</text>
+      <text x="394" y="366" font-size="11" fill="#48484a">付款减、收款加，必须同时成</text>
+      <text x="394" y="389" font-size="10.5" fill="#6e6e73">这是「过程」问题</text>
+
+      <rect x="704" y="288" width="292" height="112" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="724" y="316" font-size="12.5" font-weight="700" fill="#1d1d1f">全行合起来平不平？</text>
+      <text x="724" y="343" font-size="11" fill="#48484a">总账：科目、总分核对、报表</text>
+      <text x="724" y="366" font-size="11" fill="#48484a">借方合计必须等于贷方合计</text>
+      <text x="724" y="389" font-size="10.5" fill="#6e6e73">这是「口径」问题</text>
+
+      <text x="44" y="440" font-size="13" font-weight="700" fill="#1d1d1f">换成网点里的角色，一下就懂了</text>
+
+      <rect x="44" y="458" width="176" height="86" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="132" y="486" font-size="12" font-weight="700" fill="#0a58ca" text-anchor="middle">大堂经理</text>
+      <text x="132" y="509" font-size="10.5" fill="#48484a" text-anchor="middle">取号、引导</text>
+      <text x="132" y="529" font-size="10" fill="#6e6e73" text-anchor="middle">渠道层</text>
+
+      <rect x="238" y="458" width="176" height="86" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="326" y="486" font-size="12" font-weight="700" fill="#5b3a9e" text-anchor="middle">客户经理</text>
+      <text x="326" y="509" font-size="10.5" fill="#48484a" text-anchor="middle">判断能不能贷</text>
+      <text x="326" y="529" font-size="10" fill="#6e6e73" text-anchor="middle">信贷系统</text>
+
+      <rect x="432" y="458" width="176" height="86" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="520" y="486" font-size="12" font-weight="700" fill="#a35b00" text-anchor="middle">柜员</text>
+      <text x="520" y="509" font-size="10.5" fill="#48484a" text-anchor="middle">敲交易、打凭条</text>
+      <text x="520" y="529" font-size="10" fill="#6e6e73" text-anchor="middle">核心交易层</text>
+
+      <rect x="626" y="458" width="176" height="86" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="714" y="486" font-size="12" font-weight="700" fill="#c62828" text-anchor="middle">记账员</text>
+      <text x="714" y="509" font-size="10.5" fill="#48484a" text-anchor="middle">把这一笔写进账</text>
+      <text x="714" y="529" font-size="10" fill="#6e6e73" text-anchor="middle">核心账务层</text>
+
+      <rect x="820" y="458" width="176" height="86" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="908" y="486" font-size="12" font-weight="700" fill="#1d7a45" text-anchor="middle">会计主管</text>
+      <text x="908" y="509" font-size="10.5" fill="#48484a" text-anchor="middle">关门轧账</text>
+      <text x="908" y="529" font-size="10" fill="#6e6e73" text-anchor="middle">核心总账层</text>
+
+      <path d="M220,501 L238,501" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr1)"/>
+      <path d="M414,501 L432,501" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr1)"/>
+      <path d="M608,501 L626,501" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr1)"/>
+      <path d="M802,501 L820,501" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr1)"/>
+
+      <rect x="44" y="566" width="952" height="44" rx="10" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="520" y="594" font-size="12.5" font-weight="700" fill="#c62828" text-anchor="middle">大堂经理可以换，客户经理可以换，账本不能有两本</text>
+
+      <defs><marker id="kArr1" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先看最上面三块，从左到右是「受理 → 算业务 → 记账」，越往右越不能错。中间三块是核心唯一要回答的三个问题：归属、过程、口径。最下面一排是网点里的类比，把抽象分层换成具体的人——真正拿笔写账本的只有「记账员」和「会计主管」。</div>
+</div>
+
+<!-- 2 五个房间 -->
+<div class="card" id="k2">
+  <div class="card-head">
+    <h2><span class="num">2</span>解剖：核心里其实是五个房间 <span class="tag">内部分层</span></h2>
+    <p>各家叫法不同，但脱掉外衣都是这五层；右边两条线是时间维度。</p>
+  </div>
+  <svg viewBox="0 0 1040 744" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">核心里面的五个房间</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">从上到下：请求进来 → 判断能不能办 → 取规则 → 动账 → 汇总</text>
+
+      <rect x="44" y="92" width="140" height="88" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="114" y="122" font-size="12" font-weight="700" fill="#0a58ca" text-anchor="middle">① 接入层</text>
+      <text x="114" y="145" font-size="10" fill="#6e6e73" text-anchor="middle">交易从哪儿进</text>
+      <text x="114" y="164" font-size="10" fill="#6e6e73" text-anchor="middle">安检 + 翻译</text>
+      <rect x="190" y="92" width="514" height="88" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="208" y="118" font-size="11" fill="#48484a">手机银行 · 网银 · 柜面 · ATM · ESB 服务总线</text>
+      <text x="208" y="142" font-size="11" fill="#48484a">翻译报文 / 校验机构柜员 / 限流熔断 / 留原始报文</text>
+      <text x="208" y="166" font-size="10.5" fill="#c62828">关键：这一层不记账，只负责把请求安全送进去</text>
+
+      <rect x="44" y="192" width="140" height="100" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="114" y="224" font-size="12" font-weight="700" fill="#5b3a9e" text-anchor="middle">② 交易层</text>
+      <text x="114" y="247" font-size="10" fill="#6e6e73" text-anchor="middle">这一笔怎么办</text>
+      <text x="114" y="266" font-size="10" fill="#6e6e73" text-anchor="middle">核心的「柜台」</text>
+      <rect x="190" y="192" width="514" height="100" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="208" y="220" font-size="11" fill="#48484a">交易码路由 · 业务规则校验 · 权限与限额</text>
+      <text x="208" y="244" font-size="11" fill="#48484a">幂等防重 · 交易流水 · 失败处理与冲正</text>
+      <text x="208" y="268" font-size="10.5" fill="#5b3a9e">管「能不能办」，不管「这一笔怎么记」</text>
+
+      <rect x="44" y="304" width="140" height="100" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="114" y="336" font-size="12" font-weight="700" fill="#a35b00" text-anchor="middle">③ 产品层</text>
+      <text x="114" y="359" font-size="10" fill="#6e6e73" text-anchor="middle">规则从哪儿来</text>
+      <text x="114" y="378" font-size="10" fill="#6e6e73" text-anchor="middle">配置，不是硬编码</text>
+      <rect x="190" y="304" width="514" height="100" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="208" y="332" font-size="11" fill="#48484a">产品工厂：期限、计息方式、透支、挂失、冻结规则</text>
+      <text x="208" y="356" font-size="11" fill="#48484a">参数中心：利率、费率、汇率、税率、渠道限额</text>
+      <text x="208" y="380" font-size="10.5" fill="#a35b00">目标：新产品靠配置上线，不靠改代码发版</text>
+
+      <rect x="44" y="416" width="140" height="110" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="114" y="450" font-size="12" font-weight="700" fill="#c62828" text-anchor="middle">④ 账务层</text>
+      <text x="114" y="473" font-size="10" fill="#6e6e73" text-anchor="middle">真正动账</text>
+      <text x="114" y="492" font-size="10" fill="#6e6e73" text-anchor="middle">核心的心脏</text>
+      <text x="114" y="511" font-size="10" fill="#c62828" text-anchor="middle">错了就是事故</text>
+      <rect x="190" y="416" width="514" height="110" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="208" y="444" font-size="11" fill="#48484a">账户 · 余额（可用 / 冻结 / 上日 / 透支）</text>
+      <text x="208" y="468" font-size="11" fill="#48484a">分录（借 / 贷）· 事务（付款减和收款加同生共死）</text>
+      <text x="208" y="492" font-size="11" fill="#48484a">交易与账务分离：全渠道共用一套账务逻辑</text>
+      <text x="208" y="516" font-size="10.5" fill="#c62828">不动账的，不配叫核心</text>
+
+      <rect x="44" y="538" width="140" height="90" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="114" y="568" font-size="12" font-weight="700" fill="#1d7a45" text-anchor="middle">⑤ 总账层</text>
+      <text x="114" y="591" font-size="10" fill="#6e6e73" text-anchor="middle">全行平不平</text>
+      <text x="114" y="610" font-size="10" fill="#6e6e73" text-anchor="middle">会计主管</text>
+      <rect x="190" y="538" width="514" height="90" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="208" y="566" font-size="11" fill="#48484a">科目 · 总分核对 · 试算平衡 · 日终过账</text>
+      <text x="208" y="590" font-size="11" fill="#48484a">资产负债表 / 利润表 / 年终决算</text>
+      <text x="208" y="614" font-size="10.5" fill="#1d7a45">明细对不上总账，就一笔一笔查到平为止</text>
+
+      <rect x="724" y="92" width="272" height="240" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="744" y="120" font-size="12.5" font-weight="700" fill="#0a58ca">贯穿线 A · 联机（白天）</text>
+      <text x="744" y="148" font-size="11" fill="#48484a">一笔一笔实时处理</text>
+      <text x="744" y="174" font-size="11" fill="#48484a">要求：快、准、可回滚</text>
+      <text x="744" y="200" font-size="11" fill="#48484a">难点：幂等、行锁、热点账户</text>
+      <text x="744" y="226" font-size="11" fill="#48484a">典型：转账、存款、查询</text>
+      <text x="744" y="252" font-size="10.5" fill="#0a58ca">用户能感知的那一半</text>
+      <text x="744" y="278" font-size="10.5" fill="#6e6e73">做不好，客户当场骂人</text>
+      <text x="744" y="308" font-size="10.5" fill="#6e6e73">但它只占核心复杂度的一半</text>
+
+      <rect x="724" y="352" width="272" height="240" rx="12" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="744" y="380" font-size="12.5" font-weight="700" fill="#a35b00">贯穿线 B · 批量（晚上）</text>
+      <text x="744" y="408" font-size="11" fill="#48484a">一次几千万户，集中处理</text>
+      <text x="744" y="434" font-size="11" fill="#48484a">要求：稳、可重跑、断点续跑</text>
+      <text x="744" y="460" font-size="11" fill="#48484a">内容：计提、结息、过账、报表</text>
+      <text x="744" y="486" font-size="11" fill="#48484a">典型：日终、季末结息、年终决算</text>
+      <text x="744" y="512" font-size="10.5" fill="#a35b00">用户看不见，但账靠它才算平</text>
+      <text x="744" y="538" font-size="10.5" fill="#6e6e73">做不好，第二天开门就是错账</text>
+      <text x="744" y="568" font-size="10.5" fill="#6e6e73">跑批窗口通常只有几个小时</text>
+
+      <rect x="724" y="612" width="272" height="52" rx="10" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="860" y="634" font-size="11" font-weight="700" fill="#1d1d1f" text-anchor="middle">安全与审计贯穿两层</text>
+      <text x="860" y="653" font-size="10" fill="#6e6e73" text-anchor="middle">日志、授权、双人复核、事后追查</text>
+
+      <rect x="44" y="650" width="660" height="78" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="64" y="674" font-size="11.5" font-weight="700" fill="#5b3a9e">真实模块划分（广东华兴银行公开案例）</text>
+      <text x="64" y="697" font-size="10.5" fill="#48484a">存款、贷款、公共运营、产品与定价、客户信息、参数管理、聚合服务、记账引擎</text>
+      <text x="64" y="716" font-size="10" fill="#6e6e73">每个模块内部再分联机微服务和批量微服务——和上面五个房间一一对得上</text>
+
+      <defs><marker id="kArr2" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左边五块从上往下就是一个请求的旅程：接入 → 交易 → 产品 → 账务 → 总账，越往下越靠近钱。注意每块最后一行的小字，那是这一层「不做什么」——边界比职责更重要。右边两条线是同一套系统的两副面孔：白天联机求快，晚上批量求平，谁也离不开谁。</div>
+</div>
+
+<!-- 3 三层账 -->
+<div class="card" id="k3">
+  <div class="card-head">
+    <h2><span class="num">3</span>三层账：账户、分录、科目、总账 <span class="tag">账务模型</span></h2>
+    <p>余额只是结果，分录才是过程，总账才是全行口径。三层缺一不可。</p>
+  </div>
+  <svg viewBox="0 0 1040 756" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">一笔钱在核心里的四层记录</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">从「谁有多少」到「全行合起来多少」，一层比一层汇总</text>
+
+      <rect x="44" y="90" width="222" height="132" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="118" font-size="12.5" font-weight="700" fill="#0a58ca">账户（台账）</text>
+      <text x="64" y="145" font-size="11" fill="#48484a">张三活期：1000 元</text>
+      <text x="64" y="168" font-size="11" fill="#48484a">李四活期：500 元</text>
+      <text x="64" y="194" font-size="10.5" fill="#6e6e73">记「谁有多少」</text>
+      <text x="64" y="212" font-size="10" fill="#6e6e73">余额、状态、冻结、透支</text>
+
+      <rect x="284" y="90" width="222" height="132" rx="11" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="304" y="118" font-size="12.5" font-weight="700" fill="#c62828">分录（流水）</text>
+      <text x="304" y="145" font-size="11" fill="#48484a">借 张三 100</text>
+      <text x="304" y="168" font-size="11" fill="#48484a">贷 李四 100</text>
+      <text x="304" y="194" font-size="10.5" fill="#6e6e73">记「这一笔怎么动」</text>
+      <text x="304" y="212" font-size="10" fill="#6e6e73">借贷相等，可追溯</text>
+
+      <rect x="524" y="90" width="222" height="132" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="544" y="118" font-size="12.5" font-weight="700" fill="#5b3a9e">科目（分类）</text>
+      <text x="544" y="145" font-size="11" fill="#48484a">个人活期存款</text>
+      <text x="544" y="168" font-size="11" fill="#48484a">企业贷款 / 清算往来</text>
+      <text x="544" y="194" font-size="10.5" fill="#6e6e73">记「归到哪一类」</text>
+      <text x="544" y="212" font-size="10" fill="#6e6e73">会计科目表决定口径</text>
+
+      <rect x="764" y="90" width="232" height="132" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="784" y="118" font-size="12.5" font-weight="700" fill="#1d7a45">总账（汇总）</text>
+      <text x="784" y="145" font-size="11" fill="#48484a">全行借方 3.2 亿</text>
+      <text x="784" y="168" font-size="11" fill="#48484a">全行贷方 3.1 亿</text>
+      <text x="784" y="194" font-size="10.5" fill="#6e6e73">记「全行合起来」</text>
+      <text x="784" y="212" font-size="10" fill="#6e6e73">轧差、试算、出报表</text>
+
+      <path d="M266,156 L284,156" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#kArr3)"/>
+      <path d="M506,156 L524,156" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#kArr3)"/>
+      <path d="M746,156 L764,156" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#kArr3)"/>
+
+      <rect x="44" y="248" width="952" height="86" rx="11" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="64" y="275" font-size="12.5" font-weight="700" fill="#1d1d1f">复式记账的规矩：有借必有贷，借贷必相等</text>
+      <text x="64" y="301" font-size="11" fill="#48484a">财政部《会计基础》考试大纲原话：每笔业务都要在两个或两个以上相互联系的账户中，以借方和贷方相等的金额登记。</text>
+      <text x="64" y="323" font-size="10.5" fill="#6e6e73">翻成人话：一笔钱动了，至少两个地方同时记，金额一样——这样才追得回「从哪来、到哪去」，全行才能试算平衡。</text>
+
+      <rect x="44" y="362" width="460" height="250" rx="12" fill="#ffffff" stroke="#dcdce1"/>
+      <text x="64" y="390" font-size="12.5" font-weight="700" fill="#1d1d1f">例 1 · 行内转账 100 元</text>
+      <text x="64" y="416" font-size="10.5" fill="#6e6e73">张三 → 李四，同一家银行</text>
+      <rect x="64" y="430" width="420" height="62" rx="8" fill="#f7f7fa" stroke="#e5e5ea"/>
+      <text x="80" y="454" font-size="11.5" fill="#c62828" font-family="ui-monospace,Consolas,monospace">借：张三活期存款　100</text>
+      <text x="80" y="477" font-size="11.5" fill="#1d7a45" font-family="ui-monospace,Consolas,monospace">贷：李四活期存款　100</text>
+      <text x="64" y="516" font-size="11" fill="#48484a">两边都是负债类科目：</text>
+      <text x="64" y="539" font-size="11" fill="#48484a">一个减少（借），一个增加（贷）</text>
+      <text x="64" y="562" font-size="11" fill="#48484a">总额不变，账是平的</text>
+      <text x="64" y="589" font-size="10.5" fill="#c62828">只改余额不记分录，总分核对一定过不了</text>
+
+      <rect x="524" y="362" width="472" height="250" rx="12" fill="#ffffff" stroke="#dcdce1"/>
+      <text x="544" y="390" font-size="12.5" font-weight="700" fill="#1d1d1f">例 2 · 跨行转账 10000 元（两段）</text>
+      <rect x="544" y="402" width="432" height="86" rx="8" fill="#f7f7fa" stroke="#e5e5ea"/>
+      <text x="560" y="424" font-size="10.5" font-weight="700" fill="#6e6e73">第一段 · 转出时</text>
+      <text x="560" y="446" font-size="11" fill="#c62828" font-family="ui-monospace,Consolas,monospace">借：张三活期存款　　10,000</text>
+      <text x="560" y="469" font-size="11" fill="#1d7a45" font-family="ui-monospace,Consolas,monospace">贷：清算资金往来　　10,000</text>
+      <rect x="544" y="496" width="432" height="86" rx="8" fill="#f7f7fa" stroke="#e5e5ea"/>
+      <text x="560" y="518" font-size="10.5" font-weight="700" fill="#6e6e73">第二段 · 清算完成</text>
+      <text x="560" y="540" font-size="11" fill="#c62828" font-family="ui-monospace,Consolas,monospace">借：清算资金往来　　10,000</text>
+      <text x="560" y="563" font-size="11" fill="#1d7a45" font-family="ui-monospace,Consolas,monospace">贷：存放央行准备金　10,000</text>
+      <text x="544" y="600" font-size="10.5" fill="#48484a">中间隔的几秒到几分钟，靠过渡户接住，账始终是平的</text>
+
+      <rect x="44" y="632" width="952" height="96" rx="11" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="64" y="659" font-size="12.5" font-weight="700" fill="#1d1d1f">每天收工前要过的两关</text>
+      <text x="64" y="685" font-size="11.5" fill="#0a58ca">总分核对：总账科目余额 ＝ 各业务系统明细账汇总</text>
+      <text x="64" y="710" font-size="11.5" fill="#0a58ca">试算平衡：全部账户借方发生额合计 ＝ 全部账户贷方发生额合计</text>
+
+      <defs><marker id="kArr3" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>最上面四个框从左到右是「明细 → 流水 → 分类 → 汇总」，注意第四个框的数字不是前三者的简单相加，而是全行口径的合计。中间灰条是会计规则，记住「有借必有贷」就够了。下面两个例子对照着看：行内转账一借一贷就完事；跨行转账要两段，中间靠「清算资金往来」这个过渡户接住——这就是为什么支付清算和账务必须一起设计。</div>
+</div>
+
+<!-- 4 联机与日终 -->
+<div class="card" id="k4">
+  <div class="card-head">
+    <h2><span class="num">4</span>一笔交易怎么走：联机九步 + 日终四件事 <span class="tag">流程</span></h2>
+    <p>白天求快，晚上求平；两边都跑对，账才算真的对。</p>
+  </div>
+  <svg viewBox="0 0 1040 792" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">一笔转账在核心里的完整旅程</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">上面九步是白天的联机，下面四件是晚上的批量；中间那条是「日切」</text>
+
+      <text x="44" y="90" font-size="12.5" font-weight="700" fill="#c62828">联机九步（以手机银行行内转账为例）</text>
+
+      <rect x="44" y="102" width="176" height="112" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="132" y="126" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">① 渠道组装</text>
+      <text x="132" y="150" font-size="10" fill="#48484a" text-anchor="middle">付款/收款账号</text>
+      <text x="132" y="170" font-size="10" fill="#48484a" text-anchor="middle">金额、渠道流水号</text>
+      <text x="132" y="195" font-size="9.5" fill="#6e6e73" text-anchor="middle">App 只负责发请求</text>
+
+      <rect x="238" y="102" width="176" height="112" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="326" y="126" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">② 接入安检</text>
+      <text x="326" y="150" font-size="10" fill="#48484a" text-anchor="middle">报文、机构、渠道</text>
+      <text x="326" y="170" font-size="10" fill="#48484a" text-anchor="middle">限流、熔断、超时</text>
+      <text x="326" y="195" font-size="9.5" fill="#6e6e73" text-anchor="middle">不记账</text>
+
+      <rect x="432" y="102" width="176" height="112" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="520" y="126" font-size="11.5" font-weight="700" fill="#5b3a9e" text-anchor="middle">③ 交易路由</text>
+      <text x="520" y="150" font-size="10" fill="#48484a" text-anchor="middle">按交易码找到</text>
+      <text x="520" y="170" font-size="10" fill="#48484a" text-anchor="middle">「行内转账」逻辑</text>
+      <text x="520" y="195" font-size="9.5" fill="#6e6e73" text-anchor="middle">校验业务规则</text>
+
+      <rect x="626" y="102" width="176" height="112" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="714" y="126" font-size="11.5" font-weight="700" fill="#a35b00" text-anchor="middle">④ 幂等防重</text>
+      <text x="714" y="150" font-size="10" fill="#48484a" text-anchor="middle">流水号+交易码</text>
+      <text x="714" y="170" font-size="10" fill="#48484a" text-anchor="middle">+账号，查防重表</text>
+      <text x="714" y="195" font-size="9.5" fill="#6e6e73" text-anchor="middle">重复只返回原结果</text>
+
+      <rect x="820" y="102" width="176" height="112" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="908" y="126" font-size="11.5" font-weight="700" fill="#a35b00" text-anchor="middle">⑤ 产品参数</text>
+      <text x="908" y="150" font-size="10" fill="#48484a" text-anchor="middle">手续费、限额</text>
+      <text x="908" y="170" font-size="10" fill="#48484a" text-anchor="middle">账户产品属性</text>
+      <text x="908" y="195" font-size="9.5" fill="#6e6e73" text-anchor="middle">规则来自配置</text>
+
+      <path d="M220,158 L238,158" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+      <path d="M414,158 L432,158" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+      <path d="M608,158 L626,158" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+      <path d="M802,158 L820,158" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+
+      <path d="M908,214 L908,228 L132,228 L132,242" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+
+      <rect x="44" y="242" width="176" height="112" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="132" y="266" font-size="11.5" font-weight="700" fill="#c62828" text-anchor="middle">⑥ 账户校验</text>
+      <text x="132" y="290" font-size="10" fill="#48484a" text-anchor="middle">状态正常吗</text>
+      <text x="132" y="310" font-size="10" fill="#48484a" text-anchor="middle">余额够吗、冻结吗</text>
+      <text x="132" y="335" font-size="9.5" fill="#6e6e73" text-anchor="middle">超限了吗</text>
+
+      <rect x="238" y="242" width="176" height="112" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="326" y="266" font-size="11.5" font-weight="700" fill="#c62828" text-anchor="middle">⑦ 账务记账</text>
+      <text x="326" y="290" font-size="10" fill="#48484a" text-anchor="middle">生成借贷分录</text>
+      <text x="326" y="310" font-size="10" fill="#48484a" text-anchor="middle">更新双方余额</text>
+      <text x="326" y="335" font-size="9.5" fill="#c62828" text-anchor="middle">同一事务提交</text>
+
+      <rect x="432" y="242" width="176" height="112" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="520" y="266" font-size="11.5" font-weight="700" fill="#1d7a45" text-anchor="middle">⑧ 返回结果</text>
+      <text x="520" y="290" font-size="10" fill="#48484a" text-anchor="middle">流水号、余额</text>
+      <text x="520" y="310" font-size="10" fill="#48484a" text-anchor="middle">成功或失败原因</text>
+      <text x="520" y="335" font-size="9.5" fill="#6e6e73" text-anchor="middle">同步返回</text>
+
+      <rect x="626" y="242" width="176" height="112" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="714" y="266" font-size="11.5" font-weight="700" fill="#1d7a45" text-anchor="middle">⑨ 异步收尾</text>
+      <text x="714" y="290" font-size="10" fill="#48484a" text-anchor="middle">短信、推送</text>
+      <text x="714" y="310" font-size="10" fill="#48484a" text-anchor="middle">数仓、反洗钱</text>
+      <text x="714" y="335" font-size="9.5" fill="#6e6e73" text-anchor="middle">不拖慢记账</text>
+
+      <rect x="820" y="242" width="176" height="112" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="908" y="266" font-size="11" font-weight="700" fill="#a35b00" text-anchor="middle">一句话记住</text>
+      <text x="908" y="292" font-size="10" fill="#48484a" text-anchor="middle">记账必须同步</text>
+      <text x="908" y="312" font-size="10" fill="#48484a" text-anchor="middle">通知可以异步</text>
+      <text x="908" y="337" font-size="9.5" fill="#6e6e73" text-anchor="middle">反过来就出事故</text>
+
+      <path d="M220,298 L238,298" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+      <path d="M414,298 L432,298" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+      <path d="M608,298 L626,298" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+
+      <text x="44" y="390" font-size="12.5" font-weight="700" fill="#1d1d1f">日切 / 日终 / 日初：核心的「一天」不是自然日</text>
+
+      <rect x="44" y="404" width="300" height="92" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="430" font-size="11.5" font-weight="700" fill="#0a58ca">日切（Cut Off）</text>
+      <text x="64" y="454" font-size="10.5" fill="#48484a">会计日期从 T 日切到 T+1 日</text>
+      <text x="64" y="476" font-size="10" fill="#6e6e73">这一刻之后进来的交易，算新的一天</text>
+
+      <rect x="364" y="404" width="300" height="92" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="384" y="430" font-size="11.5" font-weight="700" fill="#a35b00">日终（EOD）</text>
+      <text x="384" y="454" font-size="10.5" fill="#48484a">处理 T 日收尾，依赖准确日终余额</text>
+      <text x="384" y="476" font-size="10" fill="#6e6e73">计提、结息、过账、报表都在这</text>
+
+      <rect x="684" y="404" width="312" height="92" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="704" y="430" font-size="11.5" font-weight="700" fill="#1d7a45">日初（BOD）</text>
+      <text x="704" y="454" font-size="10.5" fill="#48484a">开启 T+1 日</text>
+      <text x="704" y="476" font-size="10" fill="#6e6e73">定期到期、常设指令、自动转存</text>
+
+      <path d="M344,450 L364,450" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+      <path d="M664,450 L684,450" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#kArr4)"/>
+
+      <text x="44" y="524" font-size="10.5" fill="#6e6e73">业内常见做法：双余额——当前余额给联机，上日余额给批量；同一账户加锁互斥，避免联机和批量互相覆盖。</text>
+
+      <text x="44" y="556" font-size="12.5" font-weight="700" fill="#1d1d1f">日终四件事：白天的账，晚上要算平</text>
+
+      <rect x="44" y="570" width="222" height="106" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="64" y="596" font-size="11.5" font-weight="700" fill="#1d1d1f">① 计提</text>
+      <text x="64" y="620" font-size="10.5" fill="#48484a">贷款利息、存款应付利息</text>
+      <text x="64" y="641" font-size="10.5" fill="#48484a">手续费、费用摊销</text>
+      <text x="64" y="662" font-size="10" fill="#6e6e73">只算不收，先挂账</text>
+
+      <rect x="284" y="570" width="222" height="106" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="304" y="596" font-size="11.5" font-weight="700" fill="#1d1d1f">② 结息</text>
+      <text x="304" y="620" font-size="10.5" fill="#48484a">活期按季结息</text>
+      <text x="304" y="641" font-size="10.5" fill="#48484a">定期到期结息</text>
+      <text x="304" y="662" font-size="10" fill="#6e6e73">利息真正进客户账</text>
+
+      <rect x="524" y="570" width="222" height="106" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="544" y="596" font-size="11.5" font-weight="700" fill="#1d1d1f">③ 总账过账</text>
+      <text x="544" y="620" font-size="10.5" fill="#48484a">明细汇总到科目</text>
+      <text x="544" y="641" font-size="10.5" fill="#48484a">总分核对、试算平衡</text>
+      <text x="544" y="662" font-size="10" fill="#6e6e73">不平就不能开门</text>
+
+      <rect x="764" y="570" width="232" height="106" rx="10" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="784" y="596" font-size="11.5" font-weight="700" fill="#1d1d1f">④ 报表与对账</text>
+      <text x="784" y="620" font-size="10.5" fill="#48484a">资产负债表、监管报表</text>
+      <text x="784" y="641" font-size="10.5" fill="#48484a">银联 / 网联 / 央行对账</text>
+      <text x="784" y="662" font-size="10" fill="#6e6e73">差错进差错池</text>
+
+      <rect x="44" y="694" width="952" height="64" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="64" y="720" font-size="11.5" font-weight="700" fill="#c62828">批处理三条铁律：可重跑、批次防重、断点续跑</text>
+      <text x="64" y="743" font-size="10.5" fill="#48484a">贷款每天计提利息，如果不防重、重跑一次就多记一天利息，账会彻底崩——这就是批量比联机更难写的原因。</text>
+
+      <defs><marker id="kArr4" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上面两排是联机九步，沿着箭头走：第 1 到 5 步都是「准备」，第 6、7 步才是真正动账，第 8 步返回，第 9 步异步收尾。特别看右上角那个橙色框——记账同步、通知异步，顺序反了就是事故。中间三个框是日切、日终、日初，核心的「一天」和自然日不是一回事。下面四件事是晚上跑批干的活，最底下一行是为什么批量必须防重：重跑一次，就多记一天利息。</div>
+</div>
+
+<!-- 5 上下游 -->
+<div class="card" id="k5">
+  <div class="card-head">
+    <h2><span class="num">5</span>上下游：谁找核心，核心找谁 <span class="tag">全景</span></h2>
+    <p>上游是向核心发起请求的系统，下游是核心向它收尾的系统。方向是调用，不是数据流。</p>
+  </div>
+  <svg viewBox="0 0 1040 800" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">核心系统的上下游全景</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">上面四类找它办事，下面五类帮它收尾；中间只做一件事：认账</text>
+
+      <text x="44" y="92" font-size="12" font-weight="700" fill="#0a58ca">上游 · 向核心发起</text>
+
+      <rect x="44" y="104" width="222" height="108" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="128" font-size="11.5" font-weight="700" fill="#0a58ca">渠道</text>
+      <text x="64" y="151" font-size="10" fill="#48484a">手机银行 / 网银 / 柜面 / ATM</text>
+      <text x="64" y="172" font-size="10" fill="#48484a">存款、转账、查询、挂失</text>
+      <text x="64" y="195" font-size="9.5" fill="#6e6e73">只发请求，不记账</text>
+
+      <rect x="284" y="104" width="222" height="108" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="304" y="128" font-size="11.5" font-weight="700" fill="#0a58ca">外围业务</text>
+      <text x="304" y="151" font-size="10" fill="#48484a">信贷 / 理财 / 信用卡 / 代销</text>
+      <text x="304" y="172" font-size="10" fill="#48484a">放款、还款、申购赎回</text>
+      <text x="304" y="195" font-size="9.5" fill="#6e6e73">审批在外，记账在内</text>
+
+      <rect x="524" y="104" width="222" height="108" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="544" y="128" font-size="11.5" font-weight="700" fill="#0a58ca">支付平台</text>
+      <text x="544" y="151" font-size="10" fill="#48484a">代收付 / 聚合支付 / 收单</text>
+      <text x="544" y="172" font-size="10" fill="#48484a">代发、代扣、商户结算</text>
+      <text x="544" y="195" font-size="9.5" fill="#6e6e73">批量进，逐笔记</text>
+
+      <rect x="764" y="104" width="232" height="108" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="784" y="128" font-size="11.5" font-weight="700" fill="#0a58ca">合作方</text>
+      <text x="784" y="151" font-size="10" fill="#48484a">银联 / 网联 / 三方支付</text>
+      <text x="784" y="172" font-size="10" fill="#48484a">跨行、线上支付、清算</text>
+      <text x="784" y="195" font-size="9.5" fill="#6e6e73">外部最爱重放，要防重</text>
+
+      <path d="M155,212 L420,252" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+      <path d="M395,212 L470,252" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+      <path d="M635,212 L570,252" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+      <path d="M875,212 L620,252" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+
+      <rect x="300" y="254" width="440" height="112" rx="12" fill="#fff1f0" stroke="#ff8a80" stroke-width="1.6"/>
+      <text x="520" y="284" font-size="14" font-weight="700" fill="#c62828" text-anchor="middle">核心系统</text>
+      <text x="520" y="310" font-size="11" fill="#48484a" text-anchor="middle">账户 · 存款 · 贷款 · 支付清算 · 总账</text>
+      <text x="520" y="335" font-size="10.5" fill="#6e6e73" text-anchor="middle">只认账，不做决策；全行只有一本账</text>
+      <text x="520" y="356" font-size="10" fill="#c62828" text-anchor="middle">错一笔，可能要几百人天去追</text>
+
+      <text x="44" y="410" font-size="12" font-weight="700" fill="#1d7a45">下游 · 核心向它收尾</text>
+
+      <path d="M420,366 L132,424" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+      <path d="M470,366 L322,424" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+      <path d="M520,366 L512,424" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+      <path d="M570,366 L702,424" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+      <path d="M620,366 L892,424" stroke="#8e8e93" stroke-width="1.6" fill="none" marker-end="url(#kArr5)"/>
+
+      <rect x="44" y="426" width="176" height="120" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="64" y="450" font-size="11" font-weight="700" fill="#1d7a45">支付清算</text>
+      <text x="64" y="473" font-size="9.5" fill="#48484a">央行 HVPS / BEPS</text>
+      <text x="64" y="492" font-size="9.5" fill="#48484a">IBPS / CIPS</text>
+      <text x="64" y="511" font-size="9.5" fill="#48484a">银联 / 网联</text>
+      <text x="64" y="534" font-size="9" fill="#6e6e73">头寸、清算、对账</text>
+
+      <rect x="234" y="426" width="176" height="120" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="254" y="450" font-size="11" font-weight="700" fill="#1d7a45">总账 / 财务</text>
+      <text x="254" y="473" font-size="9.5" fill="#48484a">科目余额</text>
+      <text x="254" y="492" font-size="9.5" fill="#48484a">资产负债表</text>
+      <text x="254" y="511" font-size="9.5" fill="#48484a">利润表、决算</text>
+      <text x="254" y="534" font-size="9" fill="#6e6e73">报表出不来就麻烦</text>
+
+      <rect x="424" y="426" width="176" height="120" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="444" y="450" font-size="11" font-weight="700" fill="#1d7a45">监管报送</text>
+      <text x="444" y="473" font-size="9.5" fill="#48484a">1104 报表</text>
+      <text x="444" y="492" font-size="9.5" fill="#48484a">EAST 数据</text>
+      <text x="444" y="511" font-size="9.5" fill="#48484a">反洗钱、征信</text>
+      <text x="444" y="534" font-size="9" fill="#6e6e73">EAST 直连核心取数</text>
+
+      <rect x="614" y="426" width="176" height="120" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="634" y="450" font-size="11" font-weight="700" fill="#1d7a45">数据平台</text>
+      <text x="634" y="473" font-size="9.5" fill="#48484a">ODS 贴源</text>
+      <text x="634" y="492" font-size="9.5" fill="#48484a">数仓、报表集市</text>
+      <text x="634" y="511" font-size="9.5" fill="#48484a">客户画像</text>
+      <text x="634" y="534" font-size="9" fill="#6e6e73">分析在外，明细在内</text>
+
+      <rect x="804" y="426" width="192" height="120" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="824" y="450" font-size="11" font-weight="700" fill="#1d7a45">客户与参数</text>
+      <text x="824" y="473" font-size="9.5" fill="#48484a">ECIF 客户号对齐</text>
+      <text x="824" y="492" font-size="9.5" fill="#48484a">参数中心取利率费率</text>
+      <text x="824" y="511" font-size="9.5" fill="#48484a">卡系统绑账户</text>
+      <text x="824" y="534" font-size="9" fill="#6e6e73">认不出人就全乱</text>
+
+      <text x="44" y="586" font-size="12" font-weight="700" fill="#5b3a9e">三条最容易混的边界</text>
+
+      <rect x="44" y="600" width="300" height="86" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="64" y="625" font-size="11" font-weight="700" fill="#5b3a9e">信贷 vs 核心</text>
+      <text x="64" y="649" font-size="10.5" fill="#48484a">审批在外，放款记账在内</text>
+      <text x="64" y="671" font-size="9.5" fill="#6e6e73">「能不能贷」和「怎么记」是两件事</text>
+
+      <rect x="364" y="600" width="300" height="86" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="384" y="625" font-size="11" font-weight="700" fill="#5b3a9e">支付 vs 核心</text>
+      <text x="384" y="649" font-size="10.5" fill="#48484a">通道在外，过渡户在内</text>
+      <text x="384" y="671" font-size="9.5" fill="#6e6e73">钱在路上时，账要挂在核心里</text>
+
+      <rect x="684" y="600" width="312" height="86" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="704" y="625" font-size="11" font-weight="700" fill="#5b3a9e">数据 vs 核心</text>
+      <text x="704" y="649" font-size="10.5" fill="#48484a">分析在外，明细在内</text>
+      <text x="704" y="671" font-size="9.5" fill="#6e6e73">数仓可以重算，核心不能重来</text>
+
+      <rect x="44" y="710" width="952" height="58" rx="10" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="520" y="737" font-size="12.5" font-weight="700" fill="#c62828" text-anchor="middle">核心只做一件事：让每一笔钱有且只有一个说法</text>
+      <text x="520" y="757" font-size="10" fill="#6e6e73" text-anchor="middle">不审批、不营销、不做风控决策、不渲染界面、不做多维分析</text>
+
+      <defs><marker id="kArr5" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>箭头方向就是调用方向：上面四类指向核心，是「找它办事」；核心指向下面五类，是「找它收尾」。中间红框是核心，注意它只写了「认账」两个字，没有审批、没有营销、没有风控。最下面三条边界是开会最容易被问混的：信贷只管审批，支付只管通道，数据只管分析——真正记账的永远是核心。</div>
+</div>
+
+<!-- 6 瘦核心与改造 -->
+<div class="card" id="k6">
+  <div class="card-head">
+    <h2><span class="num">6</span>瘦核心与改造：像给飞行中的飞机换引擎 <span class="tag">演进</span></h2>
+    <p>核心越来越小，是因为只留「会改变钱在哪」的东西；改造难，是因为账不能错、不能停、不能乱。</p>
+  </div>
+  <svg viewBox="0 0 1040 772" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">从胖核心到分布式核心，再到改造现场</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">左边是「核心管什么」的变化，右边是「换核心为什么这么难」</text>
+
+      <text x="44" y="92" font-size="12" font-weight="700" fill="#c62828">核心的边界在收缩</text>
+
+      <rect x="44" y="104" width="470" height="120" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="64" y="132" font-size="12.5" font-weight="700" fill="#c62828">胖核心（早期）</text>
+      <text x="64" y="158" font-size="10.5" fill="#48484a">存款、贷款、支付、信用卡、理财、报表，全在里面</text>
+      <text x="64" y="181" font-size="10.5" fill="#48484a">优点是集中、一致；缺点是改一处牵全身</text>
+      <text x="64" y="204" font-size="10" fill="#6e6e73">一个新业务排队等核心发版，等不起</text>
+
+      <path d="M279,228 L279,248" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#kArr6)"/>
+
+      <rect x="44" y="250" width="470" height="120" rx="12" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="64" y="278" font-size="12.5" font-weight="700" fill="#a35b00">瘦核心（现在多数银行）</text>
+      <text x="64" y="304" font-size="10.5" fill="#48484a">只留账户、存款、贷款、支付、总账、基础参数</text>
+      <text x="64" y="327" font-size="10.5" fill="#48484a">信贷、理财、营销、风控、报表全部剥到外围</text>
+      <text x="64" y="350" font-size="10" fill="#6e6e73">代价：外围系统变多，集成复杂度上升</text>
+
+      <path d="M279,374 L279,394" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#kArr6)"/>
+
+      <rect x="44" y="396" width="470" height="120" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="424" font-size="12.5" font-weight="700" fill="#0a58ca">分布式核心（大行 / 互联网银行）</text>
+      <text x="64" y="450" font-size="10.5" fill="#48484a">按业务域拆服务，按单元扩展，分布式数据库</text>
+      <text x="64" y="473" font-size="10.5" fill="#48484a">解决的是「规模」：10 亿客户、数十亿账户</text>
+      <text x="64" y="496" font-size="10" fill="#6e6e73">不解决「语义」：账还是那些账，规则还得搬</text>
+
+      <rect x="44" y="544" width="470" height="76" rx="10" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="64" y="570" font-size="11.5" font-weight="700" fill="#1d1d1f">判断标准只有一句</text>
+      <text x="64" y="595" font-size="11" fill="#c62828">这个操作会不会改变「钱在哪、钱多少」？</text>
+      <text x="64" y="613" font-size="10" fill="#6e6e73">会 → 留核心；不会 → 尽量搬出去</text>
+
+      <rect x="540" y="104" width="456" height="142" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="560" y="132" font-size="12.5" font-weight="700" fill="#1d1d1f">改造的三个「不能」</text>
+      <text x="560" y="160" font-size="11" fill="#c62828">不能错：一笔错账，几百人天去追</text>
+      <text x="560" y="185" font-size="11" fill="#c62828">不能停：7×24，停机窗口以分钟计</text>
+      <text x="560" y="210" font-size="11" fill="#c62828">不能乱：新旧并行，两边账要对得上</text>
+      <text x="560" y="234" font-size="10" fill="#6e6e73">这不是软件升级，是给飞行中的飞机换引擎</text>
+
+      <rect x="540" y="262" width="456" height="192" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="560" y="290" font-size="12.5" font-weight="700" fill="#1d1d1f">业内怎么换</text>
+      <text x="560" y="318" font-size="10.5" fill="#48484a">双轨并行：新老核心同时跑，同一笔两边都记</text>
+      <text x="560" y="342" font-size="10.5" fill="#48484a">逐笔对账：不是抽检，是逐笔比对</text>
+      <text x="560" y="366" font-size="10.5" fill="#48484a">停机窗口：某银行换库只停了 2.5 小时</text>
+      <text x="560" y="390" font-size="10.5" fill="#48484a">回退通道：反向同步保留，换不成能退</text>
+      <text x="560" y="418" font-size="10" fill="#6e6e73">提前做存量迁移，当天只同步增量——窗口才压得住</text>
+      <text x="560" y="442" font-size="10" fill="#c62828">最难搬的不是数据，是「账的语义」</text>
+
+      <rect x="540" y="470" width="456" height="96" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="560" y="498" font-size="12" font-weight="700" fill="#1d7a45">两个真实数字（某银行换国产库）</text>
+      <text x="560" y="524" font-size="10.5" fill="#48484a">日终批量：约 110 分钟 → 约 56 分钟</text>
+      <text x="560" y="548" font-size="10.5" fill="#48484a">记账交易响应：150ms → 112ms</text>
+
+      <rect x="540" y="582" width="456" height="76" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="560" y="608" font-size="11.5" font-weight="700" fill="#a35b00">为什么分布式不是万能药</text>
+      <text x="560" y="633" font-size="10.5" fill="#48484a">规模没到，它只增加分布式事务和运维复杂度</text>
+      <text x="560" y="651" font-size="10" fill="#6e6e73">账还是一样记，成本却翻几倍</text>
+
+      <rect x="44" y="648" width="470" height="100" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="64" y="674" font-size="11.5" font-weight="700" fill="#5b3a9e">改造从来不是纯技术项目</text>
+      <text x="64" y="698" font-size="10.5" fill="#48484a">老核心的规则很多不在文档里：</text>
+      <text x="64" y="719" font-size="10.5" fill="#48484a">在代码里、在报表里、在老员工脑子里</text>
+      <text x="64" y="740" font-size="10" fill="#6e6e73">所以它是业务 + 会计 + 技术 + 监管的联合工程</text>
+
+      <rect x="540" y="682" width="456" height="66" rx="10" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="560" y="707" font-size="11.5" font-weight="700" fill="#c62828">一句话记住</text>
+      <text x="560" y="731" font-size="10.5" fill="#48484a">核心可以变小、可以变快，但账不能变样</text>
+
+      <defs><marker id="kArr6" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左边从上往下是核心的三代形态，注意每一代都在做同一件事——把「不改钱」的功能赶出去，只留账户、账务、总账。右边三块是改造现场：先看「三个不能」，再看「怎么换」的四条做法，最后两个数字说明为什么换库也算大工程。最下面一句是全篇的落点：核心可以变小、可以变快，但账不能变样。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>

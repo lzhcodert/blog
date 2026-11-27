@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>银行里几百套系统到底怎么连？给程序员的一张上帝视角地图 · 札记</title>
+<title>网关到底在管什么？从小区大门讲到线上入口 · 札记</title>
 <style>
 
 /* ============ 主题变量（支持浅色/深色） ============ */
@@ -365,119 +365,125 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 <main class="pad">
 <div class="detail-wrap">
 <article class="article">
-  <div class="article-meta-top"><span class="dot" style="background:#5856d6"></span>行业观察</div>
-  <h1 class="article-title">银行里几百套系统到底怎么连？给程序员的一张上帝视角地图</h1>
-  <div class="article-meta">2026-11-27 · 22 分钟阅读</div>
+  <div class="article-meta-top"><span class="dot" style="background:#ff2d55"></span>架构</div>
+  <h1 class="article-title">网关到底在管什么？从小区大门讲到线上入口</h1>
+  <div class="article-meta">2026-11-27 · 31 分钟阅读</div>
   <div class="article-body">
-<p>刚进银行科技部的人，第一个星期基本都是懵的。</p>
-<p>开会时满耳朵都是缩写：手机银行、网银、CRM、ECIF、查控、存款、信贷、总账、反洗钱、前置、ODS、HVPS……你拿本子记了一页纸，散会一看，还是不知道<strong>这些系统之间到底是什么关系</strong>。</p>
-<p>更让人崩溃的是，同样一句「客户」：CRM 里是一份跟进记录，核心系统里是一个客户号，信贷系统里是一套授信材料，数仓里是一张宽表。你忍不住怀疑：这到底是同一个东西吗？</p>
-<p>这篇不让你背单词。我给你一张地图，先站稳了，再一个一个认门牌。</p>
-<blockquote>说明：文中的系统划分来自公开的银行 IT 架构资料、央行清算体系公开信息与最高法查控系统公开报道；具体银行的内部系统数量、命名和边界各有差异，这篇讲的是<strong>行业通用的理解框架</strong>，不是某一家银行的真实拓扑图。</blockquote>
-<h2 id="sec-1">先背一句话：渠道受理，外围算业务，核心记总账</h2>
-<p>这句话是理解银行 IT 的第一把钥匙，几乎所有资料都指向同一个三层结构：</p>
-<table><thead><tr><th>层次</th><th>干什么</th><th>典型系统</th><th>出错代价</th></tr></thead><tbody><tr><td>渠道层</td><td>把人接进来，收下请求</td><td>手机银行、网银、柜面、ATM、开放银行</td><td>影响体验</td></tr><tr><td>外围层（业务系统）</td><td>算专业业务、做判断</td><td>信贷、理财、反洗钱、CRM、查控</td><td>影响局部</td></tr><tr><td>核心层</td><td>记账、算总账、管账户</td><td>存款、贷款、支付、总账、客户信息</td><td>影响全局</td></tr></tbody></table>
-<p>一句话拆开说：</p>
-<ul><li><strong>渠道</strong>负责「受理」——它只是收件窗口，不该自己动账。</li><li><strong>外围</strong>负责「算业务」——判断你能不能贷、是不是洗钱、营销该给谁。</li><li><strong>核心</strong>负责「记总账」——全行只有它说了算，一笔账记下去就是记下了。</li></ul>
-<p>再补两条贯穿线，地图就完整了：</p>
-<ul><li><strong>数据线</strong>：把上面三层产生的数据抽走、洗好、给报表和监管看。</li><li><strong>外联线</strong>：把银行接到央行、银联、网联、法院这些外部世界。</li></ul>
-<p><strong>三层 + 两条线</strong>，银行系统的名字再多，都能往上贴。</p>
-<h2 id="sec-2">一、先看市场：这套地图不是拍脑袋画的</h2>
-<p>你可能会问：银行系统怎么这么碎？答案藏在历史里。</p>
-<p>国内银行 IT 大致走过四步：</p>
-<ol><li><strong>单机版（1980 年代—1990 年代中期）</strong>：一个网点一台机器，数据各管各的，跨网点通存通兑都费劲。</li><li><strong>数据大集中（2000 年代）</strong>：加入 WTO 后竞争和监管压力上来，工行、建行等大行率先把全行账集中到一套系统。<strong>核心系统就在这个阶段长出来的</strong>。</li><li><strong>瘦核心与外围解耦（约 2008—2014）</strong>：核心从「什么都干」变成「只管存贷汇和总账」，信贷、理财、风控这些被剥到外围。这一步直接造成了今天「系统特别多」的观感。</li><li><strong>分布式与信创（2015 至今）</strong>：2015 年微众银行上线国内首个完全分布式核心；2019 年张家港农商行落地首个国产分布式数据库核心；2020—2025 年间超过 60 家银行完成新一代核心「换心」。</li></ol>
-<p>数字也很直白：农业银行 2025 年核心系统工作日日均交易 <strong>17.36 亿笔</strong>、峰值 <strong>21.83 亿笔</strong>；邮储银行新一代个人核心 2022 年 4 月全量投产，公司核心 2024 年上线，2026 年 7 月完成 18 亿账户在线迁移。</p>
-<p><strong>所以系统多是必然结果</strong>：每剥出去一块业务就多一个系统，每加一条监管报送就多一个接口，每一代技术栈又留下一批老系统。你看到的混乱，是三十年演进叠出来的地层，不是谁随手画的。</p>
-<h2 id="sec-3">二、渠道层：银行的门脸，只收件不记账</h2>
-<p>用户点开手机银行点「转账」，这一刻发生的事比你想象的绕。</p>
-<p>手机银行本身<strong>不碰账本</strong>。它做的是：确认你是谁、把请求打包、按「交易码」发给后面的系统、把结果渲染成你看到的那一页。</p>
-<p>除了手机银行，渠道层还有：</p>
-<ul><li><strong>柜面系统</strong>：柜员用的那个有界面的系统，开户、挂失、异常账户状态都在这操作。</li><li><strong>网上银行 / 企业网银</strong>：对公客户的主阵地，审批流比个人版复杂得多。</li><li><strong>ATM / POS</strong>：自助设备渠道。</li><li><strong>开放银行 / 银企直连</strong>：把银行能力开放给第三方，比如企业 ERP 直接查余额。</li></ul>
-<p>中间通常还夹着一层<strong>前置系统 / 中间业务平台</strong>。它没有操作界面，专门干脏活：报文转换、交易码路由、鉴权、限流、把该送核心的送核心、能自己处理的自己处理。</p>
-<blockquote><strong>记住这条边界</strong>：渠道可以重装修，账本不能。你在手机上看到的「余额」，是核心算完返回来的结果，不是手机银行自己存的那个数。</blockquote>
-<h2 id="sec-4">三、外围系统：银行的四个专业科室</h2>
-<p>外围系统名字最多，但按「服务谁」一分就清楚，基本是四堆。</p>
-<h3 id="sec-5">1. 客户经营类：CRM、ECIF、画像</h3>
-<ul><li><strong>CRM（客户关系管理）</strong>：记的是「关系」——客户经理跟进到哪一步、营销策略、客户偏好、投诉记录。它<strong>不记账户余额</strong>。</li><li><strong>ECIF（企业级客户信息整合）</strong>：把同一个人在各个系统的身份拼成一个客户号。你在手机银行和柜面被认成同一个人，靠的就是它。</li><li><strong>客户画像 / 营销平台</strong>：基于数据做「谁可能买理财」这类判断。</li></ul>
-<h3 id="sec-6">2. 业务流程类：信贷、理财、票据、国际业务</h3>
-<ul><li><strong>信贷管理系统</strong>：从申请、审批、放款到贷后管理。注意，审批和贷后在信贷系统，<strong>真正放款记账那一笔还是要落到核心</strong>。</li><li><strong>理财 / 基金代销系统</strong>：产品、份额、申赎。</li><li><strong>票据系统</strong>：电子商业汇票的开立、背书、承兑、兑付。</li><li><strong>国际业务系统</strong>：结售汇、信用证、跨境汇款。</li></ul>
-<h3 id="sec-7">3. 风控合规类：反洗钱、反欺诈、查控</h3>
-<ul><li><strong>反洗钱系统</strong>：可疑交易识别、大额交易报送。</li><li><strong>反欺诈 / 风险监控</strong>：交易实时拦截，你突然在陌生城市大额消费被拦一下，多半是它。</li><li><strong>查控系统</strong>：法院来查、冻、扣被执行人账户的通道——后面单独讲，它其实不是银行自己的业务系统。</li></ul>
-<h3 id="sec-8">4. 运营支撑类：影像、工作流、报表、OA</h3>
-<ul><li><strong>影像系统</strong>：凭证扫描、电子档案。</li><li><strong>工作流 / 审批平台</strong>：跨部门流转。</li><li><strong>报表 / 绩效系统</strong>：给管理层看的经营数据，通常从数据线取数。</li></ul>
-<p><strong>判断一个系统属于哪堆，问一句「它是记关系的、办业务的、做判断的，还是管内部的」就够了。</strong></p>
-<h2 id="sec-9">四、核心系统：账房先生，只认借贷相等</h2>
-<p>核心系统（Core Banking System）是整个银行最不能出问题的一套东西。</p>
-<p>先纠正一个流传很广的说法：<strong>CORE 最初是 Centralized Online Real-time Exchange（集中、在线、实时交互）的缩写</strong>。清华金融评论的公开文章写得很清楚：这是相对于早期「分散、脱机、批处理、单向」而言的；后来行业不再纠结缩写，逐渐接受了「核心」这个本义。</p>
-<p>它管的事，用五个模块就能说完：</p>
-<table><thead><tr><th>模块</th><th>管什么</th><th>大白话</th></tr></thead><tbody><tr><td>客户信息（CIF）</td><td>客户主数据、身份与关系</td><td>这人是谁</td></tr><tr><td>存款</td><td>活期、定期、计息结息</td><td>钱怎么进</td></tr><tr><td>贷款</td><td>发放、还款、五级分类</td><td>钱怎么出</td></tr><tr><td>支付清算</td><td>汇划、清算、结算</td><td>钱怎么转</td></tr><tr><td>总账（GL）</td><td>会计核算、日终轧差、年终决算</td><td>钱怎么算</td></tr></tbody></table>
-<p>外加<strong>产品工厂</strong>（利率、期限、费用拼装成产品）和<strong>参数中心</strong>（利率、汇率、费率可配置可追溯）。</p>
-<p>核心的底层规则是<strong>复式记账</strong>：一笔交易必然同时记借方和贷方，两边金额相等。你转账 100 块，你的账户减 100，对方账户加 100——这一减一加必须在同一个事务里完成，不能只成功一半。</p>
-<p>这也是为什么核心最难的部分往往不是「交易处理」，而是<strong>会计核算与总账</strong>：日终轧差、利息计提、年终决算，每一分钱都要能追溯。</p>
-<blockquote><strong>核心系统出问题，最怕的不是宕机，是账对不上。</strong> 宕机能恢复，账错了要一笔笔找回来。所以核心改造必须「双轨运行 + 逐笔对账」，业界管这叫给飞行中的飞机换引擎。</blockquote>
-<h2 id="sec-10">五、两条贯穿线：数据线和外联线</h2>
-<h3 id="sec-11">数据线：从「能记账」到「能看懂账」</h3>
-<p>核心和外围负责把业务<strong>做掉</strong>，数据线负责把业务<strong>看明白</strong>。典型链路是：</p>
-<p><strong>源系统（核心/外围/渠道）→ ODS（贴源层）→ DWD（明细层）→ 数据集市 / 画像 → 报表与监管报送</strong></p>
-<p>两个关键词：</p>
-<ul><li><strong>OLTP vs OLAP</strong>：核心是联机交易，追求快和准；数仓是联机分析，追求全和深。两者必须分开，否则一条大查询就能把核心拖垮。</li><li><strong>ODS</strong>：Operational Data Store，贴源层，先把各系统的原始数据原样搬过来，再逐层清洗。</li></ul>
-<p>监管报送、反洗钱名单筛查、经营分析、客户经理的业绩看板，全在这一条线上。</p>
-<h3 id="sec-12">外联线：银行不是孤岛</h3>
-<p>一家银行再大，也只是支付网络里的一个节点。它必须接这些外部系统：</p>
-<table><thead><tr><th>外部系统</th><th>谁建的</th><th>干什么</th></tr></thead><tbody><tr><td>HVPS 大额实时支付</td><td>人民银行</td><td>大额跨行汇划，不到 1 分钟到账</td></tr><tr><td>BEPS 小额批量支付</td><td>人民银行</td><td>低成本、大批量零售支付</td></tr><tr><td>IBPS 网上支付跨行清算</td><td>人民银行</td><td>100 万元以下的网银、移动支付</td></tr><tr><td>CIPS 人民币跨境支付</td><td>人民银行</td><td>跨境人民币清算结算</td></tr><tr><td>银联 / 网联</td><td>清算组织</td><td>银行卡、第三方网络支付</td></tr><tr><td>最高法查控系统</td><td>最高人民法院</td><td>司法查询、冻结、扣划</td></tr></tbody></table>
-<p>这些不是「银行的系统」，但银行的系统必须和它们对话。<strong>你在手机银行跨行转出一笔钱，中途大概率经过银联或网联，最后在央行的账户上完成清算。</strong></p>
-<h2 id="sec-13">六、走一遍：一笔转账穿过哪些系统</h2>
-<p>把地图跑起来，比背一百个名字管用。</p>
-<p><strong>场景 A：行内转账（同一个银行）</strong></p>
-<ol><li>手机银行收下请求，做鉴权，按交易码发往渠道前置。</li><li>前置做报文转换、风控调用；反欺诈系统实时判断是否拦截。</li><li>请求到达核心的支付模块。</li><li>核心按复式记账：付款账户减、收款账户加，同一个事务里完成。</li><li>核心返回结果，渠道显示「转账成功」，同时触发短信通知。</li><li>这笔交易被写入日志，晚上被抽到数仓；如果金额触发规则，还会进入反洗钱报送队列。</li></ol>
-<p><strong>场景 B：跨行转账</strong></p>
-<p>前面 1—3 步一样，第 4 步开始不同：</p>
-<ol><li>核心先记本行账务，同时把支付指令发给<strong>行内支付清算系统</strong>。</li><li>按金额和渠道，走 <strong>IBPS / HVPS / 银联 / 网联</strong> 中的一条，到达对方银行。</li><li>对方银行核心入账，回执原路返回。</li><li>两边日终再和央行账户对账，确保「我付出的钱 = 对方收到的钱」。</li></ol>
-<p><strong>看明白没有？手机银行从头到尾只是个「收发室」，真正的动作发生在核心和外部清算网络。</strong></p>
-<h2 id="sec-14">七、查控系统到底是谁的？</h2>
-<p>你听过的「查控系统」，全称是<strong>全国法院网络执行查控系统</strong>，它不属于银行，属于最高人民法院。</p>
-<p>2013 年最高法出台《关于网络查询、冻结被执行人存款的规定》；2014 年 12 月 24 日「总对总」系统正式开通。公开报道显示，它已与 <strong>3700 多家银行</strong>以及公安、交通、工商、人民银行等单位联网，<strong>3400 多家银行上线冻结功能、2400 多家上线扣划功能</strong>，可查询存款、车辆、证券、网络资金等 15 类 20 项信息。</p>
-<p>银行侧要做的事，是建一个<strong>协助执行接口</strong>：法院发来查询/冻结/扣划指令 → 银行校验法律文书和权限 → 转到核心执行账户冻结或扣划 → 回执给法院。</p>
-<p>所以它和 CRM 完全不是一类东西：</p>
-<ul><li><strong>CRM</strong> 是银行自己的客户经营系统，目的是维护关系。</li><li><strong>查控</strong> 是外部司法系统的银行端接入，目的是履行协助执行义务。</li></ul>
-<p>但两者最终都可能碰到账户：<strong>查控动的是账户状态，核心记的是账</strong>。这条链路的存在，正是「银行不是孤岛」最典型的例子。</p>
-<h2 id="sec-15">八、为什么系统这么多？三个原因叠在一起</h2>
-<ol><li><strong>历史地层</strong>：数据大集中、瘦核心、分布式、信创，每一代都留下一批系统，老的未必能立刻下线。</li><li><strong>监管要求</strong>：反洗钱、监管报送、司法协助、数据本地化，每加一条合规要求就多一个接口或一套系统。</li><li><strong>组织边界</strong>：一个系统背后往往是一个业务条线和一个部门的职责。核心不改、外围先改，是风险最低的路径。</li></ol>
-<p>这也解释了为什么银行不喜欢「大爆炸式换系统」。行业里总结的渐进路径是：<strong>先外围后核心、先双轨后单轨、先迁移后优化、先可用后先进</strong>。核心改造的成功标准不是「换成了」，而是「换完后三年，账没差过一分钱」。</p>
-<h2 id="sec-16">九、建立上帝视角的三把钥匙</h2>
-<p>给你三个能立刻上手的方法。</p>
-<h3 id="sec-17">钥匙一：问「这笔钱动没动」</h3>
-<ul><li>动了账户余额或会计分录 → <strong>核心</strong>。</li><li>只是改了状态、批了流程、记了关系 → <strong>外围</strong>。</li><li>只是展示或收请求 → <strong>渠道</strong>。</li></ul>
-<p>这一问就能把 80% 的系统归位。</p>
-<h3 id="sec-18">钥匙二：问四个问题——谁发起、谁判断、谁记账、谁看</h3>
-<ul><li>谁发起：渠道</li><li>谁判断：外围（风控、信贷、营销）</li><li>谁记账：核心</li><li>谁看：数据线（数仓、报表、监管）</li></ul>
-<p>一个系统在这四个位置里必有归属。说不清它属于哪一格，多半是你还没搞清它的职责。</p>
-<h3 id="sec-19">钥匙三：拿一笔真实交易去追</h3>
-<p>别看架构图，看日志。挑一笔你自己发起的转账，拿交易流水号从渠道日志一路追到核心记账、再到数仓落库，把经过的系统名按顺序记下来。<strong>追三次，地图就长在你脑子里了。</strong></p>
-<h2 id="sec-20">十、常见误区</h2>
-<table><thead><tr><th>误区</th><th>真相</th></tr></thead><tbody><tr><td>手机银行里显示余额，所以余额存在手机银行</td><td>余额是核心算完返回的结果</td></tr><tr><td>CRM 里也有客户信息，所以客户信息在 CRM</td><td>CRM 记关系，核心的 CIF 记身份，ECIF 负责对齐</td></tr><tr><td>查控系统是银行自己的风控系统</td><td>它是最高法的司法协助通道，银行只是接了端</td></tr><tr><td>信贷系统放款了，钱就在信贷系统里</td><td>审批在信贷，记账在核心</td></tr><tr><td>分布式核心更先进，所以都要拆</td><td>分布式是手段不是目的，业务量没触到天花板就别硬拆</td></tr><tr><td>数据仓库是核心的备份</td><td>数仓是分析用的另一套模型，不是备份</td></tr></tbody></table>
-<h2 id="sec-21">十一、术语小抄</h2>
-<ul><li><strong>CORE</strong>：Centralized Online Real-time Exchange，集中、在线、实时交互；现在多按「核心」理解。</li><li><strong>CIF</strong>：Customer Information File，客户信息文件，核心里的客户主数据。</li><li><strong>ECIF</strong>：Enterprise CIF，企业级客户信息整合，把多个系统的身份拼成一个人。</li><li><strong>ECIF / CRM / 画像</strong>：分别管身份、管关系、管洞察。</li><li><strong>前置系统</strong>：渠道和核心之间的报文转换、路由、鉴权层。</li><li><strong>交易码</strong>：一笔请求的编号，系统靠它决定调哪个服务。</li><li><strong>复式记账</strong>：每笔交易借贷两边同时记、金额相等。</li><li><strong>总账（GL）</strong>：全行会计核算的总账簿，日终轧差、年终决算都在这。</li><li><strong>ODS / DWD</strong>：贴源层 / 明细层，数据仓库的分层。</li><li><strong>OLTP / OLAP</strong>：联机交易处理 / 联机分析处理。</li><li><strong>HVPS / BEPS / IBPS / CIPS</strong>：央行的大额、小额、超网、跨境四套支付清算系统。</li><li><strong>总对总</strong>：最高法直连全国银行的查控体系，区别于地方法院的「点对点」。</li><li><strong>瘦核心</strong>：把非核心业务剥离出去，核心只管存贷汇与总账。</li><li><strong>双轨运行</strong>：新旧系统并行、逐笔对账，确认无误再切换。</li></ul>
-<h2 id="sec-22">十二、权威出处</h2>
-<ol><li>清华大学《金融评论》：《信创及数字化转型双轮驱动银行核心系统变革》——CORE 缩写来源、核心系统演进与「1+N+2」框架。</li><li>百度百科「核心系统」「核心银行系统」——胖核心到瘦核心、国内核心系统里程碑与公开运行数据。</li><li>中国人民银行清算总中心：《持续推进支付体系高质量发展》《建设安全高效的支付清算基础设施》——多层次支付清算体系、HVPS/BEPS/IBPS/CIPS、ACS。</li><li>最高人民法院：《人民法院执行工作报告》（白皮书）、中国法院网访谈——网络执行查控体系沿革与联网银行数量。</li><li>最高人民法院：《关于网络查询、冻结被执行人存款的规定》（2013）。</li><li>中共湖南省委金融办：《如何理解支付清算系统的重要意义》——支付清算体系构成与各家职责。</li><li>《电子周刊：关于对商业银行开展信息系统审计的思考》——商业银行核心业务系统与外围系统划分、渠道分类。</li><li>CSDN《银行核心系统是什么：核心账务、业务架构与国产化改造路径》——三层架构、核心模块与渐进替换路径（行业实践观点，非监管口径）。</li></ol>
-<hr>
-<p><strong>最后留一句话给你</strong>：银行系统看着乱，是因为它同时是「一台记账机器」「一套监管接口」和「三十年的技术地层」。你不需要记住所有缩写，只要每次听到一个系统名，都能问出——它在哪一层？它动不动账？它跟谁说话？问得出来，你就已经有上帝视角了。</p>
+<p>&quot;网关&quot;这个词最坑的地方在于：所有人都觉得自己懂。</p>
+<p>说&quot;就是个转发&quot;的，和说&quot;就是 Nginx&quot;的，和说&quot;就是微服务那个 API Gateway&quot;的，聊十分钟会发现各自脑子里是三样东西。有人以为它做鉴权，有人以为它做负载均衡，还有人把它当成限流器。</p>
+<p>所以这篇不先讲产品，先把<strong>概念</strong>按权威文档钉死，再说它在生产里到底干什么活、不干什么活。</p>
+<blockquote>一句话版本：网关是<strong>唯一入口</strong>，它对外冒充一台服务器，对内替所有服务做那些&quot;每个服务都要重复做一遍&quot;的事。</blockquote>
+<h2 id="sec-1">先按官方定义把概念钉死</h2>
+<h3 id="sec-2">RFC 9110：网关就是&quot;反向代理&quot;，而且它冒充源站</h3>
+<p>HTTP 协议的标准文档 RFC 9110 在第 3.7 节定义得很干脆：</p>
+<blockquote>A &quot;gateway&quot; (a.k.a. &quot;reverse proxy&quot;) is an intermediary that acts as an origin server for the outbound connection but translates received requests and forwards them inbound to another server or servers.</blockquote>
+<p>翻译过来就三层意思：</p>
+<ul><li><strong>它对外是&quot;源站&quot;</strong>。客户端握手、看证书、收响应码，全程以为自己在跟那台服务器对话。</li><li><strong>它翻译并转发</strong>。&quot;translates received requests&quot; 这个词很关键——不是照抄，是可以改的（改路径、改头、换协议）。</li><li><strong>它向内转发</strong>。真正干活的是后面那些服务器，客户端一辈子看不到它们的地址。</li></ul>
+<p>RFC 还顺手写了它最典型的三个用途：</p>
+<blockquote>Gateways are often used to encapsulate legacy or untrusted information services, to improve server performance through &quot;accelerator&quot; caching, and to enable partitioning or load balancing of HTTP services across multiple machines.</blockquote>
+<p>即：<strong>把老系统或不可信的服务包起来、做加速缓存、把 HTTP 服务分区并负载均衡到多台机器</strong>。注意这三条没有一条是&quot;写业务逻辑&quot;。</p>
+<p><strong>大白话：</strong>小区门禁的保安，长得像&quot;物业的人&quot;，访客把他当成了要办事的那一方（冒充源站）；他核对证件、登记、指路，但<strong>他不开锁、不搬货、不签合同</strong>（不干业务）。货真价实在楼里干活的，是那些你见不到的部门。</p>
+<p>这里还有个容易被忽略的方向问题。同一份 RFC 里，&quot;proxy&quot;（正向代理）是<strong>客户端自己选的</strong>，帮你出门；&quot;gateway / reverse proxy&quot;是<strong>服务端自己装的</strong>，替服务器挡门。方向反了，责任也就反了：正向代理出问题是你自己的事，网关出问题是全站的事。</p>
+<h3 id="sec-3">microservices.io：它为什么在微服务里变成必需品</h3>
+<p>Chris Richardson 在 microservices.io 的 API Gateway 模式里写得更直接：</p>
+<blockquote>Implement an API gateway that is the single entry point for all clients. The API gateway handles requests in one of two ways. Some requests are simply proxied/routed to the appropriate service. It handles other requests by fanning out to multiple services.</blockquote>
+<p>两种处理方式，这句话把网关的能力边界划清了：</p>
+<ol><li><strong>proxy / route</strong>：一对一转发。<code>/api/order/*</code> 转给订单服务，就这么简单。</li><li><strong>fan out</strong>：一个请求扇出到多个服务，再把结果拼起来。这就是为什么网关常和 API 组合（API Composition）一起出现。</li></ol>
+<p>它还列了网关真正的价值（原文措辞我保留，后面加白话）：</p>
+<ul><li><strong>Insulates the clients from how the application is partitioned</strong>：服务怎么切、切几个，客户端不用知道。</li><li><strong>Insulates the clients from the problem of determining the locations of service instances</strong>：实例 IP 怎么变、扩了几台，客户端不用改配置。</li><li><strong>Provides the optimal API for each client</strong>：给 Web、App、第三方各一套合适的接口，这就是 BFF（Backends for frontends）变体的由来。</li><li><strong>Reduces the number of requests/roundtrips</strong>：手机端一次请求拿齐，而不是调五个接口。</li><li><strong>Simplifies the client by moving logic for calling multiple services from the client to API gateway</strong>：把&quot;调五个服务再拼装&quot;的逻辑从端上搬到网关。</li><li><strong>Translates from a &quot;standard&quot; public web-friendly API protocol to whatever protocols are used internally</strong>：对外 HTTP，对内 gRPC、Dubbo、老系统的私有协议，网关来做翻译。</li></ul>
+<p>同时它也没藏着代价，这两条我特别认：</p>
+<blockquote>Increased complexity - the API gateway is yet another moving part that must be developed, deployed and managed.  Increased response time due to the additional network hop through the API gateway - however, for most applications the cost of an extra roundtrip is insignificant.</blockquote>
+<p><strong>大白话：</strong>网关不是免费的。它是&quot;又多了一个要开发、要部署、要盯着、要背锅的部件&quot;，而且实打实多一跳网络。所以别把它当性能优化手段——它优化的是<strong>治理成本</strong>，不是延迟。</p>
+<h3 id="sec-4">AWS 的表述：它是&quot;前门&quot;，管四件事</h3>
+<p>AWS 对自家 API Gateway 的定位，可以当成&quot;生产职责清单&quot;来看：</p>
+<blockquote>API Gateway acts as a &quot;front door&quot; for applications to access data, business logic, or functionality from your backend services.</blockquote>
+<blockquote>API Gateway handles all the tasks involved in accepting and processing up to hundreds of thousands of concurrent API calls. These tasks include traffic management, authorization and access control, monitoring, and API version management.</blockquote>
+<p>注意后半句的四个词：<strong>traffic management、authorization and access control、monitoring、API version management</strong>。这就是生产里网关的四大类工作。至于&quot;几十万并发&quot;是 AWS 托管服务的规模，不是自建网关的承诺，别照抄。</p>
+<h2 id="sec-5">一个请求进门，要过八道工序</h2>
+<p>前面都是定义。落到线上，一个请求从公网进来，网关大致要做这些事——顺序不是随便排的：</p>
+<ol><li><strong>TLS 终止</strong>：证书在这里卸下。续期、换证书只改一处，不用每个服务都装一遍。</li><li><strong>路由匹配</strong>：按 Host、Path、Header 决定这条请求归谁。<code>/api/order/*</code> → order-svc。</li><li><strong>认证与授权</strong>：验签、查过期、看 scope。过了就把身份写进 Header（<code>X-User-Id</code>、<code>X-Tenant</code>）传给下游。</li><li><strong>限流与配额</strong>：按 IP、用户、应用维度计数，超了直接 429，别打到后端去。</li><li><strong>请求改写</strong>：去前缀、补 Header、加 <code>X-Request-Id</code>，让后端看到干净的接口。</li><li><strong>负载均衡</strong>：按权重或最少连接挑一个健康实例。灰度时&quot;5% 走新版本&quot;就发生在这里。</li><li><strong>重试与熔断</strong>：连不上换一台；连续失败就熔断，别把整条链路拖死。</li><li><strong>日志、指标、链路追踪</strong>：耗时、状态码、上游地址、trace id。排障第一个看的就是这里。</li></ol>
+<p>为什么要这个顺序？<strong>越便宜、越能早拒绝的检查越靠前。</strong> 让 100 万次恶意请求先去解 JWT，CPU 会先被打满，后端的限流规则根本没机会生效。</p>
+<p><strong>判断一个功能该不该放网关，问两句就够：</strong></p>
+<ul><li>是不是<strong>所有入口都要</strong>？是 → 放网关；只有一个服务要 → 放服务里。</li><li>是不是<strong>不需要业务数据就能判断</strong>？需要查库、算价格、看库存 → 别放网关。</li></ul>
+<p>两条都满足才放。只满足一条还硬放，网关就会慢慢长成第二个业务系统——这是&quot;分布式单体&quot;最常见的诞生方式。</p>
+<h2 id="sec-6">它站在哪：南北向是门，东西向是楼道</h2>
+<p>这是最容易混的一段。</p>
+<ul><li><strong>南北向（North-South）</strong>：外部用户进来的流量，纵向穿过多层网络边界。网关就站在这里。</li><li><strong>东西向（East-West）</strong>：服务之间互相调的流量，横向发生在集群内部。</li></ul>
+<p>为什么必须分开？因为<strong>两段流量的信任级别不一样</strong>。门外的请求不可信，要查证件、要限速、要防攻击；楼道里的请求是自家服务发的，重点是跑得快、断了能绕。</p>
+<p>Istio 的官方文档把这个位置说得很清楚：</p>
+<blockquote>Gateway configurations are applied to standalone Envoy proxies that are running at the edge of the mesh, rather than sidecar Envoy proxies running alongside your service workloads.</blockquote>
+<p><strong>网关跑在网格边缘，是独立进程，不是服务旁边那个 sidecar。</strong> 这句话顺手解决了一个常见扯皮：出问题时到底是&quot;网关的锅&quot;还是&quot;网格的锅&quot;——先看它是不是同一个进程。</p>
+<p>生产里常见的错位是：拿对外的 API 网关去跑服务间调用。后果很具体——所有内部请求都绕一次边缘、扛一次公网级限流规则，还多一个全局单点。内部那一层该交给服务网格（mTLS、重试、熔断、流量拆分），跟着服务走，而不是集中在一处。</p>
+<h2 id="sec-7">它能做多少，取决于站在四层还是七层</h2>
+<ul><li><strong>四层（L4，传输层）</strong>：只看得到 IP 和端口。像邮局只看信封地址，能投递，但不拆信。所以它能转发 MySQL、Redis、MQ 的 TCP 连接，却不知道里面是不是 HTTP。</li><li><strong>七层（L7，应用层）</strong>：能读到方法、路径、Header、Cookie。像前台拆开看内容，才知道该转给哪个部门、要不要登记。</li></ul>
+<p>这个差别决定了能力：</p>
+<table><thead><tr><th>想做的事</th><th>四层够不够</th><th>说明</th></tr></thead><tbody><tr><td>按 IP / 端口转发</td><td>够</td><td>LVS、F5、HAProxy（TCP 模式）</td></tr><tr><td>按 URL 路径路由</td><td>不够</td><td>必须看到 HTTP 请求行</td></tr><tr><td>验 token、按用户限流</td><td>不够</td><td>必须读到 Authorization 头</td></tr><tr><td>按 Header 灰度</td><td>不够</td><td>必须解析请求头</td></tr><tr><td>协议转换（HTTP/1.1 ↔ HTTP/2、REST ↔ gRPC）</td><td>不够</td><td>必须理解应用层语义</td></tr><tr><td>数据库代理、纯长连接</td><td>够，而且更快</td><td>不需要理解内容</td></tr></tbody></table>
+<p>Envoy 官方对自己的描述就是这两种身份的合体：</p>
+<blockquote>Envoy is an L7 proxy and communication bus designed for large modern service oriented architectures.</blockquote>
+<p>同时它底层是 &quot;L3/L4 filter architecture&quot;，上面再叠一层 &quot;HTTP L7 filter&quot; 做缓冲、限流、路由。这也是为什么同一个产品既能当边缘网关，也能当 sidecar。</p>
+<p><strong>代价要说清楚：</strong>上了七层，每个请求都要解析，瓶颈从&quot;带宽&quot;变成&quot;CPU 和连接数&quot;。容量评估的口径要跟着变——不是&quot;能扛多少连接&quot;，而是&quot;每秒能解析多少请求&quot;。</p>
+<h2 id="sec-8">都叫&quot;网关&quot;，其实是五个工种</h2>
+<p>架构图上经常同时出现五个东西，名字里都带&quot;网关&quot;或&quot;代理&quot;，但职责完全不同：</p>
+<table><thead><tr><th>角色</th><th>站在哪</th><th>主要职责</th><th>典型产品</th><th>别让它干</th></tr></thead><tbody><tr><td>负载均衡</td><td>最外层</td><td>把连接分给多台机器，剔除不健康实例</td><td>LVS、F5、云 SLB/NLB</td><td>判断&quot;这个用户是谁&quot;</td></tr><tr><td>流量网关</td><td>边缘、公网入口</td><td>TLS 终止、WAF、静态缓存、域名与路径分流</td><td>NGINX、Envoy、OpenResty</td><td>细粒度业务鉴权、API 计费</td></tr><tr><td>API 网关</td><td>边缘之后</td><td>鉴权、配额限流、API 版本与生命周期、开发者门户</td><td>Kong、APISIX、AWS API Gateway</td><td>跨服务的复杂聚合</td></tr><tr><td>BFF / 业务网关</td><td>贴近某一端</td><td>为 Web / App / 小程序聚合裁剪接口</td><td>自研、GraphQL</td><td>承担全站通用治理</td></tr><tr><td>服务网格 sidecar</td><td>每个服务旁边</td><td>服务间 mTLS、重试、熔断、流量拆分、追踪</td><td>Istio、Linkerd、Envoy</td><td>管外部用户的认证</td></tr></tbody></table>
+<p><strong>负载均衡和网关的区别，一句话：</strong>负载均衡解决&quot;分给哪台机器&quot;，网关解决&quot;这个请求该不该、能不能、按什么规则到达应用&quot;。是先后关系，不是替代关系。</p>
+<p>Kubernetes 的答案很值得抄。官方把网关拆成三个角色：</p>
+<ul><li><strong>GatewayClass</strong>：定义&quot;谁来实现&quot;这类网关（哪个控制器管）。</li><li><strong>Gateway</strong>：定义一个<strong>流量处理基础设施的实例</strong>，比如一个云负载均衡器。原文是 &quot;Defines an instance of traffic handling infrastructure, such as cloud load balancer.&quot;</li><li><strong>HTTPRoute</strong>：定义&quot;从 Gateway 的 listener 到后端&quot;的具体路由规则。</li></ul>
+<p>对应到组织上，就是<strong>基础设施团队管 GatewayClass 和 Gateway，应用团队只写 HTTPRoute</strong>。职责分清，才不会出现&quot;改个路由要等两周排期&quot;或者&quot;网关配置没人敢动&quot;。</p>
+<p>小团队最常见的正确解：<strong>一个流量网关（Nginx 或 Envoy）+ 一个 API 网关</strong>。BFF 和网格等真有痛点再上。每多一跳，就多一个要配超时、要看指标、要背责任的地方。</p>
+<h2 id="sec-9">六个坑，几乎每个团队都踩过</h2>
+<p>网关上线不难。难的是它成为唯一入口之后，所有的超时、重试、IP、容量问题都会在这里集中爆发。</p>
+<p><strong>坑 1：超时层层相等。</strong> 客户端 3s、网关 3s、服务 3s。结果网关刚超时断开，服务还在算，算完白算；上游一重试，请求量翻倍。正确做法是超时当<strong>预算</strong>来分配，外层必须比内层大：</p>
+<table><thead><tr><th>层级</th><th>超时预算</th><th>理由</th></tr></thead><tbody><tr><td>客户端</td><td>5s</td><td>用户体验上限</td></tr><tr><td>网关</td><td>2s</td><td>留 3s 给网络与重试</td></tr><tr><td>业务服务</td><td>1s</td><td>留 1s 给下游</td></tr><tr><td>数据库 / 缓存</td><td>800ms</td><td>留 200ms 给连接与序列化</td></tr></tbody></table>
+<p><strong>坑 2：给所有请求配自动重试。</strong> 下单接口超时被重试三次，用户被扣三次钱。只对幂等请求（GET / PUT / DELETE）重试；POST 要重试，后端必须先有幂等键去重。</p>
+<p><strong>坑 3：网关把请求体整个读进内存再转发。</strong> 几个大文件上传就能把网关内存打满，全站 502，而业务服务却很闲。要设 body 上限，大文件走流式或对象存储直传。</p>
+<p><strong>坑 4：日志里记的客户端 IP 全是网关自己的。</strong> 风控拿不到真实 IP，按 IP 限流失效，攻击时定位不到来源。要传 <code>X-Forwarded-For</code> / <code>X-Real-IP</code>，而且<strong>只信任自己网段的代理头</strong>——这个头可以被伪造，直接取第一个值等于把风控交给攻击者。</p>
+<p><strong>坑 5：上线时改了路径前缀，网关没同步。</strong> 本地 200，线上 404：<code>/api/order</code> 被转成 <code>/order</code>，服务端一个都不认识。前缀改写规则要和后端的 context-path 成对变更，进配置评审，配回归用例。</p>
+<p><strong>坑 6：容量按业务峰值算，忘了网关自己也是瓶颈。</strong> 业务服务扩到 50 台，网关还是 2 个实例，先挂的永远是它。L7 的瓶颈是 CPU 和连接数，独立压测、独立扩容，至少三个实例跨可用区。</p>
+<p><strong>排查顺序</strong>也顺手记一下：先看网关自己的指标（QPS、4xx/5xx、上游连接数、CPU），再看上游服务的耗时。</p>
+<ul><li>网关 5xx 且上游<strong>没有</strong>日志 → 多半连不上或超时。</li><li>网关 4xx 且上游<strong>没有</strong>日志 → 多半是鉴权或限流拦下的。</li></ul>
+<p>责任划分清楚了，半夜就不用拉三个团队开会。</p>
+<h2 id="sec-10">什么时候该上，什么时候别上</h2>
+<p>这一段是我的判断，不是官方说法：</p>
+<p><strong>该上：</strong></p>
+<ul><li>有多个客户端（Web、App、小程序、第三方），需要统一入口和不同的接口形态。</li><li>有统一的横切需求：认证、限流、灰度、审计、计费。写在每个服务里必然走样。</li><li>后端实例地址经常变（容器化、弹性伸缩），不能让客户端跟着改。</li></ul>
+<p><strong>别上，或者先别上：</strong></p>
+<ul><li>就一个单体应用、几个服务，前面放个 Nginx 做反向代理和 TLS 就够了。RFC 里&quot;网关&quot;本来也包含这个层次，不必因为名词高级就上 API 网关。</li><li>团队没人能维护它。网关是<strong>唯一入口</strong>，它的可用性要求高于任何单个业务服务；没有主人、没有压测、没有告警的网关，比没有网关更危险。</li><li>有人打算在里面写业务逻辑。一旦开始&quot;在网关上做个判断&quot;，它就从基础设施变成了没人敢改的核心系统。</li></ul>
+<p>最后一个观点：<strong>网关应该被当成产品来治理，而不是当成一台服务器来运维。</strong> 路由、插件、证书、配额都要有版本、有评审、有回滚。Kubernetes Gateway API 花那么大力气做角色分离，本质就是把&quot;谁能改什么&quot;变成结构问题，而不是靠流程和人情。</p>
+<h2 id="sec-11">术语小抄</h2>
+<table><thead><tr><th>术语</th><th>大白话</th></tr></thead><tbody><tr><td>网关 Gateway</td><td>唯一入口，对外冒充源站，对内转发并做公共治理</td></tr><tr><td>反向代理 Reverse Proxy</td><td>装在服务端、替服务器挡门的代理；RFC 里与网关同义</td></tr><tr><td>正向代理 Forward Proxy</td><td>装在客户端侧、帮你出门的代理，和网关方向相反</td></tr><tr><td>南北向 North-South</td><td>外部用户进系统的流量，纵向穿边界</td></tr><tr><td>东西向 East-West</td><td>服务之间互调的流量，横向在集群内</td></tr><tr><td>Ingress</td><td>Kubernetes 里&quot;外部流量怎么进来&quot;的一类资源，Gateway API 是它的后继</td></tr><tr><td>L4 / L7</td><td>传输层 / 应用层。前者看 IP 端口，后者能读 HTTP 内容</td></tr><tr><td>TLS 终止</td><td>在网关卸下 HTTPS，后面走明文或内部再加密</td></tr><tr><td>SNI</td><td>TLS 握手里带的域名，网关靠它决定用哪张证书</td></tr><tr><td>上游 / 下游 Upstream / Downstream</td><td>消息流的方向：上游往上下游走；inbound 指朝源站，outbound 指朝用户</td></tr><tr><td>限流 Rate Limiting</td><td>单位时间放多少请求，常见算法是令牌桶、漏桶、滑动窗口</td></tr><tr><td>熔断 Circuit Breaker</td><td>连续失败就&quot;跳闸&quot;，一段时间内直接拒绝，避免拖死整条链路</td></tr><tr><td>重试 Retry</td><td>失败再试一次；只对幂等请求安全</td></tr><tr><td>幂等 Idempotent</td><td>同一个请求做一次和做十次结果一样（GET、PUT、DELETE 通常幂等）</td></tr><tr><td>BFF</td><td>Backend for Frontend，为某一端专门做的聚合层</td></tr><tr><td>sidecar</td><td>和服务部署在一起、跟着服务走的代理进程</td></tr><tr><td>服务网格 Service Mesh</td><td>用一堆 sidecar 管服务间通信的基础设施</td></tr><tr><td>WAF</td><td>Web 应用防火墙，挡 SQL 注入、XSS 这类攻击</td></tr><tr><td>X-Forwarded-For</td><td>记录请求经过的代理链，用来还原真实客户端 IP</td></tr><tr><td>金丝雀 / 灰度 Canary</td><td>先放一小部分流量到新版本，看指标再全量</td></tr><tr><td>API 生命周期</td><td>API 从设计、发布、版本演进到下线的管理过程</td></tr><tr><td>429 / 502 / 504</td><td>被限流 / 上游返回异常 / 网关等上游超时，网关排障三板斧</td></tr></tbody></table>
+<h2 id="sec-12">参考资料</h2>
+<p>以下每一条都在正文里对应了具体结论，没有凑数：</p>
+<ol><li><strong>RFC 9110 §3.7 Intermediaries</strong>（IETF，HTTP 语义标准）——gateway 与 reverse proxy 的定义、upstream/downstream、inbound/outbound，以及网关的三个典型用途。</li></ol>
+<p>&lt;https://www.rfc-editor.org/rfc/rfc9110.html#section-3.7&gt;</p>
+<ol><li><strong>microservices.io · Pattern: API Gateway / Backends for Frontends</strong>（Chris Richardson）——&quot;single entry point&quot;、proxy/route 与 fan out 两种处理方式、六条收益、两条代价（复杂度与多一跳）、BFF 变体。</li></ol>
+<p>&lt;https://microservices.io/patterns/apigateway.html&gt;</p>
+<ol><li><strong>Kubernetes 官方文档 · Gateway API</strong>——GatewayClass / Gateway / HTTPRoute 的定义、三种组织角色、请求流六步。</li></ol>
+<p>&lt;https://kubernetes.io/docs/concepts/services-networking/gateway/&gt;</p>
+<ol><li><strong>Istio 官方文档 · Traffic Management / Gateways</strong>——网关跑在网格边缘的独立 Envoy 上，而不是 sidecar；ingress 与 egress 网关的分工。</li></ol>
+<p>&lt;https://istio.io/latest/docs/concepts/traffic-management/&gt;</p>
+<ol><li><strong>Envoy 官方文档 · What is Envoy</strong>——&quot;L7 proxy and communication bus&quot;、L3/L4 filter chain 与 HTTP L7 filter、作为边缘代理的 TLS 终止与重试/熔断/全局限流能力。</li></ol>
+<p>&lt;https://www.envoyproxy.io/docs/envoy/latest/intro/what_is_envoy&gt;</p>
+<ol><li><strong>NGINX 官方文档 · Reverse Proxy</strong>——代理请求的三步（转发、取响应、回客户端）、默认改写 Host 与 Connection 头、<code>proxy_set_header</code> 传真实 IP、默认开启响应缓冲。</li></ol>
+<p>&lt;https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/&gt;</p>
+<ol><li><strong>Amazon API Gateway 官方文档 · What is Amazon API Gateway</strong>——&quot;front door&quot; 定位，以及 traffic management / authorization / monitoring / API version management 四类职责。</li></ol>
+<p>&lt;https://docs.aws.amazon.com/apigateway/latest/developerguide/welcome.html&gt;</p>
+<p>文中所有大白话、类比、坑与判断标准都是我的转述和经验，<strong>不代表上述文档的措辞</strong>；涉及具体产品能力时，以对应版本文档为准。</p>
   </div>
   <div class="article-embeds">
-    <h2 id="sec-embeds">银行系统版图图解（六张图）</h2>
-<figure class="embed-figure"><figcaption><span>图 1 · 全景地图 / 转账流程 / 核心解剖 / 外围四堆 / 外联查控 / 上帝视角（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/bank-systems-map.html" data-modal-title="银行里几百套系统到底怎么连？给程序员的一张上帝视角地图 · 图 1 · 全景地图 / 转账流程 / 核心解剖 / 外围四堆 / 外联查控 / 上帝视角（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 全景地图 / 转账流程 / 核心解剖 / 外围四堆 / 外联查控 / 上帝视角（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+    <h2 id="sec-embeds">网关图解（六张图）</h2>
+<figure class="embed-figure"><figcaption><span>图 1 · 它是什么 / 南北与东西 / 四层与七层 / 一次请求 / 网关家族 / 生产坑（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/gateway-explained.html" data-modal-title="网关到底在管什么？从小区大门讲到线上入口 · 图 1 · 它是什么 / 南北与东西 / 四层与七层 / 一次请求 / 网关家族 / 生产坑（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 它是什么 / 南北与东西 / 四层与七层 / 一次请求 / 网关家族 / 生产坑（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;UTF-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
-&lt;title&gt;银行系统版图 · 六张图讲明白&lt;/title&gt;
+&lt;title&gt;网关到底是什么 · 六张图讲清概念与生产用法&lt;/title&gt;
 &lt;style&gt;
   :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 44px}
-  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero{background:linear-gradient(135deg,#0a84ff,#5856d6 58%,#34c759);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
   .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
-  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.94}
   .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
   .hint b{color:var(--blue);font-weight:600}
   .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
@@ -504,468 +510,543 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 &lt;/head&gt;
 &lt;body&gt;
 &lt;div class=&quot;hero&quot;&gt;
-  &lt;h1&gt;银行系统版图：给程序员的一张上帝视角地图&lt;/h1&gt;
-  &lt;p&gt;三层加两条线：渠道受理、外围算业务、核心记总账，数据管看、外联管通。看完能回答「这笔业务到底经过了哪些系统」。&lt;/p&gt;
+  &lt;h1&gt;网关：所有请求都得先过这道门&lt;/h1&gt;
+  &lt;p&gt;它不是&quot;多一层转发&quot;，而是把每个服务都要重复做一遍的事——验身份、限流量、找位置、记日志——从业务代码里搬出来，只在门口做一次。六张图，从协议定义讲到生产事故。&lt;/p&gt;
 &lt;/div&gt;
 &lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
 &lt;div class=&quot;nav&quot;&gt;
-  &lt;a href=&quot;#b1&quot;&gt;全景地图&lt;/a&gt;&lt;a href=&quot;#b2&quot;&gt;转账流程&lt;/a&gt;&lt;a href=&quot;#b3&quot;&gt;核心解剖&lt;/a&gt;&lt;a href=&quot;#b4&quot;&gt;外围四堆&lt;/a&gt;&lt;a href=&quot;#b5&quot;&gt;外联与查控&lt;/a&gt;&lt;a href=&quot;#b6&quot;&gt;上帝视角&lt;/a&gt;
+  &lt;a href=&quot;#c1&quot;&gt;它是什么&lt;/a&gt;&lt;a href=&quot;#c2&quot;&gt;南北与东西&lt;/a&gt;&lt;a href=&quot;#c3&quot;&gt;四层与七层&lt;/a&gt;&lt;a href=&quot;#c4&quot;&gt;一次请求&lt;/a&gt;&lt;a href=&quot;#c5&quot;&gt;网关家族&lt;/a&gt;&lt;a href=&quot;#c6&quot;&gt;生产坑&lt;/a&gt;
 &lt;/div&gt;
 
-&lt;!-- 1 全景地图 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;b1&quot;&gt;
+&lt;!-- 1 概念 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;c1&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;全景地图：三层 + 两条线 &lt;span class=&quot;tag&quot;&gt;总览&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;银行系统名字再多，都能贴到这张图上。先记牢每一层「动不动账」。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;它对外冒充服务器，对内只是个转发员 &lt;span class=&quot;tag&quot;&gt;概念&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;RFC 9110 把 gateway 直接等同于 reverse proxy：对客户端而言它就是源站，收下请求后翻译一下，再转给内部真正干活的服务器。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 620&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;银行的地图：三层主干，两条贯穿线&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;主干从左到右是业务流转方向；右侧两条线不参与单笔交易，但贯穿所有系统&lt;/text&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 500&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;
+        &lt;marker id=&quot;gw1b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;gw1g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;
+      &lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;客户端只认识一个地址，后面有几台机器它不知道&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;63&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;网关站在中间：对外是唯一的门牌号，对内是四个检查岗加一个带路的人&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;720&quot; height=&quot;118&quot; rx=&quot;13&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;114&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 渠道层 · 受理请求，不动账&lt;/text&gt;
-      &lt;rect x=&quot;60&quot; y=&quot;128&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
-      &lt;text x=&quot;124&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;手机银行&lt;/text&gt;
-      &lt;text x=&quot;124&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;收请求 · 展示结果&lt;/text&gt;
-      &lt;rect x=&quot;196&quot; y=&quot;128&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
-      &lt;text x=&quot;260&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;网银 / 企业网银&lt;/text&gt;
-      &lt;text x=&quot;260&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;对公审批流复杂&lt;/text&gt;
-      &lt;rect x=&quot;332&quot; y=&quot;128&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
-      &lt;text x=&quot;396&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;柜面系统&lt;/text&gt;
-      &lt;text x=&quot;396&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;柜员操作界面&lt;/text&gt;
-      &lt;rect x=&quot;468&quot; y=&quot;128&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
-      &lt;text x=&quot;532&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;ATM / POS&lt;/text&gt;
-      &lt;text x=&quot;532&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;自助设备渠道&lt;/text&gt;
-      &lt;rect x=&quot;604&quot; y=&quot;128&quot; width=&quot;140&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
-      &lt;text x=&quot;674&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;开放银行&lt;/text&gt;
-      &lt;text x=&quot;674&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;银企直连 / 第三方&lt;/text&gt;
+        &lt;!-- 客户端 --&gt;
+        &lt;text x=&quot;36&quot; y=&quot;98&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#6e6e73&quot;&gt;客户端（不知道后端有几台）&lt;/text&gt;
+        &lt;rect x=&quot;36&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;54&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;111&quot; y=&quot;132&quot; font-size=&quot;12&quot; font-weight=&quot;600&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;浏览器&lt;/text&gt;
+        &lt;text x=&quot;111&quot; y=&quot;150&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;www.example.com&lt;/text&gt;
 
-      &lt;path d=&quot;M404,206 L404,220&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr)&quot;/&gt;
+        &lt;rect x=&quot;36&quot; y=&quot;176&quot; width=&quot;150&quot; height=&quot;54&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;111&quot; y=&quot;198&quot; font-size=&quot;12&quot; font-weight=&quot;600&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;手机 App&lt;/text&gt;
+        &lt;text x=&quot;111&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;api.example.com&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;222&quot; width=&quot;720&quot; height=&quot;118&quot; rx=&quot;13&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;248&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;② 外围层 · 算业务、做判断，改状态不改总账&lt;/text&gt;
-      &lt;rect x=&quot;60&quot; y=&quot;262&quot; width=&quot;158&quot; height=&quot;62&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d8d1f5&quot;/&gt;
-      &lt;text x=&quot;139&quot; y=&quot;286&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;客户经营&lt;/text&gt;
-      &lt;text x=&quot;139&quot; y=&quot;307&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;CRM · ECIF · 画像&lt;/text&gt;
-      &lt;rect x=&quot;238&quot; y=&quot;262&quot; width=&quot;158&quot; height=&quot;62&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d8d1f5&quot;/&gt;
-      &lt;text x=&quot;317&quot; y=&quot;286&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;业务流程&lt;/text&gt;
-      &lt;text x=&quot;317&quot; y=&quot;307&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;信贷 · 理财 · 票据&lt;/text&gt;
-      &lt;rect x=&quot;416&quot; y=&quot;262&quot; width=&quot;158&quot; height=&quot;62&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d8d1f5&quot;/&gt;
-      &lt;text x=&quot;495&quot; y=&quot;286&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;风控合规&lt;/text&gt;
-      &lt;text x=&quot;495&quot; y=&quot;307&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;反洗钱 · 查控 · 反欺诈&lt;/text&gt;
-      &lt;rect x=&quot;594&quot; y=&quot;262&quot; width=&quot;150&quot; height=&quot;62&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d8d1f5&quot;/&gt;
-      &lt;text x=&quot;669&quot; y=&quot;286&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;运营支撑&lt;/text&gt;
-      &lt;text x=&quot;669&quot; y=&quot;307&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;影像 · 报表 · OA&lt;/text&gt;
+        &lt;rect x=&quot;36&quot; y=&quot;242&quot; width=&quot;150&quot; height=&quot;54&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;111&quot; y=&quot;264&quot; font-size=&quot;12&quot; font-weight=&quot;600&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;第三方系统&lt;/text&gt;
+        &lt;text x=&quot;111&quot; y=&quot;282&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;open.example.com&lt;/text&gt;
 
-      &lt;path d=&quot;M404,340 L404,354&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr)&quot;/&gt;
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw1b)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M192,137 C212,137 216,137 230,137&quot;/&gt;
+          &lt;path d=&quot;M192,203 C212,203 216,203 230,203&quot;/&gt;
+          &lt;path d=&quot;M192,269 C212,269 216,269 230,269&quot;/&gt;
+        &lt;/g&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;356&quot; width=&quot;720&quot; height=&quot;118&quot; rx=&quot;13&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;382&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;③ 核心层 · 记账、算总账，全行只有它说了算&lt;/text&gt;
-      &lt;rect x=&quot;60&quot; y=&quot;396&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
-      &lt;text x=&quot;124&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;客户信息 CIF&lt;/text&gt;
-      &lt;text x=&quot;124&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;这人是谁&lt;/text&gt;
-      &lt;rect x=&quot;196&quot; y=&quot;396&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
-      &lt;text x=&quot;260&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;存款&lt;/text&gt;
-      &lt;text x=&quot;260&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;钱怎么进&lt;/text&gt;
-      &lt;rect x=&quot;332&quot; y=&quot;396&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
-      &lt;text x=&quot;396&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;贷款&lt;/text&gt;
-      &lt;text x=&quot;396&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;钱怎么出&lt;/text&gt;
-      &lt;rect x=&quot;468&quot; y=&quot;396&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
-      &lt;text x=&quot;532&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;支付清算&lt;/text&gt;
-      &lt;text x=&quot;532&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;钱怎么转&lt;/text&gt;
-      &lt;rect x=&quot;604&quot; y=&quot;396&quot; width=&quot;140&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
-      &lt;text x=&quot;674&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;总账 GL&lt;/text&gt;
-      &lt;text x=&quot;674&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;钱怎么算&lt;/text&gt;
+        &lt;!-- 网关 --&gt;
+        &lt;rect x=&quot;236&quot; y=&quot;92&quot; width=&quot;336&quot; height=&quot;256&quot; rx=&quot;14&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#9cc3ff&quot; stroke-width=&quot;1.5&quot;/&gt;
+        &lt;text x=&quot;256&quot; y=&quot;118&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;网关 Gateway&lt;/text&gt;
+        &lt;text x=&quot;256&quot; y=&quot;137&quot; font-size=&quot;10.5&quot; fill=&quot;#5a6b85&quot;&gt;反代 + 一层可编程的公共设施&lt;/text&gt;
 
-      &lt;rect x=&quot;784&quot; y=&quot;88&quot; width=&quot;212&quot; height=&quot;182&quot; rx=&quot;13&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;802&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;贯穿线一 · 数据线&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;144&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;源系统 → ODS → DWD&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;168&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;→ 集市 / 画像 / 报表&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;OLTP 和 OLAP 必须分开&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;220&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;一条大查询不能拖垮核心&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;246&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;管的是「看明白」&lt;/text&gt;
+        &lt;rect x=&quot;252&quot; y=&quot;148&quot; width=&quot;304&quot; height=&quot;42&quot; rx=&quot;9&quot; fill=&quot;#ffffff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;264&quot; y=&quot;174&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;认证&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;174&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;你是谁？验 token / 证书 / 签名&lt;/text&gt;
 
-      &lt;rect x=&quot;784&quot; y=&quot;284&quot; width=&quot;212&quot; height=&quot;190&quot; rx=&quot;13&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
-      &lt;text x=&quot;802&quot; y=&quot;310&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;贯穿线二 · 外联线&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;338&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;央行支付 HVPS / BEPS&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;362&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;IBPS / CIPS&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;386&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;银联 / 网联&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;最高法查控系统&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;438&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;管的是「连外部」&lt;/text&gt;
-      &lt;text x=&quot;802&quot; y=&quot;460&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;不属于银行，但必须对话&lt;/text&gt;
+        &lt;rect x=&quot;252&quot; y=&quot;196&quot; width=&quot;304&quot; height=&quot;42&quot; rx=&quot;9&quot; fill=&quot;#ffffff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;264&quot; y=&quot;222&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;授权&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;222&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;你能干什么？查角色 / scope&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;494&quot; width=&quot;952&quot; height=&quot;106&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;522&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话背下来&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;552&quot; font-size=&quot;16&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;渠道受理 · 外围算业务 · 核心记总账 · 数据管看 · 外联管通&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;580&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;听到任何系统名，先问三件事：它在哪一层？它动不动账？它跟谁说话？&lt;/text&gt;
+        &lt;rect x=&quot;252&quot; y=&quot;244&quot; width=&quot;304&quot; height=&quot;42&quot; rx=&quot;9&quot; fill=&quot;#ffffff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;264&quot; y=&quot;270&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;限流&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;270&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;一次放多少？令牌桶 + 配额&lt;/text&gt;
 
-      &lt;defs&gt;&lt;marker id=&quot;bArr&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-    &lt;/g&gt;
-  &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先竖着读三层——渠道只收请求、外围做判断、核心才记账，出错代价从上到下越来越重。右边两条线横穿所有层：数据线负责事后分析，外联线负责和外部世界对话，它们都不参与单笔交易。最下面那句话是全篇的口诀，后面五张图都在展开它。&lt;/div&gt;
+        &lt;rect x=&quot;252&quot; y=&quot;292&quot; width=&quot;304&quot; height=&quot;42&quot; rx=&quot;9&quot; fill=&quot;#ffffff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;264&quot; y=&quot;318&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;路由&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;318&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;去哪个门？按 Host / Path / Header&lt;/text&gt;
+
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw1g)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M578,140 C606,140 612,140 628,140&quot;/&gt;
+          &lt;path d=&quot;M578,220 C606,220 612,220 628,220&quot;/&gt;
+          &lt;path d=&quot;M578,300 C606,300 612,300 628,300&quot;/&gt;
+        &lt;/g&gt;
+
+        &lt;!-- 后端服务 --&gt;
+        &lt;text x=&quot;636&quot; y=&quot;98&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#6e6e73&quot;&gt;真正干活的服务器&lt;/text&gt;
+        &lt;rect x=&quot;636&quot; y=&quot;110&quot; width=&quot;180&quot; height=&quot;58&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;654&quot; y=&quot;134&quot; font-size=&quot;12&quot; font-weight=&quot;600&quot; fill=&quot;#1d7a45&quot;&gt;订单服务&lt;/text&gt;
+        &lt;text x=&quot;654&quot; y=&quot;153&quot; font-size=&quot;10&quot; fill=&quot;#5a7a68&quot;&gt;10.0.3.11:8080&lt;/text&gt;
+
+        &lt;rect x=&quot;636&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;58&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;654&quot; y=&quot;216&quot; font-size=&quot;12&quot; font-weight=&quot;600&quot; fill=&quot;#1d7a45&quot;&gt;商品服务&lt;/text&gt;
+        &lt;text x=&quot;654&quot; y=&quot;235&quot; font-size=&quot;10&quot; fill=&quot;#5a7a68&quot;&gt;10.0.3.12:8080&lt;/text&gt;
+
+        &lt;rect x=&quot;636&quot; y=&quot;274&quot; width=&quot;180&quot; height=&quot;58&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;654&quot; y=&quot;298&quot; font-size=&quot;12&quot; font-weight=&quot;600&quot; fill=&quot;#1d7a45&quot;&gt;支付服务&lt;/text&gt;
+        &lt;text x=&quot;654&quot; y=&quot;317&quot; font-size=&quot;10&quot; fill=&quot;#5a7a68&quot;&gt;10.0.3.13:8080&lt;/text&gt;
+
+        &lt;text x=&quot;836&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;地址可以随时变&lt;/text&gt;
+        &lt;text x=&quot;836&quot; y=&quot;149&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;客户端不用跟着改&lt;/text&gt;
+
+        &lt;!-- 说明 --&gt;
+        &lt;rect x=&quot;36&quot; y=&quot;346&quot; width=&quot;968&quot; height=&quot;62&quot; rx=&quot;10&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;52&quot; y=&quot;365&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;RFC 9110 §3.7 原文&lt;/text&gt;
+        &lt;text x=&quot;52&quot; y=&quot;383&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;A &quot;gateway&quot; (a.k.a. &quot;reverse proxy&quot;) is an intermediary that acts as an origin server for the outbound connection&lt;/text&gt;
+        &lt;text x=&quot;52&quot; y=&quot;399&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;but translates received requests and forwards them inbound to another server or servers.&lt;/text&gt;
+
+        &lt;rect x=&quot;36&quot; y=&quot;416&quot; width=&quot;968&quot; height=&quot;72&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;52&quot; y=&quot;435&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;翻译成人话&lt;/text&gt;
+        &lt;text x=&quot;52&quot; y=&quot;453&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;对客户端，网关就是那台服务器（握手、证书、响应码都由它出面）；对内部，它只是个会看内容、会改内容、会挑人的转发员。&lt;/text&gt;
+        &lt;text x=&quot;52&quot; y=&quot;471&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;RFC 同时列了它的典型用途：封装遗留或不可信服务、加速缓存、把 HTTP 服务分区与负载均衡到多台机器。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;关键区别：&lt;/b&gt;代理是客户端自己配的（帮你出门），网关是服务端自己装的（替服务器挡门）。这就是为什么网关又叫&quot;反向代理&quot;——方向反过来了。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 2 转账流程 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;b2&quot;&gt;
+&lt;!-- 2 南北东西 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;c2&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;走一遍：一笔转账穿过哪些系统 &lt;span class=&quot;tag&quot;&gt;流程图&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;行内转账和跨行转账的分叉点，就在核心的支付模块。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;南北向与东西向：同一个词，两个位置 &lt;span class=&quot;tag&quot;&gt;位置&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;外部用户进来的流量叫南北向，服务之间互相调的流量叫东西向。这两段该用不同的东西管，混用是生产里最常见的架构错位。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 650&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;场景 A · 行内转账（同一个银行）&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;从上排左到右读，每一步都标了「谁在干活」&lt;/text&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 540&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;
+        &lt;marker id=&quot;gw2b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;gw2p&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#5856d6&quot;/&gt;&lt;/marker&gt;
+      &lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;南北向管&quot;进门&quot;，东西向管&quot;内部串门&quot;&lt;/text&gt;
 
-      &lt;rect x=&quot;26&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
-      &lt;text x=&quot;42&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;① 发起&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;手机银行&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;确认身份，打包请求&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;按交易码发出&lt;/text&gt;
-      &lt;rect x=&quot;192&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
-      &lt;text x=&quot;208&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;② 转接&lt;/text&gt;
-      &lt;text x=&quot;208&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;渠道前置&lt;/text&gt;
-      &lt;text x=&quot;208&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;报文转换、路由&lt;/text&gt;
-      &lt;text x=&quot;208&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;鉴权、限流&lt;/text&gt;
-      &lt;rect x=&quot;358&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
-      &lt;text x=&quot;374&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;③ 判断&lt;/text&gt;
-      &lt;text x=&quot;374&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;反欺诈系统&lt;/text&gt;
-      &lt;text x=&quot;374&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;实时风险评分&lt;/text&gt;
-      &lt;text x=&quot;374&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#c62828&quot;&gt;可疑就在这里拦下&lt;/text&gt;
-      &lt;rect x=&quot;524&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;540&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;④ 记账&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;核心支付模块&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;借贷两边同时记&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#c62828&quot;&gt;同一事务，不可拆&lt;/text&gt;
-      &lt;rect x=&quot;690&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
-      &lt;text x=&quot;706&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑤ 返回&lt;/text&gt;
-      &lt;text x=&quot;706&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;渠道展示结果&lt;/text&gt;
-      &lt;text x=&quot;706&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;「转账成功」&lt;/text&gt;
-      &lt;text x=&quot;706&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;触发短信通知&lt;/text&gt;
-      &lt;rect x=&quot;856&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;872&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑥ 事后&lt;/text&gt;
-      &lt;text x=&quot;872&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;数仓 / 报送&lt;/text&gt;
-      &lt;text x=&quot;872&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;日志抽到 ODS&lt;/text&gt;
-      &lt;text x=&quot;872&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;命中规则进报送&lt;/text&gt;
+        &lt;!-- 南北 --&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;58&quot; width=&quot;992&quot; height=&quot;204&quot; rx=&quot;14&quot; fill=&quot;#f6f9ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;84&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;南北向 North-South&lt;/text&gt;
+        &lt;text x=&quot;196&quot; y=&quot;84&quot; font-size=&quot;10.5&quot; fill=&quot;#5a6b85&quot;&gt;用户 → 你的系统，纵向穿过多层网络边界&lt;/text&gt;
 
-      &lt;path d=&quot;M178,158 L190,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
-      &lt;path d=&quot;M344,158 L356,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
-      &lt;path d=&quot;M510,158 L522,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
-      &lt;path d=&quot;M676,158 L688,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
-      &lt;path d=&quot;M842,158 L854,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+        &lt;rect x=&quot;56&quot; y=&quot;104&quot; width=&quot;140&quot; height=&quot;66&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;126&quot; y=&quot;130&quot; font-size=&quot;11.5&quot; font-weight=&quot;600&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;公网用户&lt;/text&gt;
+        &lt;text x=&quot;126&quot; y=&quot;149&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;不可信&lt;/text&gt;
 
-      &lt;rect x=&quot;26&quot; y=&quot;230&quot; width=&quot;980&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
-      &lt;text x=&quot;42&quot; y=&quot;252&quot; font-size=&quot;11&quot; fill=&quot;#a35b00&quot;&gt;到第 ④ 步为止两种方式一样。跨行转账在这一步之后多走一段「外部清算网络」，钱才会到对方银行。&lt;/text&gt;
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw2b)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M202,137 L222,137&quot;/&gt;&lt;/g&gt;
 
-      &lt;text x=&quot;44&quot; y=&quot;298&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;场景 B · 跨行转账（多出来的四步）&lt;/text&gt;
-      &lt;rect x=&quot;26&quot; y=&quot;316&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;42&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;④ 本行记账&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;核心先记本行账&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;付款账户减记&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;生成支付指令&lt;/text&gt;
-      &lt;rect x=&quot;222&quot; y=&quot;316&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;238&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑤ 送出&lt;/text&gt;
-      &lt;text x=&quot;238&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;行内支付清算&lt;/text&gt;
-      &lt;text x=&quot;238&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;按金额和渠道&lt;/text&gt;
-      &lt;text x=&quot;238&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;选一条外部通路&lt;/text&gt;
-      &lt;rect x=&quot;418&quot; y=&quot;316&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
-      &lt;text x=&quot;434&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑥ 跨行清算&lt;/text&gt;
-      &lt;text x=&quot;434&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;外部清算网络&lt;/text&gt;
-      &lt;text x=&quot;434&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;IBPS / HVPS&lt;/text&gt;
-      &lt;text x=&quot;434&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;银联 / 网联&lt;/text&gt;
-      &lt;rect x=&quot;614&quot; y=&quot;316&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;630&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑦ 对方入账&lt;/text&gt;
-      &lt;text x=&quot;630&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;对方银行核心&lt;/text&gt;
-      &lt;text x=&quot;630&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;收款账户加记&lt;/text&gt;
-      &lt;text x=&quot;630&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;回执原路返回&lt;/text&gt;
-      &lt;rect x=&quot;810&quot; y=&quot;316&quot; width=&quot;196&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;826&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑧ 日终&lt;/text&gt;
-      &lt;text x=&quot;826&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;两边对账&lt;/text&gt;
-      &lt;text x=&quot;826&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;我付出的 = 对方收到的&lt;/text&gt;
-      &lt;text x=&quot;826&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;和央行账户核对&lt;/text&gt;
-      &lt;path d=&quot;M204,368 L220,368&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
-      &lt;path d=&quot;M400,368 L416,368&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
-      &lt;path d=&quot;M596,368 L612,368&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
-      &lt;path d=&quot;M792,368 L808,368&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+        &lt;rect x=&quot;228&quot; y=&quot;104&quot; width=&quot;150&quot; height=&quot;66&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;303&quot; y=&quot;128&quot; font-size=&quot;11.5&quot; font-weight=&quot;600&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;CDN / WAF&lt;/text&gt;
+        &lt;text x=&quot;303&quot; y=&quot;147&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;挡攻击、缓存静态&lt;/text&gt;
 
-      &lt;rect x=&quot;26&quot; y=&quot;446&quot; width=&quot;980&quot; height=&quot;180&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;46&quot; y=&quot;474&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;三条关键边界，看流程时别搞混&lt;/text&gt;
-      &lt;text x=&quot;46&quot; y=&quot;506&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;① 手机银行从头到尾只是「收发室」——它从不自己改余额，只显示核心算完返回的结果。&lt;/text&gt;
-      &lt;text x=&quot;46&quot; y=&quot;538&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;② 反欺诈是外围系统，它只有「拦不拦」的权力，没有「记不记账」的权力。&lt;/text&gt;
-      &lt;text x=&quot;46&quot; y=&quot;570&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;③ 跨行的钱最终在央行的账户上完成清算，所以银行必须接 HVPS / BEPS / IBPS / CIPS。&lt;/text&gt;
-      &lt;text x=&quot;46&quot; y=&quot;602&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;数仓是事后抽取，不在交易链路里。这条分不清，就容易把「报表数不对」怪到核心头上。&lt;/text&gt;
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw2b)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M384,137 L404,137&quot;/&gt;&lt;/g&gt;
 
-      &lt;defs&gt;&lt;marker id=&quot;bArr2&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-    &lt;/g&gt;
-  &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上排六步从左到右读，注意第 ③ 步反欺诈「只拦不记账」、第 ④ 步核心才真正动账。下排看跨行多出来的四步，分叉点就在核心的支付模块。最下面三条边界是排查问题的关键：用户说「钱没到账」时，先判断卡在上排第几步、还是下排的第 ⑥ 步。&lt;/div&gt;
+        &lt;rect x=&quot;410&quot; y=&quot;96&quot; width=&quot;176&quot; height=&quot;88&quot; rx=&quot;10&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;1.6&quot;/&gt;
+        &lt;text x=&quot;498&quot; y=&quot;117&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;Ingress Gateway&lt;/text&gt;
+        &lt;text x=&quot;498&quot; y=&quot;135&quot; font-size=&quot;9.5&quot; fill=&quot;#3a4a63&quot; text-anchor=&quot;middle&quot;&gt;独立进程，跑在边缘&lt;/text&gt;
+        &lt;text x=&quot;498&quot; y=&quot;152&quot; font-size=&quot;9.5&quot; fill=&quot;#3a4a63&quot; text-anchor=&quot;middle&quot;&gt;TLS 终止 + 鉴权 + 限流&lt;/text&gt;
+        &lt;text x=&quot;498&quot; y=&quot;169&quot; font-size=&quot;9.5&quot; fill=&quot;#3a4a63&quot; text-anchor=&quot;middle&quot;&gt;不是业务服务的 sidecar&lt;/text&gt;
+
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw2b)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M592,137 L612,137&quot;/&gt;&lt;/g&gt;
+
+        &lt;rect x=&quot;618&quot; y=&quot;104&quot; width=&quot;366&quot; height=&quot;66&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;636&quot; y=&quot;128&quot; font-size=&quot;11.5&quot; font-weight=&quot;600&quot; fill=&quot;#1d7a45&quot;&gt;集群内的服务&lt;/text&gt;
+        &lt;text x=&quot;636&quot; y=&quot;147&quot; font-size=&quot;9.5&quot; fill=&quot;#5a7a68&quot;&gt;订单 · 商品 · 支付 · 会员 · 履约，藏在网关后面，不直接暴露公网&lt;/text&gt;
+
+        &lt;text x=&quot;56&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;这一段网关能看见&quot;每一个外部请求&quot;：谁来的、带了什么凭证、要访问哪条路径、rate 多少。&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;215&quot; font-size=&quot;10.5&quot; fill=&quot;#3a4a63&quot;&gt;所以鉴权、限流、灰度、WAF、证书更新、API 版本切换，放在这里最省事——改一处，全体生效。&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;241&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;判断：这段的调用方是&quot;系统外的人&quot;，它的边界是不可信网络。&lt;/text&gt;
+
+        &lt;!-- 东西 --&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;276&quot; width=&quot;992&quot; height=&quot;200&quot; rx=&quot;14&quot; fill=&quot;#faf8ff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;44&quot; y=&quot;302&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;东西向 East-West&lt;/text&gt;
+        &lt;text x=&quot;196&quot; y=&quot;302&quot; font-size=&quot;10.5&quot; fill=&quot;#5a5a72&quot;&gt;服务 → 服务，横向发生在集群内部&lt;/text&gt;
+
+        &lt;rect x=&quot;64&quot; y=&quot;322&quot; width=&quot;170&quot; height=&quot;62&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;149&quot; y=&quot;346&quot; font-size=&quot;11.5&quot; font-weight=&quot;600&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;订单服务&lt;/text&gt;
+        &lt;text x=&quot;149&quot; y=&quot;365&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;会调商品、支付&lt;/text&gt;
+
+        &lt;rect x=&quot;64&quot; y=&quot;396&quot; width=&quot;170&quot; height=&quot;30&quot; rx=&quot;8&quot; fill=&quot;#f0edff&quot; stroke=&quot;#d2c8ff&quot;/&gt;
+        &lt;text x=&quot;149&quot; y=&quot;416&quot; font-size=&quot;9.5&quot; fill=&quot;#3a2a7a&quot; text-anchor=&quot;middle&quot;&gt;sidecar：mTLS / 重试 / 熔断&lt;/text&gt;
+
+        &lt;g stroke=&quot;#5856d6&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw2p)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M238,343 L372,343&quot;/&gt;
+          &lt;path d=&quot;M554,343 L688,343&quot;/&gt;
+        &lt;/g&gt;
+        &lt;g stroke=&quot;#5856d6&quot; stroke-width=&quot;1.5&quot; marker-start=&quot;url(#gw2p)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M372,363 L238,363&quot;/&gt;
+          &lt;path d=&quot;M688,363 L554,363&quot;/&gt;
+        &lt;/g&gt;
+
+        &lt;rect x=&quot;380&quot; y=&quot;322&quot; width=&quot;170&quot; height=&quot;62&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;465&quot; y=&quot;346&quot; font-size=&quot;11.5&quot; font-weight=&quot;600&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;商品服务&lt;/text&gt;
+        &lt;text x=&quot;465&quot; y=&quot;365&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;内部接口&lt;/text&gt;
+
+        &lt;rect x=&quot;696&quot; y=&quot;322&quot; width=&quot;170&quot; height=&quot;62&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;781&quot; y=&quot;346&quot; font-size=&quot;11.5&quot; font-weight=&quot;600&quot; fill=&quot;#1d1d1f&quot; text-anchor=&quot;middle&quot;&gt;支付服务&lt;/text&gt;
+        &lt;text x=&quot;781&quot; y=&quot;365&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot; text-anchor=&quot;middle&quot;&gt;内部接口&lt;/text&gt;
+
+        &lt;text x=&quot;884&quot; y=&quot;336&quot; font-size=&quot;9.5&quot; font-weight=&quot;700&quot; fill=&quot;#3a2a7a&quot;&gt;这一层不管&lt;/text&gt;
+        &lt;text x=&quot;884&quot; y=&quot;353&quot; font-size=&quot;9.5&quot; fill=&quot;#5a5a72&quot;&gt;对外鉴权&lt;/text&gt;
+        &lt;text x=&quot;884&quot; y=&quot;369&quot; font-size=&quot;9.5&quot; fill=&quot;#5a5a72&quot;&gt;API 计费&lt;/text&gt;
+        &lt;text x=&quot;884&quot; y=&quot;385&quot; font-size=&quot;9.5&quot; fill=&quot;#5a5a72&quot;&gt;第三方契约&lt;/text&gt;
+
+        &lt;text x=&quot;56&quot; y=&quot;446&quot; font-size=&quot;10.5&quot; fill=&quot;#3a2a7a&quot;&gt;把外网网关拿来跑服务间调用，等于让所有内部请求都绕一次边缘、扛一次公网级限流规则，还多一个全局单点。&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;465&quot; font-size=&quot;10.5&quot; fill=&quot;#3a2a7a&quot;&gt;这一层通常由 sidecar / 服务网格承担：证书轮换、重试、熔断、流量拆分，跟着服务走，而不是集中在一处。&lt;/text&gt;
+
+        &lt;rect x=&quot;24&quot; y=&quot;490&quot; width=&quot;992&quot; height=&quot;36&quot; rx=&quot;10&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;42&quot; y=&quot;513&quot; font-size=&quot;10.5&quot; fill=&quot;#8a5a00&quot;&gt;同一个产品（比如 Envoy）在两边都能用，但配置与职责要分开：边缘那份对外，网格那份对内，别用一套规则包打天下。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;一句话：&lt;/b&gt;南北向是&quot;门&quot;，东西向是&quot;楼道&quot;。门要查证件，楼道只需要保证跑得快、断了能绕。&lt;b&gt;Istio 官方文档明确说&lt;/b&gt;，gateway 配置作用在&quot;跑在网格边缘的独立 Envoy 代理&quot;上，而不是服务旁边的 sidecar。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 3 核心解剖 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;b3&quot;&gt;
+&lt;!-- 3 四层七层 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;c3&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;核心系统解剖：一台全行级的记账机器 &lt;span class=&quot;tag&quot;&gt;核心层&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;CORE 最初是「集中、在线、实时交互」的缩写；现在行业按「核心」理解。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;四层看信封，七层拆开信看内容 &lt;span class=&quot;tag&quot;&gt;能力&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;四层只认 IP 和端口，七层能读到 HTTP 方法、路径、Header。能不能按 path 路由、按 header 灰度、按用户鉴权，全取决于它站在哪一层。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 580&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;核心系统管的事，用五个模块就能说完&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;五个模块 + 两个支撑中心，就是「账房先生」的全部家当&lt;/text&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 500&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;
+        &lt;marker id=&quot;gw3o&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#ff9500&quot;/&gt;&lt;/marker&gt;
+      &lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;只多看一眼，能做的事就完全不一样&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;84&quot; width=&quot;952&quot; height=&quot;64&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;110&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;CORE = Centralized Online Real-time Exchange（集中、在线、实时交互）&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;134&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;相对于早期「分散、脱机、批处理、单向」而言；后来行业不再纠结缩写，接受了「核心」本义&lt;/text&gt;
+        &lt;!-- L4 --&gt;
+        &lt;rect x=&quot;32&quot; y=&quot;62&quot; width=&quot;478&quot; height=&quot;266&quot; rx=&quot;14&quot; fill=&quot;#fff8f0&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;52&quot; y=&quot;88&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;四层 / L4 · 传输层&lt;/text&gt;
+        &lt;text x=&quot;230&quot; y=&quot;88&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3a&quot;&gt;只看得到信封上的地址&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块一&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;客户信息 CIF&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;全行统一的客户身份&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;与关系的主数据&lt;/text&gt;
-      &lt;rect x=&quot;236&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;252&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块二&lt;/text&gt;
-      &lt;text x=&quot;252&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;存款&lt;/text&gt;
-      &lt;text x=&quot;252&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;活期、定期&lt;/text&gt;
-      &lt;text x=&quot;252&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;计息结息&lt;/text&gt;
-      &lt;rect x=&quot;428&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;444&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块三&lt;/text&gt;
-      &lt;text x=&quot;444&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;贷款&lt;/text&gt;
-      &lt;text x=&quot;444&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;发放、还款、计息&lt;/text&gt;
-      &lt;text x=&quot;444&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;五级分类&lt;/text&gt;
-      &lt;rect x=&quot;620&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;636&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块四&lt;/text&gt;
-      &lt;text x=&quot;636&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;支付清算&lt;/text&gt;
-      &lt;text x=&quot;636&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;汇划、清算、结算&lt;/text&gt;
-      &lt;text x=&quot;636&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;连接外部网络&lt;/text&gt;
-      &lt;rect x=&quot;812&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;828&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块五&lt;/text&gt;
-      &lt;text x=&quot;828&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;总账 GL&lt;/text&gt;
-      &lt;text x=&quot;828&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;会计核算、日终轧差&lt;/text&gt;
-      &lt;text x=&quot;828&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;年终决算&lt;/text&gt;
+        &lt;rect x=&quot;72&quot; y=&quot;106&quot; width=&quot;180&quot; height=&quot;76&quot; rx=&quot;6&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e0c9a8&quot; stroke-dasharray=&quot;5,4&quot;/&gt;
+        &lt;text x=&quot;86&quot; y=&quot;128&quot; font-size=&quot;10&quot; fill=&quot;#a08454&quot;&gt;信封（只读这里）&lt;/text&gt;
+        &lt;text x=&quot;86&quot; y=&quot;148&quot; font-size=&quot;10.5&quot; font-weight=&quot;600&quot; fill=&quot;#8a5a00&quot;&gt;src 10.2.1.9:51234&lt;/text&gt;
+        &lt;text x=&quot;86&quot; y=&quot;166&quot; font-size=&quot;10.5&quot; font-weight=&quot;600&quot; fill=&quot;#8a5a00&quot;&gt;dst 10.0.3.11:3306&lt;/text&gt;
 
-      &lt;text x=&quot;44&quot; y=&quot;338&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;底层规则：复式记账 —— 一笔交易借贷两边金额相等，必须在同一个事务里完成&lt;/text&gt;
-      &lt;rect x=&quot;44&quot; y=&quot;352&quot; width=&quot;952&quot; height=&quot;128&quot; rx=&quot;12&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;rect x=&quot;64&quot; y=&quot;372&quot; width=&quot;280&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;204&quot; y=&quot;398&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;付款账户&lt;/text&gt;
-      &lt;text x=&quot;204&quot; y=&quot;430&quot; font-size=&quot;20&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;− 100 元&lt;/text&gt;
-      &lt;text x=&quot;204&quot; y=&quot;451&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;借方（钱从哪来）&lt;/text&gt;
-      &lt;rect x=&quot;380&quot; y=&quot;372&quot; width=&quot;280&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;520&quot; y=&quot;398&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;收款账户&lt;/text&gt;
-      &lt;text x=&quot;520&quot; y=&quot;430&quot; font-size=&quot;20&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;+ 100 元&lt;/text&gt;
-      &lt;text x=&quot;520&quot; y=&quot;451&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;贷方（钱到哪去）&lt;/text&gt;
-      &lt;rect x=&quot;696&quot; y=&quot;372&quot; width=&quot;280&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;836&quot; y=&quot;398&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;总账&lt;/text&gt;
-      &lt;text x=&quot;836&quot; y=&quot;430&quot; font-size=&quot;17&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;借贷平衡&lt;/text&gt;
-      &lt;text x=&quot;836&quot; y=&quot;451&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;要么都成功，要么都回滚&lt;/text&gt;
+        &lt;rect x=&quot;272&quot; y=&quot;106&quot; width=&quot;200&quot; height=&quot;76&quot; rx=&quot;6&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;286&quot; y=&quot;132&quot; font-size=&quot;10.5&quot; fill=&quot;#8e8e93&quot;&gt;里面的内容看不到&lt;/text&gt;
+        &lt;text x=&quot;286&quot; y=&quot;152&quot; font-size=&quot;10.5&quot; fill=&quot;#8e8e93&quot;&gt;也不打算看&lt;/text&gt;
+        &lt;text x=&quot;286&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#b0b0b5&quot;&gt;（TCP 字节流）&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;500&quot; width=&quot;952&quot; height=&quot;64&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;526&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;两个支撑中心：产品工厂（利率、期限、费用拼装成产品）· 参数中心（利率汇率费率可配置可追溯）&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;550&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;宕机可以恢复，账错了要一笔笔找回 —— 所以核心改造必须双轨运行、逐笔对账&lt;/text&gt;
-    &lt;/g&gt;
-  &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先看五个模块的分工——「这人是谁、钱怎么进、怎么出、怎么转、怎么算」。中间那组借贷示意是核心的底层规则：一减一加必须在同一事务里完成，不能只成功一半。最下面一句是全图重点：核心怕的不是宕机，是账对不上。&lt;/div&gt;
+        &lt;text x=&quot;52&quot; y=&quot;212&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3a&quot;&gt;能做：按 IP / 端口转发、TCP 连接保持、简单健康检查&lt;/text&gt;
+        &lt;text x=&quot;52&quot; y=&quot;232&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3a&quot;&gt;不能做：按 URL 路由、看 token、改 Header、按用户灰度&lt;/text&gt;
+        &lt;text x=&quot;52&quot; y=&quot;252&quot; font-size=&quot;10.5&quot; fill=&quot;#8a6a3a&quot;&gt;优势：快、通用、协议无关 —— MySQL、Redis、MQ 都能转&lt;/text&gt;
+        &lt;text x=&quot;52&quot; y=&quot;281&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;典型场景：数据库代理、纯 TCP 接入、对性能极敏感的长连接&lt;/text&gt;
+        &lt;text x=&quot;52&quot; y=&quot;304&quot; font-size=&quot;10.5&quot; fill=&quot;#8a5a00&quot;&gt;典型产品：LVS、F5、HAProxy（TCP 模式）、云厂商 NLB&lt;/text&gt;
+
+        &lt;!-- L7 --&gt;
+        &lt;rect x=&quot;530&quot; y=&quot;62&quot; width=&quot;478&quot; height=&quot;266&quot; rx=&quot;14&quot; fill=&quot;#f0f9ff&quot; stroke=&quot;#b9dcf7&quot;/&gt;
+        &lt;text x=&quot;550&quot; y=&quot;88&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;七层 / L7 · 应用层&lt;/text&gt;
+        &lt;text x=&quot;728&quot; y=&quot;88&quot; font-size=&quot;10.5&quot; fill=&quot;#3a6a8f&quot;&gt;拆开信封，连里面写了什么都能读&lt;/text&gt;
+
+        &lt;rect x=&quot;570&quot; y=&quot;100&quot; width=&quot;418&quot; height=&quot;88&quot; rx=&quot;6&quot; fill=&quot;#ffffff&quot; stroke=&quot;#9cc3ff&quot;/&gt;
+        &lt;text x=&quot;584&quot; y=&quot;120&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;GET /api/order/123 HTTP/1.1&lt;/text&gt;
+        &lt;text x=&quot;584&quot; y=&quot;138&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;Host: api.example.com&lt;/text&gt;
+        &lt;text x=&quot;584&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;Authorization: Bearer eyJhbGciOi...&lt;/text&gt;
+        &lt;text x=&quot;584&quot; y=&quot;170&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;X-User-Id: 88123　　Cookie: sid=...&lt;/text&gt;
+
+        &lt;text x=&quot;550&quot; y=&quot;212&quot; font-size=&quot;10.5&quot; fill=&quot;#3a6a8f&quot;&gt;能做：按 Host / Path / Header 路由、验 token、限流、改 URL、灰度&lt;/text&gt;
+        &lt;text x=&quot;550&quot; y=&quot;232&quot; font-size=&quot;10.5&quot; fill=&quot;#3a6a8f&quot;&gt;还能做：协议转换（HTTP/1.1 ↔ HTTP/2、REST ↔ gRPC）、响应压缩&lt;/text&gt;
+        &lt;text x=&quot;550&quot; y=&quot;252&quot; font-size=&quot;10.5&quot; fill=&quot;#3a6a8f&quot;&gt;代价：要解析每个请求，CPU 与内存开销更高，大 body 更吃缓冲&lt;/text&gt;
+        &lt;text x=&quot;550&quot; y=&quot;281&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;典型场景：Web / API 入口、微服务统一接入、灰度与 A/B 测试&lt;/text&gt;
+        &lt;text x=&quot;550&quot; y=&quot;304&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;典型产品：NGINX、Envoy、APISIX、Kong、Spring Cloud Gateway&lt;/text&gt;
+
+        &lt;rect x=&quot;32&quot; y=&quot;344&quot; width=&quot;976&quot; height=&quot;58&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;50&quot; y=&quot;365&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;选型口诀&lt;/text&gt;
+        &lt;text x=&quot;50&quot; y=&quot;386&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;只要&quot;把连接转过去&quot;→ 四层够了；要&quot;看懂这是谁的什么请求&quot;→ 必须七层。gRPC、WebSocket、灰度、鉴权都属于后者；一旦上了七层，容量评估要按&quot;每秒解析多少请求&quot;算，而不是&quot;能扛多少连接&quot;。&lt;/text&gt;
+
+        &lt;rect x=&quot;32&quot; y=&quot;414&quot; width=&quot;976&quot; height=&quot;52&quot; rx=&quot;10&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;50&quot; y=&quot;434&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;一个常见误区&lt;/text&gt;
+        &lt;text x=&quot;50&quot; y=&quot;453&quot; font-size=&quot;10.5&quot; fill=&quot;#6e5420&quot;&gt;&quot;我们已经有了 L4 负载均衡，为什么还要 L7 网关？&quot;——因为负载均衡解决&quot;分给哪台机器&quot;，网关解决&quot;这个请求该不该、能不能、按什么规则到达应用&quot;。两者是先后关系，不是替代关系。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;记法：&lt;/b&gt;四层像邮局，只看信封地址就能投递；七层像前台，拆开看内容，才知道该转给哪个部门、要不要先登记。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 4 外围四堆 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;b4&quot;&gt;
+&lt;!-- 4 一次请求 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;c4&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;外围系统：按「服务谁」分成四堆 &lt;span class=&quot;tag&quot;&gt;外围层&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;名字最多的那一层。按职责一分类，就没有那么乱了。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;一个请求过关的八道工序 &lt;span class=&quot;tag&quot;&gt;流程&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;顺序不是随便排的：先做便宜的判断（TLS、路由），再做贵的（鉴权、限流），最后才转发。搞反顺序，等于让垃圾流量先消耗最贵的资源。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 600&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;外围系统四堆：客户经营 / 业务流程 / 风控合规 / 运营支撑&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;判断口诀：它是记关系的、办业务的、做判断的，还是管内部的？&lt;/text&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 512&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;
+        &lt;marker id=&quot;gw4b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;gw4g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;
+      &lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;客户端只发了一次请求，网关替它跑了八道工序&lt;/text&gt;
+        &lt;text x=&quot;44&quot; y=&quot;60&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;前四道是&quot;治理&quot;（这个请求该不该进来），后四道是&quot;转发&quot;（怎么安全高效地送到）&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;12&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;116&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 客户经营类 —— 记关系、管身份&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;CRM：跟进记录、营销策略、投诉，不记余额&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;170&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;ECIF：把同一个人在各系统的身份拼成一个客户号&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;198&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;客户画像：谁可能买理财、谁要流失&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;226&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;客户经理工作台：管日常跟进和任务&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;256&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;一句话：让银行「认识」客户，但不负责记账&lt;/text&gt;
+        &lt;!-- 行1 标签 --&gt;
+        &lt;text x=&quot;44&quot; y=&quot;88&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 治理：在门口就把它拦下或放行&lt;/text&gt;
 
-      &lt;rect x=&quot;532&quot; y=&quot;88&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;12&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
-      &lt;text x=&quot;552&quot; y=&quot;116&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;② 业务流程类 —— 办专业业务&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;信贷管理：申请、审批、放款、贷后&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;170&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;理财 / 基金代销：产品、份额、申赎&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;198&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;票据系统：电票的开立、背书、承兑、兑付&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;226&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;国际业务：结售汇、信用证、跨境汇款&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;256&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;一句话：审批在它们这儿，真正记账仍落核心&lt;/text&gt;
+        &lt;!-- 1 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;98&quot; width=&quot;226&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;circle cx=&quot;66&quot; cy=&quot;120&quot; r=&quot;10&quot; fill=&quot;#007aff&quot;/&gt;&lt;text x=&quot;66&quot; y=&quot;124&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;1&lt;/text&gt;
+        &lt;text x=&quot;84&quot; y=&quot;124&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;TLS 终止&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;146&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;证书在这里卸下，后面走明文或&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;162&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;内部再加密；续期只改一处&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;177&quot; font-size=&quot;9.5&quot; fill=&quot;#7a8a9f&quot;&gt;SNI 决定用哪张证书&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;300&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;12&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;328&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;③ 风控合规类 —— 做判断、拦风险&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;354&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;反洗钱：可疑交易识别、大额交易报送&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;382&quot; font-size=&quot;10.5&quot; fill=&quot;#c62828&quot;&gt;反欺诈 / 风险监控：交易实时拦截&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#c62828&quot;&gt;查控接口：法院的查询、冻结、扣划通道&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;438&quot; font-size=&quot;10.5&quot; fill=&quot;#c62828&quot;&gt;风险预警：额度、敞口、集中度监控&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;468&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;一句话：有「说不」的权力，但没有「动账」的权力&lt;/text&gt;
+        &lt;!-- 2 --&gt;
+        &lt;rect x=&quot;286&quot; y=&quot;98&quot; width=&quot;226&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;circle cx=&quot;308&quot; cy=&quot;120&quot; r=&quot;10&quot; fill=&quot;#007aff&quot;/&gt;&lt;text x=&quot;308&quot; y=&quot;124&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;2&lt;/text&gt;
+        &lt;text x=&quot;326&quot; y=&quot;124&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;路由匹配&lt;/text&gt;
+        &lt;text x=&quot;300&quot; y=&quot;146&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;Host + Path + Header 三选组合，&lt;/text&gt;
+        &lt;text x=&quot;300&quot; y=&quot;162&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;决定这条请求归哪个服务&lt;/text&gt;
+        &lt;text x=&quot;300&quot; y=&quot;177&quot; font-size=&quot;9.5&quot; fill=&quot;#7a8a9f&quot;&gt;/api/order/* → order-svc&lt;/text&gt;
 
-      &lt;rect x=&quot;532&quot; y=&quot;300&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;12&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;552&quot; y=&quot;328&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;④ 运营支撑类 —— 管内部、留痕迹&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;354&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;影像系统：凭证扫描、电子档案&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;382&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;工作流 / 审批平台：跨部门流转&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;报表 / 绩效：从数据线取数，不直连核心&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;438&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;OA / 人力：纯内部管理，不碰客户账&lt;/text&gt;
-      &lt;text x=&quot;552&quot; y=&quot;468&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;一句话：给银行自己人用的，客户感知不到&lt;/text&gt;
+        &lt;!-- 3 --&gt;
+        &lt;rect x=&quot;528&quot; y=&quot;98&quot; width=&quot;226&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;circle cx=&quot;550&quot; cy=&quot;120&quot; r=&quot;10&quot; fill=&quot;#007aff&quot;/&gt;&lt;text x=&quot;550&quot; y=&quot;124&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;3&lt;/text&gt;
+        &lt;text x=&quot;568&quot; y=&quot;124&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;认证 + 授权&lt;/text&gt;
+        &lt;text x=&quot;542&quot; y=&quot;146&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;验签、查过期、看 scope；&lt;/text&gt;
+        &lt;text x=&quot;542&quot; y=&quot;162&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;过了就把身份写进 Header 下传&lt;/text&gt;
+        &lt;text x=&quot;542&quot; y=&quot;177&quot; font-size=&quot;9.5&quot; fill=&quot;#7a8a9f&quot;&gt;X-User-Id / X-Tenant&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;516&quot; width=&quot;952&quot; height=&quot;64&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;542&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;最容易搞混的两组：CRM 有客户信息，但客户主数据在核心 CIF；信贷系统放款了，但记账那一笔在核心。&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;566&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;系统多是历史地层：瘦核心把业务剥到外围，监管每加一条报送就多一个接口，每一代技术栈又留下一批老系统。&lt;/text&gt;
-    &lt;/g&gt;
-  &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;这四个框按「服务谁」划分，比按系统名字背单词有效得多。特别看每个框最后那句灰色小字——它说的都是「边界」：外围有判断权、没有记账权。最下面黄色框点出两组最容易搞混的关系，这也是面试和业务沟通里最常被问到的。&lt;/div&gt;
+        &lt;!-- 4 --&gt;
+        &lt;rect x=&quot;770&quot; y=&quot;98&quot; width=&quot;226&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#eef4ff&quot; stroke=&quot;#c9dcff&quot;/&gt;
+        &lt;circle cx=&quot;792&quot; cy=&quot;120&quot; r=&quot;10&quot; fill=&quot;#007aff&quot;/&gt;&lt;text x=&quot;792&quot; y=&quot;124&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;4&lt;/text&gt;
+        &lt;text x=&quot;810&quot; y=&quot;124&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;限流 + 配额&lt;/text&gt;
+        &lt;text x=&quot;784&quot; y=&quot;146&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;按 IP / 用户 / 应用维度计数，&lt;/text&gt;
+        &lt;text x=&quot;784&quot; y=&quot;162&quot; font-size=&quot;10&quot; fill=&quot;#3a4a63&quot;&gt;超了直接 429，不打到后端&lt;/text&gt;
+        &lt;text x=&quot;784&quot; y=&quot;177&quot; font-size=&quot;9.5&quot; fill=&quot;#7a8a9f&quot;&gt;令牌桶 / 漏桶 / 滑动窗口&lt;/text&gt;
+
+        &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw4b)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M274,141 L282,141&quot;/&gt;&lt;path d=&quot;M516,141 L524,141&quot;/&gt;&lt;path d=&quot;M758,141 L766,141&quot;/&gt;
+        &lt;/g&gt;
+
+        &lt;!-- 行2 标签 --&gt;
+        &lt;text x=&quot;44&quot; y=&quot;212&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;② 转发：选一台健康的机器，把请求安全送进去&lt;/text&gt;
+
+        &lt;!-- 5 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;222&quot; width=&quot;226&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;circle cx=&quot;66&quot; cy=&quot;244&quot; r=&quot;10&quot; fill=&quot;#34c759&quot;/&gt;&lt;text x=&quot;66&quot; y=&quot;248&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;5&lt;/text&gt;
+        &lt;text x=&quot;84&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;请求改写&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;270&quot; font-size=&quot;10&quot; fill=&quot;#3a5a48&quot;&gt;去前缀、补 Header、加请求 ID，&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;286&quot; font-size=&quot;10&quot; fill=&quot;#3a5a48&quot;&gt;让后端看到干净的接口&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;301&quot; font-size=&quot;9.5&quot; fill=&quot;#6a8a78&quot;&gt;X-Request-Id 贯穿全链路&lt;/text&gt;
+
+        &lt;!-- 6 --&gt;
+        &lt;rect x=&quot;286&quot; y=&quot;222&quot; width=&quot;226&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;circle cx=&quot;308&quot; cy=&quot;244&quot; r=&quot;10&quot; fill=&quot;#34c759&quot;/&gt;&lt;text x=&quot;308&quot; y=&quot;248&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;6&lt;/text&gt;
+        &lt;text x=&quot;326&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;负载均衡&lt;/text&gt;
+        &lt;text x=&quot;300&quot; y=&quot;270&quot; font-size=&quot;10&quot; fill=&quot;#3a5a48&quot;&gt;按权重 / 最少连接 / 一致性哈希&lt;/text&gt;
+        &lt;text x=&quot;300&quot; y=&quot;286&quot; font-size=&quot;10&quot; fill=&quot;#3a5a48&quot;&gt;挑一个实例，健康检查不过就跳过&lt;/text&gt;
+        &lt;text x=&quot;300&quot; y=&quot;301&quot; font-size=&quot;9.5&quot; fill=&quot;#6a8a78&quot;&gt;灰度时这里决定 5% 走新版本&lt;/text&gt;
+
+        &lt;!-- 7 --&gt;
+        &lt;rect x=&quot;528&quot; y=&quot;222&quot; width=&quot;226&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;circle cx=&quot;550&quot; cy=&quot;244&quot; r=&quot;10&quot; fill=&quot;#34c759&quot;/&gt;&lt;text x=&quot;550&quot; y=&quot;248&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;7&lt;/text&gt;
+        &lt;text x=&quot;568&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;重试 / 熔断&lt;/text&gt;
+        &lt;text x=&quot;542&quot; y=&quot;270&quot; font-size=&quot;10&quot; fill=&quot;#3a5a48&quot;&gt;连不上换一台；连续失败就熔断，&lt;/text&gt;
+        &lt;text x=&quot;542&quot; y=&quot;286&quot; font-size=&quot;10&quot; fill=&quot;#3a5a48&quot;&gt;别把整条链路拖死&lt;/text&gt;
+        &lt;text x=&quot;542&quot; y=&quot;301&quot; font-size=&quot;9.5&quot; fill=&quot;#7a6a3a&quot;&gt;只对幂等请求重试！&lt;/text&gt;
+
+        &lt;!-- 8 --&gt;
+        &lt;rect x=&quot;770&quot; y=&quot;222&quot; width=&quot;226&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;circle cx=&quot;792&quot; cy=&quot;244&quot; r=&quot;10&quot; fill=&quot;#34c759&quot;/&gt;&lt;text x=&quot;792&quot; y=&quot;248&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;&gt;8&lt;/text&gt;
+        &lt;text x=&quot;810&quot; y=&quot;248&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;日志 / 指标 / 追踪&lt;/text&gt;
+        &lt;text x=&quot;784&quot; y=&quot;270&quot; font-size=&quot;10&quot; fill=&quot;#3a5a48&quot;&gt;耗时、状态码、上游地址、trace，&lt;/text&gt;
+        &lt;text x=&quot;784&quot; y=&quot;286&quot; font-size=&quot;10&quot; fill=&quot;#3a5a48&quot;&gt;排障时第一个要看的就是这里&lt;/text&gt;
+        &lt;text x=&quot;784&quot; y=&quot;301&quot; font-size=&quot;9.5&quot; fill=&quot;#6a8a78&quot;&gt;注意别把敏感 Header 记进去&lt;/text&gt;
+
+        &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw4b)&quot; fill=&quot;none&quot;&gt;
+          &lt;path d=&quot;M274,265 L282,265&quot;/&gt;&lt;path d=&quot;M516,265 L524,265&quot;/&gt;&lt;path d=&quot;M758,265 L766,265&quot;/&gt;
+        &lt;/g&gt;
+
+        &lt;!-- 返回 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;322&quot; width=&quot;952&quot; height=&quot;40&quot; rx=&quot;10&quot; fill=&quot;#f7f7fa&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;347&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;响应沿原路返回：可以压缩、可以缓存、可以改写响应头；但客户端只看到一个来自&quot;网关&quot;的响应，后端地址与实例数全程不可见。&lt;/text&gt;
+
+        &lt;!-- 判断标准 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;374&quot; width=&quot;952&quot; height=&quot;62&quot; rx=&quot;10&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;395&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;决定一个功能该不该放网关，问两句就够&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;415&quot; font-size=&quot;10.5&quot; fill=&quot;#6e5420&quot;&gt;① 是不是&quot;所有入口都要&quot;？（是 → 放网关；只有一个服务要 → 放服务里）　② 是不是&quot;不需要业务数据就能判断&quot;？（需要查库、算价格、看库存 → 别放网关）&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;431&quot; font-size=&quot;10.5&quot; fill=&quot;#6e5420&quot;&gt;两条都满足才放。只满足一条还硬放，网关就会慢慢长成第二个业务系统。&lt;/text&gt;
+
+        &lt;rect x=&quot;44&quot; y=&quot;446&quot; width=&quot;952&quot; height=&quot;40&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;471&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;顺序背后的原则：越便宜、越能早拒绝的检查越靠前。让 100 万次恶意请求先去验签，CPU 会先被打满。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;大白话：&lt;/b&gt;这八道工序，以前是每个业务服务各写一遍，写八份、改八次、错八个地方。放到网关，是写一份、改一次、全站生效——这才是网关真正的价值，不是&quot;多一层转发&quot;。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 5 外联与查控 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;b5&quot;&gt;
+&lt;!-- 5 家族 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;c5&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;外联与查控：银行不是孤岛 &lt;span class=&quot;tag&quot;&gt;流程图&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;上半张讲钱怎么出去，下半张讲法院怎么进来。两条链路都在核心落地。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;都叫&quot;网关&quot;，其实是五个工种 &lt;span class=&quot;tag&quot;&gt;选型&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;负载均衡、流量网关、API 网关、BFF、服务网格经常同时出现在一张架构图上。分不清它们的边界，就会出现&quot;两个网关互相甩锅&quot;的排障现场。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 650&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;上半 · 支付外联：一笔跨行汇款怎么出去&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;外部清算系统不属于银行，但银行的系统必须和它们对话&lt;/text&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 512&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;位置不同，职责就不同；职责不清，就会互相打脸&lt;/text&gt;
 
-      &lt;rect x=&quot;26&quot; y=&quot;82&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;42&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;起点&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;本行核心&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;先记本行账务&lt;/text&gt;
-      &lt;text x=&quot;42&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;生成支付指令&lt;/text&gt;
-      &lt;rect x=&quot;222&quot; y=&quot;82&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;238&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;行内&lt;/text&gt;
-      &lt;text x=&quot;238&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;支付清算系统&lt;/text&gt;
-      &lt;text x=&quot;238&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;按金额和渠道&lt;/text&gt;
-      &lt;text x=&quot;238&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;选择外部通路&lt;/text&gt;
-      &lt;rect x=&quot;418&quot; y=&quot;82&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
-      &lt;text x=&quot;434&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;外部基础设施&lt;/text&gt;
-      &lt;text x=&quot;434&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;央行 / 清算网络&lt;/text&gt;
-      &lt;text x=&quot;434&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;HVPS · BEPS · IBPS&lt;/text&gt;
-      &lt;text x=&quot;434&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;CIPS · 银联 · 网联&lt;/text&gt;
-      &lt;rect x=&quot;614&quot; y=&quot;82&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;630&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;终点&lt;/text&gt;
-      &lt;text x=&quot;630&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;对方银行核心&lt;/text&gt;
-      &lt;text x=&quot;630&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;收款账户加记&lt;/text&gt;
-      &lt;text x=&quot;630&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;回执原路返回&lt;/text&gt;
-      &lt;rect x=&quot;810&quot; y=&quot;82&quot; width=&quot;196&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;826&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;日终&lt;/text&gt;
-      &lt;text x=&quot;826&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;央行账户对账&lt;/text&gt;
-      &lt;text x=&quot;826&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;ACS 系统簿记&lt;/text&gt;
-      &lt;text x=&quot;826&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;双方的账要相等&lt;/text&gt;
-      &lt;path d=&quot;M204,134 L220,134&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
-      &lt;path d=&quot;M400,134 L416,134&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
-      &lt;path d=&quot;M596,134 L612,134&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
-      &lt;path d=&quot;M792,134 L808,134&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+        &lt;!-- 表头 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;58&quot; width=&quot;952&quot; height=&quot;40&quot; rx=&quot;8&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;56&quot; y=&quot;83&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;角色&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;83&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;站在哪&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;83&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;主要职责&lt;/text&gt;
+        &lt;text x=&quot;646&quot; y=&quot;83&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;典型产品&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;83&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;别让它干&lt;/text&gt;
 
-      &lt;rect x=&quot;26&quot; y=&quot;212&quot; width=&quot;980&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
-      &lt;text x=&quot;42&quot; y=&quot;234&quot; font-size=&quot;11&quot; fill=&quot;#0a58ca&quot;&gt;HVPS 大额实时（不到 1 分钟到账）· BEPS 小额批量 · IBPS 网银与移动支付（100 万元以下）· CIPS 跨境人民币&lt;/text&gt;
+        &lt;!-- 行1 LB --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;102&quot; width=&quot;952&quot; height=&quot;66&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;56&quot; y=&quot;126&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;负载均衡&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;144&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;Load Balancer&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;126&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;最外层&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;144&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;L4 或 L7&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;126&quot; font-size=&quot;10.5&quot; fill=&quot;#1d1d1f&quot;&gt;把连接/请求分给多台机器，剔除不健康的实例&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;144&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;目标是&quot;不断、不偏、不打死某一台&quot;&lt;/text&gt;
+        &lt;text x=&quot;646&quot; y=&quot;126&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;LVS、F5、云 SLB/NLB&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;126&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;判断&quot;这个用户是谁&quot;&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;144&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;它不关心业务身份&lt;/text&gt;
 
-      &lt;text x=&quot;44&quot; y=&quot;288&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;下半 · 查控链路：法院的指令怎么进来&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;310&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;查控系统属于最高人民法院，银行这边只是一个协助执行接口&lt;/text&gt;
+        &lt;!-- 行2 流量网关 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;172&quot; width=&quot;952&quot; height=&quot;66&quot; rx=&quot;8&quot; fill=&quot;#fbfdff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;56&quot; y=&quot;196&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;流量网关&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;214&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;Edge / Ingress&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;边缘，公网入口&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;214&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;南北向&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#1d1d1f&quot;&gt;TLS 终止、WAF、静态缓存、统一域名与路径分流、大流量接入&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;214&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;目标是&quot;扛住并清洗掉不该进来的流量&quot;&lt;/text&gt;
+        &lt;text x=&quot;646&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;NGINX、Envoy、OpenResty&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;细粒度的业务鉴权&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;214&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;和 API 计费&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;326&quot; width=&quot;214&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;352&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;发起方&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;376&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;最高法「总对总」&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;400&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;2014 年 12 月开通&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;418&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;法院发查询 / 冻结 / 扣划&lt;/text&gt;
-      &lt;rect x=&quot;286&quot; y=&quot;326&quot; width=&quot;214&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
-      &lt;text x=&quot;302&quot; y=&quot;352&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;银行端&lt;/text&gt;
-      &lt;text x=&quot;302&quot; y=&quot;376&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;协助执行接口&lt;/text&gt;
-      &lt;text x=&quot;302&quot; y=&quot;400&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;校验法律文书和权限&lt;/text&gt;
-      &lt;text x=&quot;302&quot; y=&quot;418&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;转成银行内部指令&lt;/text&gt;
-      &lt;rect x=&quot;528&quot; y=&quot;326&quot; width=&quot;214&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
-      &lt;text x=&quot;544&quot; y=&quot;352&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;落地&lt;/text&gt;
-      &lt;text x=&quot;544&quot; y=&quot;376&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;核心执行&lt;/text&gt;
-      &lt;text x=&quot;544&quot; y=&quot;400&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;冻结账户状态&lt;/text&gt;
-      &lt;text x=&quot;544&quot; y=&quot;418&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;扣划走账务记账&lt;/text&gt;
-      &lt;rect x=&quot;770&quot; y=&quot;326&quot; width=&quot;214&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;786&quot; y=&quot;352&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;闭环&lt;/text&gt;
-      &lt;text x=&quot;786&quot; y=&quot;376&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;回执法院&lt;/text&gt;
-      &lt;text x=&quot;786&quot; y=&quot;400&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;反馈查询结果&lt;/text&gt;
-      &lt;text x=&quot;786&quot; y=&quot;418&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;留痕备查&lt;/text&gt;
-      &lt;path d=&quot;M260,382 L284,382&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
-      &lt;path d=&quot;M502,382 L526,382&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
-      &lt;path d=&quot;M744,382 L768,382&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+        &lt;!-- 行3 API 网关 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;242&quot; width=&quot;952&quot; height=&quot;66&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;56&quot; y=&quot;266&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#5856d6&quot;&gt;API 网关&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;284&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;API Gateway&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;266&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;边缘之后&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;284&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;面向 API 契约&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;266&quot; font-size=&quot;10.5&quot; fill=&quot;#1d1d1f&quot;&gt;鉴权、配额与限流、API 版本与生命周期、开发者门户、用量计费&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;284&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;目标是&quot;把 API 当成产品来管&quot;&lt;/text&gt;
+        &lt;text x=&quot;646&quot; y=&quot;266&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;Kong、APISIX、AWS API Gateway&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;266&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;跨服务的复杂聚合&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;284&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;（那是 BFF 的事）&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;458&quot; width=&quot;940&quot; height=&quot;62&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;482&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;公开数据：3700 多家银行联网 · 3400 多家上线冻结 · 2400 多家上线扣划&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;505&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;可查询存款、车辆、证券、网络资金等 15 类 20 项信息&lt;/text&gt;
+        &lt;!-- 行4 BFF --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;312&quot; width=&quot;952&quot; height=&quot;66&quot; rx=&quot;8&quot; fill=&quot;#fbfdff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;56&quot; y=&quot;336&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;BFF / 业务网关&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;354&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;Backend for Frontend&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;336&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;贴近某一端&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;354&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;每端一个&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;336&quot; font-size=&quot;10.5&quot; fill=&quot;#1d1d1f&quot;&gt;为 Web / App / 小程序分别聚合裁剪接口，减少端上多次往返&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;354&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;目标是&quot;这一端要什么，就给它什么&quot;&lt;/text&gt;
+        &lt;text x=&quot;646&quot; y=&quot;336&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;自研（BFF 层）、GraphQL&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;336&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;承担全站通用治理&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;354&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;那样会复制 N 份&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;540&quot; width=&quot;940&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;566&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话分清 CRM 和查控&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;592&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;CRM 是银行自己的客户经营系统，目的是维护关系；查控是外部司法通道的银行端，目的是履行协助执行义务。&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;616&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;两者都能碰到账户：查控动的是账户状态，核心记的是账。&lt;/text&gt;
+        &lt;!-- 行5 mesh --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;382&quot; width=&quot;952&quot; height=&quot;66&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+        &lt;text x=&quot;56&quot; y=&quot;406&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;服务网格 sidecar&lt;/text&gt;
+        &lt;text x=&quot;56&quot; y=&quot;424&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;Service Mesh&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;406&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;每个服务旁边&lt;/text&gt;
+        &lt;text x=&quot;186&quot; y=&quot;424&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;东西向&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;406&quot; font-size=&quot;10.5&quot; fill=&quot;#1d1d1f&quot;&gt;服务间 mTLS、重试、熔断、流量拆分、链路追踪&lt;/text&gt;
+        &lt;text x=&quot;316&quot; y=&quot;424&quot; font-size=&quot;9.5&quot; fill=&quot;#8e8e93&quot;&gt;目标是&quot;让通信本身可靠且可观测&quot;&lt;/text&gt;
+        &lt;text x=&quot;646&quot; y=&quot;406&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;Istio、Linkerd、Envoy&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;管外部用户的&lt;/text&gt;
+        &lt;text x=&quot;846&quot; y=&quot;424&quot; font-size=&quot;10&quot; fill=&quot;#8e8e93&quot;&gt;认证与 API 契约&lt;/text&gt;
 
-      &lt;defs&gt;&lt;marker id=&quot;bArr3&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
-    &lt;/g&gt;
-  &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上半张从左到右读，重点是第 ③ 格那一串外部基础设施——HVPS、BEPS、IBPS、CIPS、银联、网联，记住「汇划走央行、银行卡走银联、网络支付走网联」就够入门。下半张注意起点不是银行而是法院，银行只是协助执行；不管查控还是 CRM，最终落账的都还是核心。&lt;/div&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;458&quot; width=&quot;952&quot; height=&quot;46&quot; rx=&quot;10&quot; fill=&quot;#fff5e8&quot; stroke=&quot;#f7ddb6&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;477&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#8a5a00&quot;&gt;叠三层网关不等于架构更健壮，只等于排障更慢。&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;495&quot; font-size=&quot;10.5&quot; fill=&quot;#6e5420&quot;&gt;小团队最常见的正确解：一个流量网关（Nginx/Envoy）+ 一个 API 网关，BFF 与网格等真有痛点再上。每多一跳，就多一个要配超时、要看指标、要背责任的地方。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;Kubernetes 的答案很值得抄：&lt;/b&gt;官方把网关拆成三个角色——&lt;b&gt;GatewayClass&lt;/b&gt; 定&quot;谁来提供&quot;，&lt;b&gt;Gateway&lt;/b&gt; 定&quot;这一处入口实例&quot;，&lt;b&gt;HTTPRoute&lt;/b&gt; 定&quot;怎么路由&quot;。基础设施团队管前两个，应用团队只写 Route。职责分清，才不会互相等排期。&lt;/div&gt;
 &lt;/div&gt;
 
-&lt;!-- 6 上帝视角 --&gt;
-&lt;div class=&quot;card&quot; id=&quot;b6&quot;&gt;
+&lt;!-- 6 坑 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;c6&quot;&gt;
   &lt;div class=&quot;card-head&quot;&gt;
-    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;建立上帝视角：三把钥匙 &lt;span class=&quot;tag&quot;&gt;方法&lt;/span&gt;&lt;/h2&gt;
-    &lt;p&gt;不用背所有缩写。每次听到一个系统名，用这三把钥匙去套。&lt;/p&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;六个坑，几乎每个团队都踩过 &lt;span class=&quot;tag&quot;&gt;生产&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;网关上线不难，难的是它成为唯一入口之后，所有的超时、重试、IP、容量问题都会在这里集中爆发。&lt;/p&gt;
   &lt;/div&gt;
-  &lt;svg viewBox=&quot;0 0 1040 640&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
-    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
-      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;三把钥匙：从「听不懂」到「能定位」&lt;/text&gt;
-      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;第一把判层级，第二把判职责，第三把靠实战把地图刻进脑子&lt;/text&gt;
+  &lt;div class=&quot;pz-host&quot;&gt;
+    &lt;svg viewBox=&quot;0 0 1040 528&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+      &lt;defs&gt;&lt;marker id=&quot;gw6g&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+      &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+        &lt;text x=&quot;44&quot; y=&quot;38&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;同一个故障，左右两种做法，结果差一个数量级&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;300&quot; height=&quot;126&quot; rx=&quot;11&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
-      &lt;text x=&quot;60&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 问「这笔钱动没动」&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;动了余额或会计分录 → 核心&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;166&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;改状态、批流程、记关系 → 外围&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;190&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;只展示或收请求 → 渠道&lt;/text&gt;
-      &lt;text x=&quot;60&quot; y=&quot;208&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;这一问能把 80% 系统归位&lt;/text&gt;
-      &lt;rect x=&quot;358&quot; y=&quot;88&quot; width=&quot;300&quot; height=&quot;126&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
-      &lt;text x=&quot;374&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;② 问「四个谁」&lt;/text&gt;
-      &lt;text x=&quot;374&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;谁发起 → 渠道&lt;/text&gt;
-      &lt;text x=&quot;374&quot; y=&quot;166&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;谁判断 → 外围（风控、信贷）&lt;/text&gt;
-      &lt;text x=&quot;374&quot; y=&quot;190&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;谁记账 → 核心；谁看 → 数据线&lt;/text&gt;
-      &lt;text x=&quot;374&quot; y=&quot;208&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;说不清属于哪一格，就是没搞清职责&lt;/text&gt;
-      &lt;rect x=&quot;672&quot; y=&quot;88&quot; width=&quot;300&quot; height=&quot;126&quot; rx=&quot;11&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
-      &lt;text x=&quot;688&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;③ 追一笔真实交易&lt;/text&gt;
-      &lt;text x=&quot;688&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;挑自己发起的一笔转账&lt;/text&gt;
-      &lt;text x=&quot;688&quot; y=&quot;166&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;拿流水号从渠道日志一路追&lt;/text&gt;
-      &lt;text x=&quot;688&quot; y=&quot;190&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;到核心记账、再到数仓落库&lt;/text&gt;
-      &lt;text x=&quot;688&quot; y=&quot;208&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;追三次，地图就长在脑子里&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;66&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;踩过的坑&lt;/text&gt;
+        &lt;text x=&quot;562&quot; y=&quot;66&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;正确的做法&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;236&quot; width=&quot;952&quot; height=&quot;110&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;262&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;四问定位法：任何业务都能拆成四个位置&lt;/text&gt;
-      &lt;rect x=&quot;64&quot; y=&quot;278&quot; width=&quot;204&quot; height=&quot;54&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;166&quot; y=&quot;299&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;谁发起&lt;/text&gt;
-      &lt;text x=&quot;166&quot; y=&quot;320&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;渠道层&lt;/text&gt;
-      &lt;rect x=&quot;286&quot; y=&quot;278&quot; width=&quot;204&quot; height=&quot;54&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;388&quot; y=&quot;299&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;谁判断&lt;/text&gt;
-      &lt;text x=&quot;388&quot; y=&quot;320&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;外围层&lt;/text&gt;
-      &lt;rect x=&quot;508&quot; y=&quot;278&quot; width=&quot;204&quot; height=&quot;54&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;610&quot; y=&quot;299&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;谁记账&lt;/text&gt;
-      &lt;text x=&quot;610&quot; y=&quot;320&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;核心层&lt;/text&gt;
-      &lt;rect x=&quot;730&quot; y=&quot;278&quot; width=&quot;244&quot; height=&quot;54&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
-      &lt;text x=&quot;852&quot; y=&quot;299&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;谁看&lt;/text&gt;
-      &lt;text x=&quot;852&quot; y=&quot;320&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;数据线：数仓、报表、监管&lt;/text&gt;
+        &lt;!-- 1 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;76&quot; width=&quot;460&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;98&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;超时层层相等：客户端 3s、网关 3s、服务 3s&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;118&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;结果：网关刚超时断开，服务还在算，算完白算；上游一重试，请求量翻倍。&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw6g)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M508,106 L540,106&quot;/&gt;&lt;/g&gt;
+        &lt;rect x=&quot;548&quot; y=&quot;76&quot; width=&quot;448&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;562&quot; y=&quot;98&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;外层必须比内层大，留出预算&lt;/text&gt;
+        &lt;text x=&quot;562&quot; y=&quot;118&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;客户端 5s &amp;gt; 网关 2s &amp;gt; 服务 1s，逐层收紧。超时是&quot;预算&quot;，不是随手填的数。&lt;/text&gt;
 
-      &lt;rect x=&quot;44&quot; y=&quot;366&quot; width=&quot;952&quot; height=&quot;258&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
-      &lt;text x=&quot;64&quot; y=&quot;394&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;六个常见误区，对照着改口&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;424&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;误区&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;424&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;真相&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;450&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;手机银行显示余额，所以余额在手机银行&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;450&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;余额是核心算完返回的结果&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;480&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;CRM 有客户信息，所以客户信息在 CRM&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;480&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;CRM 记关系，核心 CIF 记身份&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;510&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;查控系统是银行自己的风控系统&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;510&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;是最高法的司法协助通道，银行只是接了端&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;540&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;信贷系统放款了，钱就在信贷系统里&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;540&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;审批在信贷，记账在核心&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;570&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;数据仓库是核心的备份&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;570&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;数仓是分析用的另一套模型，不是备份&lt;/text&gt;
-      &lt;text x=&quot;64&quot; y=&quot;600&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;分布式核心更先进，所以都要拆&lt;/text&gt;
-      &lt;text x=&quot;540&quot; y=&quot;600&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;分布式是手段不是目的，业务量没到天花板就别硬拆&lt;/text&gt;
-    &lt;/g&gt;
-  &lt;/svg&gt;
-  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上面三张卡是递进关系：先判层、再判职责、最后靠实战固化。中间「四问定位法」可以拿去用在任何一个新系统上——它在这四个位置里必有归属。下面是六个常见误区，左列是新人最容易说的话，右列是更准确的说法；改口之日，就是你开始有上帝视角之时。&lt;/div&gt;
+        &lt;!-- 2 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;144&quot; width=&quot;460&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;166&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;给所有请求配自动重试&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;186&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;结果：下单接口超时被重试 3 次，用户被扣了 3 次钱，客服电话打爆。&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw6g)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M508,174 L540,174&quot;/&gt;&lt;/g&gt;
+        &lt;rect x=&quot;548&quot; y=&quot;144&quot; width=&quot;448&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;562&quot; y=&quot;166&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;只对幂等请求重试（GET / PUT / DELETE）&lt;/text&gt;
+        &lt;text x=&quot;562&quot; y=&quot;186&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;POST 要重试，必须先有幂等键（Idempotency-Key）在后端去重。&lt;/text&gt;
+
+        &lt;!-- 3 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;212&quot; width=&quot;460&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;234&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;网关把请求体整个读到内存再转发&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;254&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;结果：几个上传大文件就把网关内存打满，全站 502，业务服务却都很闲。&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw6g)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M508,242 L540,242&quot;/&gt;&lt;/g&gt;
+        &lt;rect x=&quot;548&quot; y=&quot;212&quot; width=&quot;448&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;562&quot; y=&quot;234&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;限制 body 上限，大文件走流式或直传&lt;/text&gt;
+        &lt;text x=&quot;562&quot; y=&quot;254&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;设置 client_max_body_size 与缓冲策略，上传改用对象存储直传签名 URL。&lt;/text&gt;
+
+        &lt;!-- 4 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;280&quot; width=&quot;460&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;302&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;日志里记的客户端 IP 全是网关自己的&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;322&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;结果：风控拿不到真实 IP，按 IP 限流失效，攻击时定位不到来源。&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw6g)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M508,310 L540,310&quot;/&gt;&lt;/g&gt;
+        &lt;rect x=&quot;548&quot; y=&quot;280&quot; width=&quot;448&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;562&quot; y=&quot;302&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;传 X-Forwarded-For / X-Real-IP，并做信任链&lt;/text&gt;
+        &lt;text x=&quot;562&quot; y=&quot;322&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;只信任自己网段的代理头，别直接取第一个值——它可以被伪造。&lt;/text&gt;
+
+        &lt;!-- 5 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;348&quot; width=&quot;460&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;370&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;上线时改了路径前缀，网关没同步&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;390&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;结果：本地 200，线上 404；/api/order 被转成 /order，服务端一个都不认识。&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw6g)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M508,378 L540,378&quot;/&gt;&lt;/g&gt;
+        &lt;rect x=&quot;548&quot; y=&quot;348&quot; width=&quot;448&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;562&quot; y=&quot;370&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;前缀改写写进配置评审，配上回归用例&lt;/text&gt;
+        &lt;text x=&quot;562&quot; y=&quot;390&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;strip/rewrite 规则与后端 context-path 成对变更，别只在发布单里口头约定。&lt;/text&gt;
+
+        &lt;!-- 6 --&gt;
+        &lt;rect x=&quot;44&quot; y=&quot;416&quot; width=&quot;460&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#fff1f0&quot; stroke=&quot;#ffc9c4&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;438&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;容量按业务峰值算，忘了网关自己也是瓶颈&lt;/text&gt;
+        &lt;text x=&quot;58&quot; y=&quot;458&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;结果：业务服务扩到 50 台，网关还是 2 个实例，先挂的永远是它。&lt;/text&gt;
+        &lt;g stroke=&quot;#8e8e93&quot; stroke-width=&quot;1.5&quot; marker-end=&quot;url(#gw6g)&quot; fill=&quot;none&quot;&gt;&lt;path d=&quot;M508,446 L540,446&quot;/&gt;&lt;/g&gt;
+        &lt;rect x=&quot;548&quot; y=&quot;416&quot; width=&quot;448&quot; height=&quot;60&quot; rx=&quot;9&quot; fill=&quot;#e9f8ef&quot; stroke=&quot;#bfe8cf&quot;/&gt;
+        &lt;text x=&quot;562&quot; y=&quot;438&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;网关按&quot;解析成本&quot;独立压测与扩容&lt;/text&gt;
+        &lt;text x=&quot;562&quot; y=&quot;458&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;L7 的瓶颈是 CPU 和连接数，不是带宽；至少 3 实例跨可用区，别做单点。&lt;/text&gt;
+
+        &lt;rect x=&quot;44&quot; y=&quot;484&quot; width=&quot;952&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+        &lt;text x=&quot;58&quot; y=&quot;506&quot; font-size=&quot;10.5&quot; fill=&quot;#4a4a4f&quot;&gt;共同点：这些坑都不是网关&quot;功能不够&quot;，而是把它当成了透明管道。它不是管道，它是唯一入口——所有入口级故障都会先砸在它身上。&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;排查顺序：&lt;/b&gt;先看网关自己的指标（QPS、4xx/5xx、上游连接数、CPU），再看上游服务的耗时。网关 5xx 且上游无日志，多半是连不上或超时；网关 4xx 且上游无日志，多半是鉴权或限流拦下的——责任划分清楚了，才不用半夜拉三个团队开会。&lt;/div&gt;
 &lt;/div&gt;
 
 &lt;script&gt;
@@ -1048,17 +1129,17 @@ html[data-mode="dark"] .vein{stroke:#8e8e93!important}
 &lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;
-" sandbox="allow-scripts" loading="lazy" style="height:1300px"></iframe></figure>
+" sandbox="allow-scripts" loading="lazy" style="height:1080px"></iframe></figure>
   </div>
 </article>
-<nav class="toc" aria-label="文章目录"><div class="toc-head"><span class="toc-title">本页目录</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a></div><div class="toc-group"><a href="#sec-1" class="">先背一句话：渠道受理，外围算业务，核心记总账</a></div><div class="toc-group"><a href="#sec-2" class="">一、先看市场：这套地图不是拍脑袋画的</a></div><div class="toc-group"><a href="#sec-3" class="">二、渠道层：银行的门脸，只收件不记账</a></div><div class="toc-group"><a href="#sec-4" class="">三、外围系统：银行的四个专业科室</a><a href="#sec-5" class="lv3">1. 客户经营类：CRM、ECIF、画像</a><a href="#sec-6" class="lv3">2. 业务流程类：信贷、理财、票据、国际业务</a><a href="#sec-7" class="lv3">3. 风控合规类：反洗钱、反欺诈、查控</a><a href="#sec-8" class="lv3">4. 运营支撑类：影像、工作流、报表、OA</a></div><div class="toc-group"><a href="#sec-9" class="">四、核心系统：账房先生，只认借贷相等</a></div><div class="toc-group"><a href="#sec-10" class="">五、两条贯穿线：数据线和外联线</a><a href="#sec-11" class="lv3">数据线：从「能记账」到「能看懂账」</a><a href="#sec-12" class="lv3">外联线：银行不是孤岛</a></div><div class="toc-group"><a href="#sec-13" class="">六、走一遍：一笔转账穿过哪些系统</a></div><div class="toc-group"><a href="#sec-14" class="">七、查控系统到底是谁的？</a></div><div class="toc-group"><a href="#sec-15" class="">八、为什么系统这么多？三个原因叠在一起</a></div><div class="toc-group"><a href="#sec-16" class="">九、建立上帝视角的三把钥匙</a><a href="#sec-17" class="lv3">钥匙一：问「这笔钱动没动」</a><a href="#sec-18" class="lv3">钥匙二：问四个问题——谁发起、谁判断、谁记账、谁看</a><a href="#sec-19" class="lv3">钥匙三：拿一笔真实交易去追</a></div><div class="toc-group"><a href="#sec-20" class="">十、常见误区</a></div><div class="toc-group"><a href="#sec-21" class="">十一、术语小抄</a></div><div class="toc-group"><a href="#sec-22" class="">十二、权威出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">银行系统版图图解（六张图）</a></div></nav>
+<nav class="toc" aria-label="文章目录"><div class="toc-head"><span class="toc-title">本页目录</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a></div><div class="toc-group"><a href="#sec-1" class="">先按官方定义把概念钉死</a><a href="#sec-2" class="lv3">RFC 9110：网关就是&quot;反向代理&quot;，而且它冒充源站</a><a href="#sec-3" class="lv3">microservices.io：它为什么在微服务里变成必需品</a><a href="#sec-4" class="lv3">AWS 的表述：它是&quot;前门&quot;，管四件事</a></div><div class="toc-group"><a href="#sec-5" class="">一个请求进门，要过八道工序</a></div><div class="toc-group"><a href="#sec-6" class="">它站在哪：南北向是门，东西向是楼道</a></div><div class="toc-group"><a href="#sec-7" class="">它能做多少，取决于站在四层还是七层</a></div><div class="toc-group"><a href="#sec-8" class="">都叫&quot;网关&quot;，其实是五个工种</a></div><div class="toc-group"><a href="#sec-9" class="">六个坑，几乎每个团队都踩过</a></div><div class="toc-group"><a href="#sec-10" class="">什么时候该上，什么时候别上</a></div><div class="toc-group"><a href="#sec-11" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-12" class="">参考资料</a></div><div class="toc-group"><a href="#sec-embeds" class="">网关图解（六张图）</a></div></nav>
 </div>
 </main>
 <div class="detail-actions"><a class="back-fab" href="../index.html" aria-label="返回文章列表"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>返回列表</a><button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button></div><div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
   <div class="toc-backdrop" data-toc-close></div>
   <div class="toc-panel">
-    <div class="toc-panel-head"><span>本页目录 · 23 节</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
-    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先背一句话：渠道受理，外围算业务，核心记总账</a></div><div class="toc-group"><a href="#sec-2" class="">一、先看市场：这套地图不是拍脑袋画的</a></div><div class="toc-group"><a href="#sec-3" class="">二、渠道层：银行的门脸，只收件不记账</a></div><div class="toc-group"><a href="#sec-4" class="">三、外围系统：银行的四个专业科室</a><a href="#sec-5" class="lv3">1. 客户经营类：CRM、ECIF、画像</a><a href="#sec-6" class="lv3">2. 业务流程类：信贷、理财、票据、国际业务</a><a href="#sec-7" class="lv3">3. 风控合规类：反洗钱、反欺诈、查控</a><a href="#sec-8" class="lv3">4. 运营支撑类：影像、工作流、报表、OA</a></div><div class="toc-group"><a href="#sec-9" class="">四、核心系统：账房先生，只认借贷相等</a></div><div class="toc-group"><a href="#sec-10" class="">五、两条贯穿线：数据线和外联线</a><a href="#sec-11" class="lv3">数据线：从「能记账」到「能看懂账」</a><a href="#sec-12" class="lv3">外联线：银行不是孤岛</a></div><div class="toc-group"><a href="#sec-13" class="">六、走一遍：一笔转账穿过哪些系统</a></div><div class="toc-group"><a href="#sec-14" class="">七、查控系统到底是谁的？</a></div><div class="toc-group"><a href="#sec-15" class="">八、为什么系统这么多？三个原因叠在一起</a></div><div class="toc-group"><a href="#sec-16" class="">九、建立上帝视角的三把钥匙</a><a href="#sec-17" class="lv3">钥匙一：问「这笔钱动没动」</a><a href="#sec-18" class="lv3">钥匙二：问四个问题——谁发起、谁判断、谁记账、谁看</a><a href="#sec-19" class="lv3">钥匙三：拿一笔真实交易去追</a></div><div class="toc-group"><a href="#sec-20" class="">十、常见误区</a></div><div class="toc-group"><a href="#sec-21" class="">十一、术语小抄</a></div><div class="toc-group"><a href="#sec-22" class="">十二、权威出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">银行系统版图图解（六张图）</a></div></nav>
+    <div class="toc-panel-head"><span>本页目录 · 13 节</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先按官方定义把概念钉死</a><a href="#sec-2" class="lv3">RFC 9110：网关就是&quot;反向代理&quot;，而且它冒充源站</a><a href="#sec-3" class="lv3">microservices.io：它为什么在微服务里变成必需品</a><a href="#sec-4" class="lv3">AWS 的表述：它是&quot;前门&quot;，管四件事</a></div><div class="toc-group"><a href="#sec-5" class="">一个请求进门，要过八道工序</a></div><div class="toc-group"><a href="#sec-6" class="">它站在哪：南北向是门，东西向是楼道</a></div><div class="toc-group"><a href="#sec-7" class="">它能做多少，取决于站在四层还是七层</a></div><div class="toc-group"><a href="#sec-8" class="">都叫&quot;网关&quot;，其实是五个工种</a></div><div class="toc-group"><a href="#sec-9" class="">六个坑，几乎每个团队都踩过</a></div><div class="toc-group"><a href="#sec-10" class="">什么时候该上，什么时候别上</a></div><div class="toc-group"><a href="#sec-11" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-12" class="">参考资料</a></div><div class="toc-group"><a href="#sec-embeds" class="">网关图解（六张图）</a></div></nav>
   </div>
 </div>
 

@@ -1,0 +1,1289 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>锁到底在锁什么？单机锁和分布式锁的区别、背景、原理与使用场景 · 札记</title>
+<style>
+
+/* ============ 主题变量（支持浅色/深色） ============ */
+:root{
+  --bg:#ffffff; --fg:#1c1c1e; --fg2:#6e6e73; --fg3:#a1a1a6;
+  --border:#e5e5ea; --card:#fafafa; --hover:#f2f2f7;
+  --accent:#007aff; --accent-soft:#eaf3ff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#141416; --fg:#f2f2f7; --fg2:#a1a1a6; --fg3:#6e6e73;
+    --border:#333337; --card:#1d1d20; --hover:#262629;
+    --accent:#0a84ff; --accent-soft:#1c2b40;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--fg);line-height:1.6;-webkit-font-smoothing:antialiased;
+  max-width:1120px;margin:0 auto;padding:32px 20px 64px;
+  transition:background .2s ease,color .2s ease;
+}
+a{color:inherit}
+
+/* ============ 头部 ============ */
+.site-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.site-title{font-size:24px;font-weight:650;letter-spacing:-.4px}
+.site-title span{font-weight:400;color:var(--fg3);font-size:14px;margin-left:8px;letter-spacing:0}
+.site-sub{font-size:13px;color:var(--fg3);margin-top:2px}
+.site-stats{display:flex;gap:14px;font-size:12px;color:var(--fg3);white-space:nowrap;align-items:center}
+.site-stats b{font-weight:600;color:var(--fg2);font-variant-numeric:tabular-nums}
+
+/* 搜索 */
+.search{position:relative;width:220px;flex:none}
+.search .si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--fg3);pointer-events:none}
+.search input{width:100%;height:34px;border:1px solid var(--border);background:var(--card);border-radius:9px;padding:0 30px 0 32px;font-size:13px;outline:none;color:var(--fg)}
+.search input::placeholder{color:var(--fg3)}
+.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,122,255,.12)}
+.search .clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:18px;height:18px;border:0;border-radius:50%;background:var(--fg3);color:var(--bg);font-size:12px;line-height:18px;text-align:center;cursor:pointer;padding:0}
+
+/* ============ 树舞台 ============ */
+.stage-scroll{position:relative;overflow-x:auto;border:1px solid var(--border);border-radius:16px;
+  background:radial-gradient(ellipse at 50% 118%,rgba(0,122,255,.07),transparent 68%);}
+.stage{position:relative;min-width:760px}
+#tree-svg{display:block;width:100%;height:auto}
+#tip{
+  position:absolute;opacity:0;pointer-events:none;z-index:3;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:9px 12px;font-size:12px;color:var(--fg2);width:236px;
+  box-shadow:0 8px 28px rgba(0,0,0,.12);transition:opacity .14s ease;
+}
+#tip .tt{font-weight:600;color:var(--fg);font-size:13px;line-height:1.4;margin-bottom:5px}
+#tip .tm{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg3);margin-bottom:5px}
+#tip .te{font-size:11.5px;color:var(--fg2);line-height:1.5}
+.swipe-hint{display:none;text-align:center;font-size:11px;color:var(--fg3);padding:6px 0 0}
+
+/* 图例筛选 */
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0;align-items:center}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  border:1px solid var(--border);border-radius:999px;padding:5px 13px;
+  background:transparent;color:var(--fg2);font-size:12.5px;font-family:inherit;
+  transition:color .15s ease,border-color .15s ease,background .15s ease;
+}
+.chip:hover{color:var(--fg);border-color:var(--fg3)}
+.chip.on{color:var(--fg);border-color:var(--fg);background:var(--hover)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.chip-all{margin-left:auto;border:0;background:none;color:var(--fg3);font-size:12px;padding:5px 2px}
+.chip-all:hover{color:var(--accent)}
+
+/* 树上元素 */
+.leaf{cursor:pointer}
+.leaf-scale{transition:transform .18s cubic-bezier(.2,.8,.2,1);transform-box:fill-box;transform-origin:center}
+.leaf:hover .leaf-scale,.leaf.sel .leaf-scale{transform:scale(1.45)}
+.leaf .halo{fill:none;stroke-width:1.5;opacity:0;transition:opacity .2s ease}
+.leaf:hover .halo,.leaf.sel .halo{opacity:.75}
+.leaf.sel .core{stroke:var(--fg);stroke-width:1.2}
+.leaf:focus{outline:none}
+.leaf:focus-visible .halo{opacity:.95;stroke:var(--fg)}
+.dim{opacity:.08;pointer-events:none}
+.branch-main{stroke-linecap:round;opacity:.62}
+.branch-twig{stroke-linecap:round;opacity:.5}
+
+/* 选中文章卡片 */
+.post-card{
+  border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:13px;background:var(--card);
+  padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:18px;
+  min-height:104px;transition:border-color .2s ease;
+}
+.pc-main{min-width:0}
+.pc-meta{display:flex;gap:11px;align-items:center;font-size:11.5px;color:var(--fg3);margin-bottom:5px;flex-wrap:wrap}
+.pc-meta .tag{display:inline-flex;align-items:center;gap:5px}
+.pc-title{font-size:17px;font-weight:650;line-height:1.4;letter-spacing:-.2px}
+.pc-ex{font-size:13px;color:var(--fg2);margin-top:5px;line-height:1.55}
+.pc-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+.pc-embed{font-size:11px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:3px 8px}
+.pc-read{text-decoration:none;background:var(--fg);color:var(--bg);border-radius:9px;padding:8px 15px;font-size:13px;transition:opacity .15s ease;white-space:nowrap}
+.pc-read:hover{opacity:.82}
+.pc-empty{font-size:13px;color:var(--fg3)}
+
+/* 文章列表（按年月分组，SEO / 无脚本回退 / 移动端正文共用） */
+.list-head{margin-top:30px;font-size:13px;color:var(--fg3);display:flex;justify-content:space-between;align-items:baseline}
+.group{margin-top:14px}
+.month{font-size:12px;font-weight:600;color:var(--fg3);margin-bottom:5px;letter-spacing:.3px}
+.post-list{list-style:none;border-top:1px solid var(--border)}
+.post-item{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s ease}
+.post-item:hover{background:var(--hover)}
+.post-item.sel .pl-title{color:var(--accent);font-weight:600}
+.pl-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.pl-date{font-size:12px;color:var(--fg3);flex:none;font-variant-numeric:tabular-nums;width:42px}
+.pl-title{font-size:14px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;color:inherit}
+.pl-cat{font-size:11.5px;color:var(--fg3);flex:none}
+.pl-em{font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;line-height:15px;flex:none}
+.empty{padding:40px 20px;text-align:center;color:var(--fg3);font-size:13px}
+
+.foot{margin-top:34px;font-size:11px;color:var(--fg3);text-align:center}
+
+/* 窄屏：树保留为可横向滚动的紧凑视图 */
+@media (max-width:760px){
+  body{padding:22px 14px 48px}
+  .site-head{align-items:flex-start}
+  .search{width:100%}
+  .site-stats{width:100%;justify-content:flex-start}
+  .stage{min-width:700px}
+  .swipe-hint{display:block}
+  .post-card{padding:14px;gap:12px}
+  .pc-side{gap:6px}
+  .pl-cat{display:none}
+}
+
+
+/* 详情页用到的语义色此前未定义（首页模板只提供 --fg/--border/--accent 一套），
+   这里补一层别名，避免目录、表格、弹层等元素出现透明背景或丢边框。 */
+:root{
+  --surface:#ffffff; --surface-3:#f2f2f7; --line:#e5e5ea;
+  --text:#1c1c1e; --muted:#6e6e73; --faint:#a1a1a6;
+  --blue:#007aff; --blue-soft:#eaf3ff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --surface:#1d1d20; --surface-3:#262629; --line:#333337;
+    --text:#f2f2f7; --muted:#a1a1a6; --faint:#6e6e73;
+    --blue:#0a84ff; --blue-soft:#1c2b40;
+  }
+}
+/* 返回列表：桌面端放在目录标题右侧，移动端改为底部悬浮按钮 */
+.back{font-size:12px;color:var(--blue);text-decoration:none;white-space:nowrap;padding:2px 4px;border-radius:6px}
+.back:hover{background:var(--blue-soft)}
+.detail-wrap{display:flex;gap:40px;align-items:flex-start;max-width:1240px;margin:0 auto;padding:28px 0 64px}
+.article{flex:1;min-width:0;max-width:820px;margin:0;padding:0}
+.article-meta-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.article-title{font-size:29px;line-height:1.3;letter-spacing:-.6px;margin:12px 0 10px}
+.article-meta{font-size:12px;color:var(--faint);margin-bottom:26px;padding-bottom:20px;border-bottom:.5px solid var(--line)}
+.article-body{font-size:15px;line-height:1.85;color:#2b2b2e}
+.article-body h2{font-size:20px;line-height:1.4;letter-spacing:-.3px;margin:34px 0 12px;color:var(--text);scroll-margin-top:72px}
+.article-body h3{font-size:17px;margin:26px 0 10px;color:var(--text);scroll-margin-top:72px}
+.article-body p{margin:0 0 16px}
+.article-body ul,.article-body ol{margin:0 0 18px;padding-left:22px}
+.article-body li{margin:6px 0}
+.article-body a{color:var(--blue)}
+.article-body strong{font-weight:600;color:var(--text)}
+.article-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-3);padding:2px 5px;border-radius:5px;font-size:13px}
+.article-body pre{background:var(--surface-3);padding:14px;border-radius:10px;overflow:auto;margin:0 0 18px}
+.article-body pre code{background:transparent;padding:0}
+/* 代码块：超过 14 行默认折叠，所有代码块都能一键复制 */
+.code-block{margin:0 0 18px;border:.5px solid var(--line);border-radius:11px;background:var(--surface-3);overflow:hidden}
+.code-bar{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 12px;border-bottom:.5px solid var(--line)}
+.code-lang{font-size:11px;letter-spacing:.4px;color:var(--faint);text-transform:lowercase}
+.code-btns{margin-left:auto;display:flex;gap:2px}
+.code-btns button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;line-height:1;padding:6px 9px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s}
+.code-btns button:hover{background:var(--line);color:var(--text)}
+.code-btns button.done{color:#34c759}
+.code-block pre{margin:0;padding:12px 14px;border-radius:0;background:transparent}
+.code-body{position:relative}
+.code-block.is-collapsed .code-body{max-height:320px;overflow:hidden}
+.code-block.is-collapsed .code-body::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to bottom,transparent,var(--surface-3));pointer-events:none}
+@media(max-width:760px){.code-block pre{padding:11px 12px}.code-btns button{font-size:11.5px;padding:5px 8px}}
+.article-body table{border-collapse:collapse;width:100%;margin:0 0 20px;font-size:14px}
+.article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
+.article-body th{background:var(--surface-3);font-weight:600}
+.article-body blockquote{margin:0 0 18px;padding:10px 14px;border-left:3px solid var(--blue);background:var(--blue-soft);border-radius:0 8px 8px 0}
+.md-figure{margin:22px 0;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.md-figure img{display:block;width:100%;height:auto;background:#fff}
+.md-figure figcaption{padding:9px 12px;background:var(--surface-3);font-size:12px;line-height:1.6;color:var(--muted)}
+.article-embeds{margin-top:38px;padding-top:24px;border-top:.5px solid var(--line)}
+.article-embeds h2{font-size:20px;line-height:1.4;letter-spacing:-.3px;margin:0 0 14px;color:var(--text);scroll-margin-top:72px}
+.embed-figure{margin:0 0 20px;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.embed-figure figcaption{padding:10px 13px;background:var(--surface-3);font-size:12px;color:var(--muted)}
+.embed-figure iframe{display:block;width:100%;border:0;background:#fff}
+/* 右侧子标题导航：按二级标题分组，三级标题缩进并从属于最近的二级标题 */
+.toc{position:sticky;top:78px;width:190px;flex:0 0 190px;max-height:calc(100vh - 110px);overflow:auto;padding:6px 4px 6px 16px;border-left:.5px solid var(--line)}
+.toc-title{font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--faint);margin:0 0 10px;padding-left:10px}
+.toc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px}
+.toc-head .toc-title{margin:0}
+.toc a{display:block;font-size:12.5px;line-height:1.45;color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:7px;border-left:2px solid transparent;transition:background .15s,color .15s}
+.toc a:hover{color:var(--blue);background:var(--surface-3)}
+.toc-group{margin:0 0 4px}
+.toc-group > a{color:var(--text);font-weight:600}
+.toc a.lv3{position:relative;padding-left:26px;font-size:12px;color:var(--faint);font-weight:400}
+.toc a.lv3::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:1px;background:var(--line)}
+.toc a.lv3::after{content:"";position:absolute;left:15px;top:50%;width:6px;border-top:1px solid var(--line)}
+.toc a.active{color:var(--blue);background:var(--blue-soft);border-left-color:var(--blue);font-weight:600}
+.toc a.lv3.active{border-left-color:transparent}
+/* 移动端目录：右下角「返回列表 + 目录」悬浮操作 + 底部弹层，桌面端完全隐藏 */
+.detail-actions{display:none}
+.toc-sheet{display:none}
+@media(max-width:980px){
+  .detail-wrap{display:block;padding:20px 0 64px}
+  .article{max-width:820px;margin:0 auto}
+  .toc{display:none}
+  .detail-actions{display:flex;position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;align-items:center;gap:8px}
+  .toc-fab,.back-fab{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 13px;border:.5px solid var(--line);border-radius:999px;background:var(--surface);color:var(--text);font:inherit;font-size:13px;text-decoration:none;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,.14);cursor:pointer}
+  .toc-fab:active,.back-fab:active{transform:scale(.97)}
+  .back-fab{color:var(--blue)}
+  .toc-sheet{display:none;position:fixed;inset:0;z-index:80}
+  .toc-sheet.on{display:block}
+  .toc-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.3)}
+  .toc-panel{position:absolute;left:0;right:0;bottom:0;max-height:72vh;overflow:auto;background:var(--surface);border-radius:16px 16px 0 0;padding:6px 10px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 34px rgba(0,0,0,.16);animation:tocUp .2s ease}
+  .toc-panel-head{display:flex;align-items:center;gap:10px;padding:8px 6px 2px}
+  .toc-panel-head span{font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--faint);margin-right:auto}
+  .toc-close{width:28px;height:28px;border:0;border-radius:50%;background:var(--surface-3);color:var(--muted);font-size:15px;line-height:1;cursor:pointer}
+  .toc-sheet .toc{display:block;position:static;width:auto;max-height:none;overflow:visible;padding:0;border-left:0}
+}
+@keyframes tocUp{from{transform:translateY(14px);opacity:.5}to{transform:none;opacity:1}}
+@media(max-width:700px){
+  .article-title{font-size:23px}
+  .article-body{font-size:14.5px}
+  .detail-actions{right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom));gap:6px}
+  .toc-fab,.back-fab{height:36px;padding:0 11px;font-size:12px}
+}
+
+/* 嵌入图弹窗查看器 */
+.embed-strip{display:flex;align-items:center;gap:8px}
+.strip-label{flex:1;min-width:0}
+.embed-open{display:inline-flex;align-items:center;gap:4px;flex:none;border:0;background:var(--blue-soft,#e5f1ff);color:var(--blue,#007aff);font-size:11px;line-height:1;padding:6px 9px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.embed-open:hover{background:#d5e8ff}
+.embed-figure figcaption{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.modal-overlay{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.modal-overlay.open{display:flex}
+.modal{width:min(1400px,100%);height:min(94vh,1100px);display:flex;flex-direction:column;background:var(--surface,#fff);border-radius:16px;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.35)}
+.modal-head{flex:none;display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:.5px solid var(--line,#e5e5ea);background:var(--surface,#fff)}
+.modal-title{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text,#1d1d1f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal-btn{border:0;background:var(--surface-3,#f2f2f7);color:var(--blue,#007aff);font-size:12px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.modal-btn:hover{background:var(--blue-soft,#e5f1ff)}
+.modal-close{width:30px;height:30px;flex:none;border:0;border-radius:50%;background:var(--surface-3,#f2f2f7);color:var(--muted,#6e6e73);font-size:19px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.modal-close:hover{background:#e5e5ea;color:var(--text,#1d1d1f)}
+.modal-body{flex:1;min-height:0;background:#fff}
+.modal-body iframe{display:block;width:100%;height:100%;border:0;background:#fff}
+/* 横屏查看：全屏/旋转引导（仅手机端显示入口） */
+.modal-landscape{display:none}
+.land-tools{display:none;position:absolute;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:4;gap:8px}
+.land-tools button{border:0;border-radius:8px;padding:7px 11px;font-size:12px;background:rgba(255,255,255,.9);color:#007aff;box-shadow:0 2px 10px rgba(0,0,0,.12);cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.rotate-hint{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(280px,80vw);padding:20px;border-radius:16px;background:rgba(28,28,30,.92);color:#fff;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.rotate-hint.show{display:block}
+.rotate-hint .rh-icon{font-size:34px;line-height:1;margin-bottom:10px}
+.rotate-hint .rh-title{font-size:14px;font-weight:600;margin-bottom:6px}
+.rotate-hint .rh-sub{font-size:12px;color:rgba(255,255,255,.72);line-height:1.5}
+.modal-overlay.landscape-mode{padding:0;background:#fff}
+.modal-overlay.landscape-mode .modal{width:100vw;height:100vh;height:100dvh;border-radius:0}
+.modal-overlay.landscape-mode .modal-head{display:none}
+.modal-overlay.landscape-mode .land-tools{display:flex}
+.modal-overlay:fullscreen{background:#fff}
+.modal-overlay:fullscreen .modal{width:100vw;height:100vh}
+@media(max-width:700px){
+  .modal-overlay{padding:0}
+  .modal{width:100%;height:100%;border-radius:0}
+  .modal-head{padding:9px 11px}
+  .modal-landscape{display:inline-flex}
+}
+
+/* ---------- 显示模式：覆盖首页与详情页两套变量 ---------- */
+/* 护眼：暖色纸张 */
+html[data-mode="eye"]{
+  --bg:#f5efdf; --fg:#43392c; --fg2:#6f6250; --fg3:#9c8d76;
+  --border:#ddd0b6; --card:#fbf6e9; --hover:#efe4cd;
+  --accent:#8a6a3b; --accent-soft:#ecdfc2;
+  --surface:#fbf6e9; --surface-3:#efe4cd; --line:#ddd0b6;
+  --text:#43392c; --muted:#6f6250; --faint:#9c8d76;
+  --blue:#8a6a3b; --blue-soft:#ecdfc2;
+  color-scheme:light;
+}
+html[data-mode="eye"] body{background:var(--bg);color:var(--fg)}
+html[data-mode="eye"] .article-body{color:var(--text)}
+html[data-mode="eye"] .stage-scroll{background:radial-gradient(ellipse at 50% 118%,rgba(138,106,59,.08),transparent 68%)}
+html[data-mode="eye"] .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(138,106,59,.14)}
+html[data-mode="eye"] .embed-figure iframe,html[data-mode="eye"] .modal-body iframe{filter:sepia(.12) saturate(.94)}
+html[data-mode="eye"] .modal-body,html[data-mode="eye"] .modal-overlay.landscape-mode,html[data-mode="eye"] .modal-overlay:fullscreen{background:#f5efdf}
+/* 羊皮纸：更深的旧纸底色 + 细纹，正文改用衬线体，像翻一本旧书 */
+html[data-mode="parchment"]{
+  --bg:#eee0c0; --fg:#3b2f20; --fg2:#6b5740; --fg3:#9a8462;
+  --border:#cdb894; --card:#f7ecd2; --hover:#e7d7b2;
+  --accent:#8a5a2b; --accent-soft:#ead4aa;
+  --surface:#f7ecd2; --surface-3:#e7d7b2; --line:#cdb894;
+  --text:#3b2f20; --muted:#6b5740; --faint:#9a8462;
+  --blue:#8a5a2b; --blue-soft:#ead4aa;
+  color-scheme:light;
+}
+html[data-mode="parchment"] body{
+  color:var(--fg);
+  background-color:var(--bg);
+  background-image:
+    radial-gradient(circle at 12% 18%,rgba(122,84,42,.10) 0 1px,transparent 1.5px),
+    radial-gradient(circle at 78% 62%,rgba(122,84,42,.08) 0 1px,transparent 1.5px),
+    repeating-linear-gradient(0deg,rgba(122,84,42,.035) 0 1px,transparent 1px 6px);
+  background-size:38px 38px,52px 52px,100% 6px;
+}
+html[data-mode="parchment"] .article-title,
+html[data-mode="parchment"] .article-body{font-family:"Songti SC","STSong","Noto Serif SC",Georgia,serif}
+html[data-mode="parchment"] .article-body{color:var(--text)}
+html[data-mode="parchment"] .stage-scroll{background:radial-gradient(ellipse at 50% 118%,rgba(138,90,43,.12),transparent 68%)}
+html[data-mode="parchment"] .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(138,90,43,.16)}
+html[data-mode="parchment"] .embed-figure iframe,html[data-mode="parchment"] .modal-body iframe{filter:sepia(.28) saturate(.86) contrast(.97)}
+html[data-mode="parchment"] .modal-body,html[data-mode="parchment"] .modal-overlay.landscape-mode,html[data-mode="parchment"] .modal-overlay:fullscreen{background:#f7ecd2}
+/* 深色 */
+html[data-mode="dark"]{
+  --bg:#141416; --fg:#f2f2f7; --fg2:#a1a1a6; --fg3:#6e6e73;
+  --border:#333337; --card:#1d1d20; --hover:#262629;
+  --accent:#0a84ff; --accent-soft:#1c2b40;
+  --surface:#1d1d20; --surface-3:#262629; --line:#333337;
+  --text:#f2f2f7; --muted:#a1a1a6; --faint:#6e6e73;
+  --blue:#0a84ff; --blue-soft:#1c2b40;
+  color-scheme:dark;
+}
+html[data-mode="dark"] body{background:var(--bg);color:var(--fg)}
+html[data-mode="dark"] .article-body{color:var(--text)}
+html[data-mode="dark"] .stage-scroll{background:radial-gradient(ellipse at 50% 118%,rgba(10,132,255,.09),transparent 68%)}
+html[data-mode="dark"] .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,132,255,.18)}
+/* 嵌入图本身是白底 SVG，深色下反相+转相，尽量保持原彩色相位 */
+html[data-mode="dark"] .embed-figure iframe,html[data-mode="dark"] .modal-body iframe{filter:invert(.9) hue-rotate(180deg)}
+html[data-mode="dark"] .modal-body,html[data-mode="dark"] .modal-overlay.landscape-mode,html[data-mode="dark"] .modal-overlay:fullscreen{background:#1d1d20}
+html[data-mode="dark"] .vein{stroke:#8e8e93!important}
+/* 右上角模式开关与菜单：桌面与手机同位置，不与详情页右下角目录按钮冲突 */
+.theme-toggle{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:16px;z-index:150;width:38px;height:38px;border:1px solid var(--border);border-radius:50%;background:var(--card);color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.1);transition:background .18s,color .18s,border-color .18s}
+.theme-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.theme-toggle svg{width:19px;height:19px;display:block}
+.theme-menu{position:fixed;top:calc(58px + env(safe-area-inset-top,0px));right:16px;z-index:149;min-width:132px;padding:5px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 8px 28px rgba(0,0,0,.16);display:none}
+.theme-menu.on{display:block}
+.theme-menu button{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--fg2);font:inherit;font-size:13px;cursor:pointer;text-align:left}
+.theme-menu button:hover{background:var(--hover);color:var(--fg)}
+.theme-menu button.on{color:var(--accent);font-weight:600}
+.theme-menu button svg{width:16px;height:16px;flex:0 0 16px}
+.theme-menu button .tick{margin-left:auto;font-size:12px;opacity:0}
+.theme-menu button.on .tick{opacity:1}
+@media(max-width:760px){.theme-toggle{width:36px;height:36px;top:calc(12px + env(safe-area-inset-top,0px));right:12px}.theme-menu{top:calc(54px + env(safe-area-inset-top,0px));right:12px}}
+</style>
+
+<script>
+(function(){
+  try{
+    var m=localStorage.getItem('blog-theme-mode');
+    if(!m && localStorage.getItem('blog-eye-care')==='on') m='eye';
+    if(m==='eye'||m==='parchment'||m==='dark') document.documentElement.setAttribute('data-mode',m);
+  }catch(e){}
+})();
+</script>
+</head>
+<body>
+<main class="pad">
+<div class="detail-wrap">
+<article class="article">
+  <div class="article-meta-top"><span class="dot" style="background:#007aff"></span>多线程并发</div>
+  <h1 class="article-title">锁到底在锁什么？单机锁和分布式锁的区别、背景、原理与使用场景</h1>
+  <div class="article-meta">2026-11-27 · 26 分钟阅读</div>
+  <div class="article-body">
+<p>「这个变量要加锁。」</p>
+<p>「这里得用分布式锁，不然多个节点会重复跑。」</p>
+<p>这两句话在代码评审里出现频率极高。但真追问一句「锁的到底是什么」，很多人会卡住：是锁那行代码？锁那个变量？还是锁一个对象？单机锁和分布式锁又差在哪——不都是「同一时间只能一个人进」吗？</p>
+<p>这篇按四个问题讲清楚：</p>
+<ol><li>锁产生的背景是什么？没有锁会出什么事？</li><li>锁的原理是什么？它凭什么能保证「同一时间只有一个人」？</li><li>单机锁和分布式锁的区别在哪？</li><li>什么时候需要锁，什么时候不需要？</li></ol>
+<p>先给一句话版本：</p>
+<blockquote><strong>锁不是锁住代码，而是大家约定共同看一眼同一个「标记」：谁先把标记占上，谁干活；干完把标记还回去。</strong> 单机锁的标记在<strong>一个进程的内存里</strong>，分布式锁的标记在<strong>所有机器都能访问到的第三方存储里</strong>。位置一变，麻烦就全变了。</blockquote>
+<p>全文用一家公司的会议室贯穿：同一间屋子、两拨人同时想进去，怎么定规矩。</p>
+<h2 id="sec-1">一、背景：没有锁，到底会出什么事</h2>
+<p>不是所有共享都需要锁。只读的东西，一百个人同时看也不会看坏。锁是因为「<strong>多个人同时改同一份东西</strong>」才会被逼出来的。</p>
+<p>Java 官方教程给过一个特别经典的例子，我照搬过来（原文叫 <code>Counter</code>）：</p>
+<div class="code-block"><div class="code-bar"><span class="code-lang">java</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>class Counter {
+    private int c = 0;
+    public void increment() { c++; }
+    public void decrement() { c--; }
+}</code></pre></div></div>
+<p>看起来人畜无害。但 <code>c++</code> 这一行，在虚拟机里其实是<strong>三步</strong>：</p>
+<ol><li>把 <code>c</code> 现在的值读出来；</li><li>在这个值上加 1；</li><li>把结果写回 <code>c</code>。</li></ol>
+<p>如果两个线程同时做，官方给了这样一条时间线：</p>
+<table><thead><tr><th>时刻</th><th>线程甲</th><th>线程乙</th><th>内存里的 c</th></tr></thead><tbody><tr><td>1</td><td>读出 0</td><td></td><td>0</td></tr><tr><td>2</td><td></td><td>读出 0</td><td>0</td></tr><tr><td>3</td><td>算出 1</td><td></td><td>0</td></tr><tr><td>4</td><td></td><td>算出 -1</td><td>0</td></tr><tr><td>5</td><td>写入 1</td><td></td><td>1</td></tr><tr><td>6</td><td></td><td>写入 -1</td><td>-1</td></tr></tbody></table>
+<p>甲加了一次、乙减了一次，结果本该还是 0，最后却是 -1。官方原话是：</p>
+<blockquote>Interference happens when two operations, running in different threads, but acting on the same data, interleave. （两个跑在不同线程里、作用于同一份数据的操作<strong>交错</strong>时，就会发生干扰。）</blockquote>
+<p>而且「这次结果丢了」还是运气好的情况——官方也说了，换个时序可能是乙的结果丢，也可能完全不出错。<strong>正因为时好时坏，这类漏洞极难排查。</strong></p>
+<p>这还只是第一层。第二层更隐蔽：<strong>你改了，别人根本看不见</strong>。</p>
+<p>官方对「内存一致性错误」的定义是：</p>
+<blockquote>Memory consistency errors occur when different threads have inconsistent views of what should be the same data. （不同线程对「本该是同一份数据」看到了不一致的样子。）</blockquote>
+<p>翻译成会议室的话：甲在白板上改了日程，乙手里还拿着昨天抄的纸，按旧日程走进了屋子。多核 CPU 各有各的缓存，这种「各看各的」是真实存在的，不是理论假设。</p>
+<p>所以锁其实要同时解决两件事：</p>
+<ul><li><strong>互斥</strong>：同一时间只让一个人进（防「交错」）；</li><li><strong>可见性</strong>：下一个人进来时，必须看见上一个人改完的结果（防「各看各的」）。</li></ul>
+<p>Java 官方把第二件事说得很明白：当一个线程释放锁，另一个线程随后拿到同一把锁，两者之间就建立了「<strong>先发生</strong>」关系，前面那位的修改对后面这位可见。</p>
+<p>再把场景放大一层，就出现了第三种麻烦：</p>
+<ul><li>一个进程里的多个线程，共享同一块堆内存，门牌号互相认得；</li><li>一台机器上的多个进程，内存互相隔离，JVM 那把锁就管不着了；</li><li>几十台机器上的几百个进程，根本不认识彼此，更没有一块公共内存。</li></ul>
+<p><strong>会议室从「一间」变成了「全国分公司的一堆」</strong>，白板挂在谁家？这就是分布式锁的来由。</p>
+<blockquote>一句话记住：<strong>锁不是为了让程序变快，是为了让程序别乱。</strong></blockquote>
+<h2 id="sec-2">二、原理：锁凭什么能保证「只有一个人」</h2>
+<p>抛开各种语言的花哨名字，所有锁都是同一套动作，四步：</p>
+<ol><li><strong>申请</strong>：想干活的人先去抢那个标记；</li><li><strong>占用</strong>：抢到了就进屋，标记上写着自己的名字；</li><li><strong>排斥</strong>：没抢到的人在门口等（专业说法叫<strong>阻塞</strong>），而不是一起挤进去；</li><li><strong>释放</strong>：干完活把标记交还，门口的人才有机会进去。</li></ol>
+<p>Java 官方对这一步的描述非常精确：</p>
+<blockquote>A thread that needs exclusive and consistent access to an object&#39;s fields has to acquire the object&#39;s intrinsic lock before accessing them, and then release the intrinsic lock when it&#39;s done with them. As long as a thread owns an intrinsic lock, no other thread can acquire the same lock. The other thread will block when it attempts to acquire the lock.</blockquote>
+<p>注意关键词：<strong>「同一个标记」</strong>。锁生效的前提是所有人都认同一个标记。两个人各拿一把自己的锁，等于没锁。这也是新手最常踩的坑：</p>
+<div class="code-block"><div class="code-bar"><span class="code-lang">java</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>synchronized (new Object()) { ... }   // 每次进来都是新对象，锁了个寂寞
+String lock = new String(&quot;order&quot;);     // 换个对象实例，两把锁互不相干</code></pre></div></div>
+<h3 id="sec-3">2.1 一个好锁要满足的三条底线</h3>
+<p>Redis 官方文档在讲分布式锁时，给出了三条「最低保证」，其实单机锁也一样适用：</p>
+<table><thead><tr><th>底线</th><th>含义</th><th>会议室说法</th></tr></thead><tbody><tr><td><strong>互斥</strong></td><td>任意时刻只有一个持有者</td><td>屋子里不能同时有两拨人</td></tr><tr><td><strong>不死等</strong></td><td>有人崩溃倒下，锁最终也能被别人拿到</td><td>钥匙不能跟着人一起锁进柜子里</td></tr><tr><td><strong>容错</strong></td><td>部分设施坏了，系统整体还能继续发锁/收锁</td><td>前台临时不在，也有备用登记方式</td></tr></tbody></table>
+<p>第二条在单机里靠「异常也释放」解决——Java 的同步块即使抛出未捕获异常也会释放锁，所以写 <code>try/finally</code> 是铁律。在分布式里靠<strong>租约</strong>（给锁设过期时间）解决：人晕倒了，钥匙过几分钟自动作废。</p>
+<h3 id="sec-4">2.2 锁的两个「附加服务」</h3>
+<p>除了互斥，正经的锁还顺手提供两样东西：</p>
+<ul><li><strong>可见性</strong>：前面说的「先发生」关系，保证接力时看见正确结果；</li><li><strong>可重入</strong>：同一个线程已经拿着锁，再进一层用同一把锁，不会被自己卡死。Java 官方管这叫 reentrant synchronization——「允许一个线程多次获取它已经拥有的锁」。</li></ul>
+<p>顺带说一句：<strong>锁的粒度</strong>。锁太大（整个系统一把锁），所有人都排队，等于把并发废了；锁太小（每个字段一把锁），心智负担爆炸还容易漏。合适的粒度是「一次业务操作」：改订单就锁订单，别锁整栋楼。</p>
+<h3 id="sec-5">2.3 悲观锁和乐观锁：两种性格</h3>
+<p>不是所有锁都靠「先把门堵上」。</p>
+<ul><li><strong>悲观锁</strong>：先占坑再干活，默认「肯定有人跟我抢」。<code>synchronized</code>、<code>ReentrantLock</code>、数据库的 <code>SELECT ... FOR UPDATE</code>、Redis 的 <code>SET NX</code> 都是这一类。</li><li><strong>乐观锁</strong>：不堵门，干活时记下版本，提交时检查「我看的时候到现在，有没有被人改过」。数据库版本号字段、CAS、Redis 的 <code>WATCH</code> 都是这一类。Redis 官方书里管 <code>WATCH</code> 叫<strong>乐观锁</strong>，因为它「并没有真的阻止别人改数据，而是在别人改了之后通知我」。</li></ul>
+<p>取舍很简单：<strong>冲突多、改完代价大</strong>用悲观；<strong>冲突少、改起来很快</strong>用乐观。</p>
+<h2 id="sec-6">三、核心区别：单机锁 vs 分布式锁</h2>
+<p>终于到正题。先看一张对照表：</p>
+<table><thead><tr><th></th><th>单机锁</th><th>分布式锁</th></tr></thead><tbody><tr><td>标记放在哪</td><td>进程内存里的一个对象头 / 操作系统内核</td><td>Redis、数据库、ZooKeeper、etcd 等外部存储</td></tr><tr><td>谁在竞争</td><td>同一个进程里的线程（或同一台机器的进程）</td><td>不同机器上的进程</td></tr><tr><td>怎么判断「谁拿着」</td><td>看对象头/互斥量里记的线程标识</td><td>看第三方存储里那条记录、值、过期时间</td></tr><tr><td>崩溃了怎么办</td><td>线程异常退出时释放；进程死了操作系统回收</td><td>必须设<strong>租约</strong>（过期时间），否则永久卡死</td></tr><tr><td>别人能不能偷看/误删</td><td>基本不能，地址空间隔离</td><td>能——任何人都能删那条 key，所以要校验值</td></tr><tr><td>性能</td><td>纳秒到微秒级，纯内存操作</td><td>毫秒级，多一次网络往返</td></tr><tr><td>典型实现</td><td><code>synchronized</code>、ReentrantLock、互斥量</td><td>Redis <code>SET NX PX</code>、数据库唯一行、临时顺序节点</td></tr></tbody></table>
+<p>一句话总结区别：</p>
+<blockquote><strong>单机锁靠「大家在同一块内存里看同一块牌子」，分布式锁靠「大家都在网上查同一本登记册」。</strong></blockquote>
+<h3 id="sec-7">3.1 最要命的误区：单机锁在集群里等于没锁</h3>
+<p>假设你写了个定时任务：</p>
+<div class="code-block"><div class="code-bar"><span class="code-lang">java</span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>@Scheduled(cron = &quot;0 0 2 * * ?&quot;)
+public void syncOrders() {
+    synchronized (this) {
+        doSync();
+    }
+}</code></pre></div></div>
+<p>本地跑得好好的。上线部署三台机器，凌晨两点<strong>三台一起跑</strong>，因为每台机器锁的都是自己内存里那个 <code>this</code>。</p>
+<p>这就是单机锁和分布式锁的分水岭：<strong>锁的作用域必须覆盖竞争者的范围</strong>。竞争者跨进程跨机器，锁就必须放在所有人都能访问的地方。</p>
+<h3 id="sec-8">3.2 分布式锁的正确打开方式（以 Redis 为例）</h3>
+<p>最基础的写法，Redis 官方给的是一条命令：</p>
+<div class="code-block"><div class="code-bar"><span class="code-lang"></span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>SET order:lock &lt;随机值&gt; NX PX 30000</code></pre></div></div>
+<ul><li><code>NX</code>：key 不存在才设置——这就是「抢占标记」；</li><li><code>PX 30000</code>：30 秒后自动过期——这就是「租约」，防持有者崩溃后锁永不释放；</li><li><code>&lt;随机值&gt;</code>：<strong>必须是全局唯一的随机串</strong>，释放时校验。</li></ul>
+<p>释放不能直接用 <code>DEL</code>。官方特意强调了原因：客户端 A 加锁后卡顿超过 30 秒，锁过期被 B 抢走；这时 A 慢慢悠悠执行完，一个 <code>DEL</code> 就把<strong>B 的锁</strong>删了。所以要用 Lua 脚本（或新版 Redis 的 <code>DELEX</code>）做「<strong>值匹配才删</strong>」：</p>
+<div class="code-block"><div class="code-bar"><span class="code-lang"></span><span class="code-btns"><button type="button" class="code-copy">复制</button></span></div><div class="code-body"><pre><code>if redis.call(&quot;get&quot;, KEYS[1]) == ARGV[1] then
+    return redis.call(&quot;del&quot;, KEYS[1])
+else
+    return 0
+end</code></pre></div></div>
+<p>业务时间不可控时，还要有<strong>看门狗</strong>周期性续期。但看门狗不是万能的：进程真被长时间挂起（比如垃圾回收停顿），续期线程自己也停了。</p>
+<h3 id="sec-9">3.3 主从切换那几毫秒，锁会丢</h3>
+<p>Redis 官方自己列了一个「四步翻车」序列，我照原意讲：</p>
+<ol><li>客户端甲在主节点拿到锁；</li><li>主节点宕机，锁还没同步到从节点（Redis 复制是<strong>异步</strong>的）；</li><li>从节点被提升成新主节点；</li><li>客户端乙向新主节点申请同一把锁，成功。<strong>互斥被打破。</strong></li></ol>
+<p>官方的原话是 <code>SAFETY VIOLATION!</code>。 Redlock 算法（在多个互相独立的主节点上投票，超过半数且总耗时小于租约才算成功）就是想补这个洞。</p>
+<h3 id="sec-10">3.4 连 Redlock 也有争议：栅栏令牌才是底牌</h3>
+<p>Martin Kleppmann 那篇著名的质疑指出：就算锁服务完美无缺，下面三件事依然能让两个人同时以为自己拿着锁：</p>
+<ul><li><strong>进程停顿</strong>：甲拿到锁后被挂起，租约到期、乙拿锁，甲醒来继续写；</li><li><strong>时钟跳变</strong>：某台机器的表往前跳，锁提前过期；</li><li><strong>网络延迟</strong>：甲的写请求在路上堵了一分钟才到存储服务，那时租约早没了。</li></ul>
+<p>他给的结论不是「换个更好的锁」，而是<strong>让存储服务自己识别谁才是最新的</strong>：</p>
+<blockquote>每次授予锁时返回一个<strong>单调递增的令牌</strong>，写请求必须带上它；存储服务记住见过的最大令牌，<strong>拒绝任何比它小的写入</strong>。</blockquote>
+<p>原文的例子：甲拿到令牌 33 后停顿，租约过期；乙拿到 34 并写入成功；甲醒来拿 33 去写，存储服务一看「34 都见过了」，直接拒绝。</p>
+<p>Kleppmann 的关键判断是 Redlock「<strong>没有生成栅栏令牌的机制</strong>」，而且依赖过强的时序假设，所以他建议：只为效率用锁就用单实例；为正确性用锁就用有共识的系统（如 ZooKeeper、etcd 或带事务的数据库），并在资源访问处强制校验令牌。</p>
+<p>这条结论对普通业务同样成立：<strong>Redis 锁负责减少冲突，数据库约束负责兜底正确</strong>。库存别只靠锁，还要有唯一约束或版本号。</p>
+<h2 id="sec-11">四、什么时候需要锁：一张判断清单</h2>
+<p>先问自己三个问题：</p>
+<ol><li><strong>有没有共享状态？</strong>（同一份数据、同一个文件、同一个外部资源）</li><li><strong>有没有多个执行者？</strong>（多线程、多进程、多机器、多个定时实例）</li><li><strong>是不是「读—改—写」序列，且结果必须正确？</strong></li></ol>
+<p>三个都是「是」，才需要认真考虑锁。只要有一个「否」，多半不需要。</p>
+<h3 id="sec-12">4.1 什么时候用单机锁</h3>
+<ul><li>同一个进程里，多个线程改同一份堆内存对象；</li><li>单机多实例之间的文件、内存缓存写入；</li><li>临界区很短，纯内存操作，不涉及外部存储。</li></ul>
+<h3 id="sec-13">4.2 什么时候用分布式锁</h3>
+<ul><li><strong>定时任务只跑一个</strong>：多实例部署的唯一调度；</li><li><strong>防止重复提交/重复发券</strong>：用户连点、消息重投；</li><li><strong>多个节点争抢一个外部资源</strong>：同一个文件、同一个账号的操作、同一批数据的批处理；</li><li><strong>限流/配额的全局计数</strong>（不过这一类用原子命令往往更好）。</li></ul>
+<h3 id="sec-14">4.3 什么时候不需要锁</h3>
+<ul><li><strong>没有共享</strong>：无状态服务、每个请求只用自己的局部变量；</li><li><strong>只读</strong>：大家看同一份不变的数据，随便看；</li><li><strong>不可变对象</strong>：对象创建后就不改，天然线程安全；</li><li><strong>线程隔离</strong>：每个线程有自己的一份（如线程本地变量）；</li><li><strong>一个原子操作就够</strong>：Java 官方说，对引用变量和大多数基本类型的单次读写本身就是原子的；<code>volatile</code> 还能保证可见性。但官方也提醒：原子性不等于不需要同步——<code>c++</code> 是三步，不是一步；</li><li><strong>数据库有更强约束</strong>：唯一索引、版本号、事务已经能兜底，就别再套一层 Redis 锁。</li></ul>
+<p>Kleppmann 把用锁的目的分成两类，非常实用：</p>
+<ul><li><strong>为了效率</strong>：锁失败了只是多算一次、多写一封邮件。这种用简单方案就够，不必上复杂的锁集群；</li><li><strong>为了正确性</strong>：锁失败了就是数据错乱、超卖、重复扣款。这种必须清楚说明，并让存储层兜底。</li></ul>
+<h3 id="sec-15">4.4 七个常见坑</h3>
+<ol><li><strong>锁对象换来换去</strong>：每次 new 一个新对象当锁，等于没锁；</li><li><strong>忘记释放</strong>：异常路径漏了 <code>finally</code>，锁永久占用；</li><li><strong>锁粒度太大</strong>：整张表、整个方法一把锁，并发直接归零；</li><li><strong>锁过期但业务没干完</strong>：租约时间拍脑袋定，必须留余量或续期；</li><li><strong>释放别人的锁</strong>：不用随机值校验就 <code>DEL</code>；</li><li><strong>只看锁不看存储</strong>：Redis 锁拿着，数据库却没有唯一约束；</li><li><strong>以为看门狗万能</strong>：进程停顿、时钟跳变、网络延迟，它都救不了。</li></ol>
+<h3 id="sec-16">4.5 动手前六问</h3>
+<ul><li>共享的是什么？说得出具体字段/文件/资源吗？</li><li>竞争者都有谁？线程、进程还是跨机器？</li><li>临界区里做了几步？能不能缩成一个原子操作？</li><li>崩溃时会怎样？锁能自动释放吗？</li><li>时钟/network 出问题时会怎样？存储层能识别旧持有者吗？</li><li>不用锁，用唯一约束 / 版本号 / 幂等能不能解决？</li></ul>
+<h2 id="sec-17">术语小抄</h2>
+<table><thead><tr><th>术语</th><th>大白话</th></tr></thead><tbody><tr><td>临界区</td><td>同一时间只准一个人进的那段代码</td></tr><tr><td>互斥</td><td>有人在里面，外面的人就等着</td></tr><tr><td>竞态条件</td><td>结果取决于谁先谁后，而且顺序不受控</td></tr><tr><td>阻塞</td><td>抢不到锁就停在那等，不往下跑</td></tr><tr><td>管程 / 内部锁</td><td>Java 里每个对象自带的那把锁</td></tr><tr><td>可重入</td><td>自己已经拿着锁，还能再用同一把进下一层</td></tr><tr><td>锁粒度</td><td>一把锁管多大范围</td></tr><tr><td>公平锁</td><td>先来先得；非公平锁允许插队，吞吐更高</td></tr><tr><td>悲观锁</td><td>先占坑再干活，默认有人抢</td></tr><tr><td>乐观锁</td><td>先干活，提交时查版本，发现被改就重试</td></tr><tr><td>原子操作</td><td>一步完成，中间不可被打断</td></tr><tr><td>可见性</td><td>一个人改完，下一个人看得见</td></tr><tr><td>租约</td><td>带过期时间的锁，防止持有者崩溃后永久占用</td></tr><tr><td>看门狗</td><td>后台线程周期性续租</td></tr><tr><td>栅栏令牌</td><td>单调递增的号码，存储层用它拒绝过期持有者</td></tr></tbody></table>
+<h2 id="sec-18">出处</h2>
+<ol><li>Oracle，《The Java Tutorials · Thread Interference》：<code>c++</code> 三步拆解与交错时间线。&lt;https://docs.oracle.com/javase/tutorial/essential/concurrency/interfere.html&gt;</li><li>Oracle，《The Java Tutorials · Memory Consistency Errors》：happens-before 定义。&lt;https://docs.oracle.com/javase/tutorial/essential/concurrency/memconsist.html&gt;</li><li>Oracle，《The Java Tutorials · Intrinsic Locks and Synchronization》：获取/释放/阻塞/可重入的原文。&lt;https://docs.oracle.com/javase/tutorial/essential/concurrency/locksync.html&gt;</li><li>Oracle，《The Java Tutorials · Synchronization》：线程干扰、内存一致性错误与线程竞争。&lt;https://docs.oracle.com/javase/tutorial/essential/concurrency/sync.html&gt;</li><li>Oracle，《The Java Tutorials · Atomic Access》：原子性与可见性的区别。&lt;https://docs.oracle.com/javase/tutorial/essential/concurrency/atomic.html&gt;</li><li>Redis 官方文档，《Distributed Locks with Redis》：三条保证、主从切换竞态、SET NX PX、Lua 释放、Redlock 步骤、时钟漂移提醒。&lt;https://redis.io/docs/manual/patterns/distributed-locks/&gt;</li><li>Redis 官方书，《Distributed locking》：<code>WATCH</code> 作为乐观锁的说明。&lt;https://redis.ac.cn/ebook/part-2-core-concepts/chapter-6-application-components-in-redis/6-2-distributed-locking/&gt;</li><li>Martin Kleppmann，《How to do distributed locking》：效率锁与正确性锁、GC 停顿、时钟跳变、网络延迟、栅栏令牌 33/34 例子、对 Redlock 的结论。&lt;http://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html&gt;</li></ol>
+<blockquote>说明：文中的会议室、登记册与「凌晨两点三台机器一起跑」是为了讲清楚概念的教学类比；命令与代码为示意，生产环境请使用成熟客户端库并按实际业务压测设定租约时间。</blockquote>
+  </div>
+  <div class="article-embeds">
+    <h2 id="sec-embeds">锁的四问图解（六张图）</h2>
+<figure class="embed-figure"><figcaption><span>图 1 · 背景 / 原理 / 单机 / 分布式 / 对照 / 判断（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/lock-explained.html" data-modal-title="锁到底在锁什么？单机锁和分布式锁的区别、背景、原理与使用场景 · 图 1 · 背景 / 原理 / 单机 / 分布式 / 对照 / 判断（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 背景 / 原理 / 单机 / 分布式 / 对照 / 判断（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;UTF-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
+&lt;title&gt;锁的四问 · 六张图讲明白&lt;/title&gt;
+&lt;style&gt;
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport&gt;svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming&gt;svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging&gt;svg,.pz-viewport.dragging&gt;svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div class=&quot;hero&quot;&gt;
+  &lt;h1&gt;锁的四问：背景、原理、单机与分布式、什么时候用&lt;/h1&gt;
+  &lt;p&gt;用公司会议室和云上登记册讲清楚：为什么没有锁会算错、锁凭什么保证互斥、两类锁的分水岭在哪，以及栅栏令牌为什么才是底牌。&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
+&lt;div class=&quot;nav&quot;&gt;
+  &lt;a href=&quot;#k1&quot;&gt;背景&lt;/a&gt;&lt;a href=&quot;#k2&quot;&gt;原理&lt;/a&gt;&lt;a href=&quot;#k3&quot;&gt;单机锁&lt;/a&gt;&lt;a href=&quot;#k4&quot;&gt;分布式锁&lt;/a&gt;&lt;a href=&quot;#k5&quot;&gt;翻车现场&lt;/a&gt;&lt;a href=&quot;#k6&quot;&gt;判断清单&lt;/a&gt;
+&lt;/div&gt;
+
+&lt;!-- 1 背景 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;k1&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;没有锁会出什么事：三步的加一，被插成了负数 &lt;span class=&quot;tag&quot;&gt;第一问&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;Java 官方的经典例子：c++ 看着是一行，其实是读、加、写三步。两拨人同时做，结果就丢了。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 554&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;同一块白板，两个人同时改&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;64&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;甲加一次、乙减一次，本该回到 0，最后却是 -1&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;86&quot; width=&quot;952&quot; height=&quot;248&quot; rx=&quot;13&quot; fill=&quot;#ffffff&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;86&quot; width=&quot;952&quot; height=&quot;34&quot; rx=&quot;13&quot; fill=&quot;#f2f2f7&quot;/&gt;
+      &lt;text x=&quot;66&quot; y=&quot;108&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#6e6e73&quot;&gt;时刻&lt;/text&gt;
+      &lt;text x=&quot;190&quot; y=&quot;108&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;线程甲（加一）&lt;/text&gt;
+      &lt;text x=&quot;520&quot; y=&quot;108&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#ff9500&quot;&gt;线程乙（减一）&lt;/text&gt;
+      &lt;text x=&quot;850&quot; y=&quot;108&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#6e6e73&quot;&gt;白板上的数&lt;/text&gt;
+      &lt;g font-size=&quot;11.5&quot; fill=&quot;#3a3a3c&quot;&gt;
+        &lt;text x=&quot;66&quot; y=&quot;142&quot;&gt;1&lt;/text&gt;&lt;text x=&quot;190&quot; y=&quot;142&quot;&gt;读出 0&lt;/text&gt;&lt;text x=&quot;520&quot; y=&quot;142&quot;&gt;—&lt;/text&gt;&lt;text x=&quot;850&quot; y=&quot;142&quot;&gt;0&lt;/text&gt;
+        &lt;text x=&quot;66&quot; y=&quot;170&quot;&gt;2&lt;/text&gt;&lt;text x=&quot;190&quot; y=&quot;170&quot;&gt;—&lt;/text&gt;&lt;text x=&quot;520&quot; y=&quot;170&quot;&gt;读出 0&lt;/text&gt;&lt;text x=&quot;850&quot; y=&quot;170&quot;&gt;0&lt;/text&gt;
+        &lt;text x=&quot;66&quot; y=&quot;198&quot;&gt;3&lt;/text&gt;&lt;text x=&quot;190&quot; y=&quot;198&quot;&gt;算出 1&lt;/text&gt;&lt;text x=&quot;520&quot; y=&quot;198&quot;&gt;—&lt;/text&gt;&lt;text x=&quot;850&quot; y=&quot;198&quot;&gt;0&lt;/text&gt;
+        &lt;text x=&quot;66&quot; y=&quot;226&quot;&gt;4&lt;/text&gt;&lt;text x=&quot;190&quot; y=&quot;226&quot;&gt;—&lt;/text&gt;&lt;text x=&quot;520&quot; y=&quot;226&quot;&gt;算出 -1&lt;/text&gt;&lt;text x=&quot;850&quot; y=&quot;226&quot;&gt;0&lt;/text&gt;
+        &lt;text x=&quot;66&quot; y=&quot;254&quot;&gt;5&lt;/text&gt;&lt;text x=&quot;190&quot; y=&quot;254&quot;&gt;写入 1&lt;/text&gt;&lt;text x=&quot;520&quot; y=&quot;254&quot;&gt;—&lt;/text&gt;&lt;text x=&quot;850&quot; y=&quot;254&quot;&gt;1&lt;/text&gt;
+        &lt;text x=&quot;66&quot; y=&quot;282&quot;&gt;6&lt;/text&gt;&lt;text x=&quot;190&quot; y=&quot;282&quot;&gt;—&lt;/text&gt;&lt;text x=&quot;520&quot; y=&quot;282&quot;&gt;写入 -1&lt;/text&gt;&lt;text x=&quot;850&quot; y=&quot;282&quot;&gt;-1&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;line x1=&quot;44&quot; y1=&quot;296&quot; x2=&quot;996&quot; y2=&quot;296&quot; stroke=&quot;#e5e5ea&quot;/&gt;
+      &lt;text x=&quot;66&quot; y=&quot;320&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;甲的结果被乙覆盖了。换个时序，可能乙的结果丢，也可能完全不出错——所以这类漏洞极难查。&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;352&quot; width=&quot;306&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;378&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;麻烦一 · 交错&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;402&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;一行代码其实好几步&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;424&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;两个人的步骤互相穿插&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;446&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;→ 结果丢失&lt;/text&gt;
+
+      &lt;rect x=&quot;367&quot; y=&quot;352&quot; width=&quot;306&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#ffd9a0&quot;/&gt;
+      &lt;text x=&quot;387&quot; y=&quot;378&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#a85c00&quot;&gt;麻烦二 · 看不见&lt;/text&gt;
+      &lt;text x=&quot;387&quot; y=&quot;402&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;甲改完白板，乙拿的还是旧纸&lt;/text&gt;
+      &lt;text x=&quot;387&quot; y=&quot;424&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;多核各有缓存，各看各的&lt;/text&gt;
+      &lt;text x=&quot;387&quot; y=&quot;446&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;→ 看见旧值&lt;/text&gt;
+
+      &lt;rect x=&quot;690&quot; y=&quot;352&quot; width=&quot;306&quot; height=&quot;118&quot; rx=&quot;12&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;710&quot; y=&quot;378&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;麻烦三 · 跨机器&lt;/text&gt;
+      &lt;text x=&quot;710&quot; y=&quot;402&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;不同进程内存互相隔离&lt;/text&gt;
+      &lt;text x=&quot;710&quot; y=&quot;424&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;不同机器根本没有公共内存&lt;/text&gt;
+      &lt;text x=&quot;710&quot; y=&quot;446&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;→ 单机锁管不着&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;490&quot; width=&quot;952&quot; height=&quot;48&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;520&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话：锁不是为了让程序变快，是为了让程序别乱。&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先看时间线的第 5、6 行——甲写入 1，乙随后写入 -1，甲那一次加一凭空消失。再看下面三个框：交错是「同时改」，看不见是「改了对方不知道」，跨机器是「连同一块白板都没有」。锁就是为解决这三层麻烦而生的。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 2 原理 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;k2&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;锁的原理：四步动作、三条底线、两个附加服务 &lt;span class=&quot;tag&quot;&gt;第二问&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;所有锁都是同一套动作。锁的不是代码，而是大家约定共同看一眼的那个「标记」。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 552&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;defs&gt;
+      &lt;marker id=&quot;k2a&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+    &lt;/defs&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;进会议室的四步：申请 → 占用 → 排斥 → 释放&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;64&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;门牌上写着谁的名字，只有拿牌子的人能进去，出来后交还&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;226&quot; height=&quot;146&quot; rx=&quot;12&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;114&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 申请&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;140&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;想干活，先去抢标记&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;164&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;抢不到就排队&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;192&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;抢到才往下走&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;218&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;关键词：acquire&lt;/text&gt;
+
+      &lt;rect x=&quot;284&quot; y=&quot;88&quot; width=&quot;226&quot; height=&quot;146&quot; rx=&quot;12&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;302&quot; y=&quot;114&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;② 占用&lt;/text&gt;
+      &lt;text x=&quot;302&quot; y=&quot;140&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;标记写上自己的名字&lt;/text&gt;
+      &lt;text x=&quot;302&quot; y=&quot;164&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;进屋干活&lt;/text&gt;
+      &lt;text x=&quot;302&quot; y=&quot;192&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;同一时间只有一人&lt;/text&gt;
+      &lt;text x=&quot;302&quot; y=&quot;218&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;关键词：互斥&lt;/text&gt;
+
+      &lt;rect x=&quot;524&quot; y=&quot;88&quot; width=&quot;226&quot; height=&quot;146&quot; rx=&quot;12&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#ffd9a0&quot;/&gt;
+      &lt;text x=&quot;542&quot; y=&quot;114&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#a85c00&quot;&gt;③ 排斥&lt;/text&gt;
+      &lt;text x=&quot;542&quot; y=&quot;140&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;没抢到的人在门口等&lt;/text&gt;
+      &lt;text x=&quot;542&quot; y=&quot;164&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;不往里挤，也不抢着改&lt;/text&gt;
+      &lt;text x=&quot;542&quot; y=&quot;192&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;这叫「阻塞」&lt;/text&gt;
+      &lt;text x=&quot;542&quot; y=&quot;218&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;关键词：block&lt;/text&gt;
+
+      &lt;rect x=&quot;764&quot; y=&quot;88&quot; width=&quot;226&quot; height=&quot;146&quot; rx=&quot;12&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;782&quot; y=&quot;114&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;④ 释放&lt;/text&gt;
+      &lt;text x=&quot;782&quot; y=&quot;140&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;干完把标记交还&lt;/text&gt;
+      &lt;text x=&quot;782&quot; y=&quot;164&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;异常也要还（finally）&lt;/text&gt;
+      &lt;text x=&quot;782&quot; y=&quot;192&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;门口的人才有机会进&lt;/text&gt;
+      &lt;text x=&quot;782&quot; y=&quot;218&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;关键词：release&lt;/text&gt;
+
+      &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#k2a)&quot;&gt;
+        &lt;path d=&quot;M272,155 L281,155&quot;/&gt;&lt;path d=&quot;M512,155 L521,155&quot;/&gt;&lt;path d=&quot;M752,155 L761,155&quot;/&gt;
+      &lt;/g&gt;
+
+      &lt;text x=&quot;44&quot; y=&quot;268&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一把好锁的三条底线（Redis 官方给的最低保证）&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;282&quot; width=&quot;306&quot; height=&quot;94&quot; rx=&quot;11&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;308&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;互斥&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;332&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;任意时刻只有一个持有者&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;356&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;屋子里不能同时两拨人&lt;/text&gt;
+      &lt;rect x=&quot;367&quot; y=&quot;282&quot; width=&quot;306&quot; height=&quot;94&quot; rx=&quot;11&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;385&quot; y=&quot;308&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;不死等&lt;/text&gt;
+      &lt;text x=&quot;385&quot; y=&quot;332&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;持有者崩溃，锁最终可拿&lt;/text&gt;
+      &lt;text x=&quot;385&quot; y=&quot;356&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;钥匙不能跟着人锁进柜子&lt;/text&gt;
+      &lt;rect x=&quot;690&quot; y=&quot;282&quot; width=&quot;306&quot; height=&quot;94&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#ffd9a0&quot;/&gt;
+      &lt;text x=&quot;708&quot; y=&quot;308&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a85c00&quot;&gt;容错&lt;/text&gt;
+      &lt;text x=&quot;708&quot; y=&quot;332&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;部分设施坏了还能发锁&lt;/text&gt;
+      &lt;text x=&quot;708&quot; y=&quot;356&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;前台不在，有备用登记方式&lt;/text&gt;
+
+      &lt;text x=&quot;44&quot; y=&quot;408&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;顺手附赠的两个服务&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;422&quot; width=&quot;470&quot; height=&quot;74&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;448&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;可见性：接力时看见正确结果&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;474&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;释放锁 → 另人拿到同一把锁 = 建立「先发生」关系&lt;/text&gt;
+      &lt;rect x=&quot;526&quot; y=&quot;422&quot; width=&quot;470&quot; height=&quot;74&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot;/&gt;
+      &lt;text x=&quot;546&quot; y=&quot;448&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;可重入：自己不会再卡死自己&lt;/text&gt;
+      &lt;text x=&quot;546&quot; y=&quot;474&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;已持锁的线程，用同一把锁进下一层照样放行&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;514&quot; width=&quot;952&quot; height=&quot;30&quot; rx=&quot;9&quot; fill=&quot;#1d1d1f&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;534&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#ffffff&quot;&gt;记住：所有人必须认同一个标记。各拿各的锁，等于没锁。&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上排四张卡片从左到右读，注意是「先抢牌子再进屋」，不是「进屋再找牌子」。中排三条底线里最容易被忽略的是「不死等」——所以分布式锁必须设过期时间。下排两个附加服务提醒你：锁不只防冲突，还负责让下一个人看见正确结果。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 3 单机锁 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;k3&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;单机锁：牌子挂在进程自己家里 &lt;span class=&quot;tag&quot;&gt;第三问 · 上&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;同一个 JVM 里的线程共享一块内存，牌子就挂在内存里。换个对象、换台机器，牌子就不认了。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 510&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;defs&gt;
+      &lt;marker id=&quot;k3a&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+      &lt;marker id=&quot;k3b&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#ff3b30&quot;/&gt;&lt;/marker&gt;
+    &lt;/defs&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;牌子在同一个进程的内存里，大家看得见&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;64&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;一个 JVM = 一间办公室，门口只有一块白板&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;560&quot; height=&quot;300&quot; rx=&quot;13&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;116&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;一个 JVM 进程（同一块堆内存）&lt;/text&gt;
+      &lt;rect x=&quot;196&quot; y=&quot;150&quot; width=&quot;256&quot; height=&quot;58&quot; rx=&quot;10&quot; fill=&quot;#ffffff&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;2&quot;/&gt;
+      &lt;text x=&quot;324&quot; y=&quot;176&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;那把锁（锁对象）&lt;/text&gt;
+      &lt;text x=&quot;324&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;牌子上的名字：线程甲&lt;/text&gt;
+
+      &lt;rect x=&quot;72&quot; y=&quot;246&quot; width=&quot;146&quot; height=&quot;44&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;145&quot; y=&quot;274&quot; font-size=&quot;11&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;线程甲 · 持有中&lt;/text&gt;
+      &lt;rect x=&quot;240&quot; y=&quot;246&quot; width=&quot;146&quot; height=&quot;44&quot; rx=&quot;8&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+      &lt;text x=&quot;313&quot; y=&quot;274&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;线程乙 · 门口等&lt;/text&gt;
+      &lt;rect x=&quot;408&quot; y=&quot;246&quot; width=&quot;146&quot; height=&quot;44&quot; rx=&quot;8&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+      &lt;text x=&quot;481&quot; y=&quot;274&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;线程丙 · 门口等&lt;/text&gt;
+
+      &lt;path d=&quot;M145,244 L280,210&quot; stroke=&quot;#007aff&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot; marker-end=&quot;url(#k3a)&quot;/&gt;
+      &lt;path d=&quot;M313,244 L340,210&quot; stroke=&quot;#9ca3af&quot; stroke-width=&quot;1.4&quot; stroke-dasharray=&quot;4 4&quot; fill=&quot;none&quot;/&gt;
+      &lt;path d=&quot;M481,244 L370,210&quot; stroke=&quot;#9ca3af&quot; stroke-width=&quot;1.4&quot; stroke-dasharray=&quot;4 4&quot; fill=&quot;none&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;324&quot; font-size=&quot;11&quot; fill=&quot;#0a58ca&quot;&gt;绿色实线：抢到牌子，进去干活&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;350&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;灰色虚线：抢不到，在门口阻塞等待&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;374&quot; font-size=&quot;11&quot; fill=&quot;#0a58ca&quot;&gt;线程异常退出也会释放锁（finally）&lt;/text&gt;
+
+      &lt;rect x=&quot;620&quot; y=&quot;88&quot; width=&quot;376&quot; height=&quot;300&quot; rx=&quot;13&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;640&quot; y=&quot;116&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;两个常见翻车&lt;/text&gt;
+      &lt;text x=&quot;640&quot; y=&quot;148&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;翻车一：牌子每次都是新的&lt;/text&gt;
+      &lt;rect x=&quot;640&quot; y=&quot;160&quot; width=&quot;336&quot; height=&quot;50&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;654&quot; y=&quot;181&quot; font-size=&quot;10&quot; fill=&quot;#b71c1c&quot;&gt;synchronized (new Object())&lt;/text&gt;
+      &lt;text x=&quot;654&quot; y=&quot;201&quot; font-size=&quot;10&quot; fill=&quot;#b71c1c&quot;&gt;每次进来都是新对象 → 三把锁互不相干&lt;/text&gt;
+      &lt;text x=&quot;640&quot; y=&quot;238&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;翻车二：三台机器各锁各的&lt;/text&gt;
+      &lt;rect x=&quot;640&quot; y=&quot;250&quot; width=&quot;100&quot; height=&quot;46&quot; rx=&quot;7&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;690&quot; y=&quot;278&quot; font-size=&quot;10&quot; fill=&quot;#b71c1c&quot; text-anchor=&quot;middle&quot;&gt;机器 1 的锁&lt;/text&gt;
+      &lt;rect x=&quot;748&quot; y=&quot;250&quot; width=&quot;100&quot; height=&quot;46&quot; rx=&quot;7&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;798&quot; y=&quot;278&quot; font-size=&quot;10&quot; fill=&quot;#b71c1c&quot; text-anchor=&quot;middle&quot;&gt;机器 2 的锁&lt;/text&gt;
+      &lt;rect x=&quot;856&quot; y=&quot;250&quot; width=&quot;100&quot; height=&quot;46&quot; rx=&quot;7&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;906&quot; y=&quot;278&quot; font-size=&quot;10&quot; fill=&quot;#b71c1c&quot; text-anchor=&quot;middle&quot;&gt;机器 3 的锁&lt;/text&gt;
+      &lt;text x=&quot;640&quot; y=&quot;322&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;凌晨两点，三台机器一起跑定时任务&lt;/text&gt;
+      &lt;text x=&quot;640&quot; y=&quot;346&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;单机锁在集群里等于没锁&lt;/text&gt;
+      &lt;text x=&quot;640&quot; y=&quot;374&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;→ 锁的作用域必须覆盖竞争者范围&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;406&quot; width=&quot;952&quot; height=&quot;88&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;434&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;判断线：竞争者是谁&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;458&quot; font-size=&quot;11&quot; fill=&quot;#48484a&quot;&gt;同一个进程里的线程 → 单机锁够用，纯内存操作，快&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;480&quot; font-size=&quot;11&quot; fill=&quot;#0a58ca&quot;&gt;跨进程、跨机器 → 单机锁失灵，必须换成所有人都能访问的外部标记&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;左图重点是牌子只有一块：三条线里只有甲是实线拿到牌子，乙丙在门口等。右图两个反例都要记住——「每次 new 一个新锁对象」和「三台机器各锁各的」，本质上都是「大家看的不是同一块牌子」。最后一行就是单机锁和分布式锁的分水岭。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 4 分布式锁 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;k4&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;分布式锁：牌子换成所有人都能查的云上登记册 &lt;span class=&quot;tag&quot;&gt;第三问 · 下&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;Redis 官方给的正确姿势：SET 时带唯一值和过期时间，释放时校验值匹配才删。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 562&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;defs&gt;
+      &lt;marker id=&quot;k4a&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+    &lt;/defs&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;三台机器上的进程，一起查同一本登记册&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;64&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;谁先把登记册上那一行写上自己的名字，谁干活&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;280&quot; height=&quot;70&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;184&quot; y=&quot;116&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;机器 1 · 订单服务&lt;/text&gt;
+      &lt;text x=&quot;184&quot; y=&quot;140&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;凌晨两点来抢锁&lt;/text&gt;
+      &lt;rect x=&quot;380&quot; y=&quot;88&quot; width=&quot;280&quot; height=&quot;70&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;520&quot; y=&quot;116&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;机器 2 · 订单服务&lt;/text&gt;
+      &lt;text x=&quot;520&quot; y=&quot;140&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;凌晨两点来抢锁&lt;/text&gt;
+      &lt;rect x=&quot;716&quot; y=&quot;88&quot; width=&quot;280&quot; height=&quot;70&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;856&quot; y=&quot;116&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;机器 3 · 订单服务&lt;/text&gt;
+      &lt;text x=&quot;856&quot; y=&quot;140&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;凌晨两点来抢锁&lt;/text&gt;
+
+      &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.6&quot; fill=&quot;none&quot; marker-end=&quot;url(#k4a)&quot;&gt;
+        &lt;path d=&quot;M184,160 L420,214&quot;/&gt;&lt;path d=&quot;M520,160 L520,214&quot;/&gt;&lt;path d=&quot;M856,160 L620,214&quot;/&gt;
+      &lt;/g&gt;
+
+      &lt;rect x=&quot;272&quot; y=&quot;218&quot; width=&quot;496&quot; height=&quot;110&quot; rx=&quot;13&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot; stroke-width=&quot;2&quot;/&gt;
+      &lt;text x=&quot;520&quot; y=&quot;246&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;Redis 里的那一行（所有机器都能访问）&lt;/text&gt;
+      &lt;rect x=&quot;300&quot; y=&quot;260&quot; width=&quot;440&quot; height=&quot;30&quot; rx=&quot;7&quot; fill=&quot;#ffffff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;520&quot; y=&quot;281&quot; font-size=&quot;11&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;SET order:lock &amp;lt;随机值&amp;gt; NX PX 30000&lt;/text&gt;
+      &lt;text x=&quot;520&quot; y=&quot;314&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;NX = 不存在才写（抢）　·　PX 30000 = 30 秒后自动过期（租约）　·　随机值 = 防误删&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;358&quot; width=&quot;452&quot; height=&quot;132&quot; rx=&quot;12&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;384&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;正确释放：值匹配才删&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;408&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;如果登记册上的值还是我写的那个 → 删&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;430&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;已经变成别人的值 → 不许动&lt;/text&gt;
+      &lt;rect x=&quot;64&quot; y=&quot;442&quot; width=&quot;412&quot; height=&quot;34&quot; rx=&quot;7&quot; fill=&quot;#ffffff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;78&quot; y=&quot;464&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot;&gt;值不匹配就返回 0（新版可用 DELEX）&lt;/text&gt;
+
+      &lt;rect x=&quot;544&quot; y=&quot;358&quot; width=&quot;452&quot; height=&quot;132&quot; rx=&quot;12&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;564&quot; y=&quot;384&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;错误释放：直接删 key&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;408&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;甲干活超过 30 秒 → 锁过期&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;430&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;乙抢到锁 → 登记册写乙的值&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;452&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;甲醒来一个 DEL → 把乙的锁删了&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;476&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;→ 丙也能进来，互斥彻底失效&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;510&quot; width=&quot;952&quot; height=&quot;40&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;536&quot; font-size=&quot;11.5&quot; fill=&quot;#48484a&quot;&gt;业务时间不可控时要续租（看门狗）；但进程被挂起时，续租线程也一起停了。&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先看三条箭头都指向同一个 Redis 框——这就是「同一块牌子」在分布式里的样子。中间那条命令三个参数各管一件事：NX 管抢、PX 管崩溃后自动释放、随机值管别删错人。下面左右两栏对照，重点看右栏的四步翻车链：卡顿 → 过期 → 别人抢 → 误删。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 5 翻车现场 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;k5&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;再进一步：主从切换会丢锁，栅栏令牌才是底牌 &lt;span class=&quot;tag&quot;&gt;第三问 · 补充&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;Redis 官方自己列了四步翻车；Kleppmann 指出就算锁完美，停顿和延迟也能破坏互斥。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 632&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;defs&gt;
+      &lt;marker id=&quot;k5a&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#ff3b30&quot;/&gt;&lt;/marker&gt;
+    &lt;/defs&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;翻车现场一：主从切换那几毫秒&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;64&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;Redis 复制是异步的，锁还没同步过去，主节点就倒了&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;86&quot; width=&quot;952&quot; height=&quot;154&quot; rx=&quot;12&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;g font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;
+        &lt;rect x=&quot;62&quot; y=&quot;106&quot; width=&quot;210&quot; height=&quot;60&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+        &lt;text x=&quot;72&quot; y=&quot;128&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;① 甲在主节点拿到锁&lt;/text&gt;
+        &lt;text x=&quot;72&quot; y=&quot;150&quot;&gt;登记册刚写上甲的名字&lt;/text&gt;
+        &lt;rect x=&quot;288&quot; y=&quot;106&quot; width=&quot;210&quot; height=&quot;60&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+        &lt;text x=&quot;298&quot; y=&quot;128&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;② 主节点宕机&lt;/text&gt;
+        &lt;text x=&quot;298&quot; y=&quot;150&quot;&gt;还没同步到从节点&lt;/text&gt;
+        &lt;rect x=&quot;514&quot; y=&quot;106&quot; width=&quot;210&quot; height=&quot;60&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+        &lt;text x=&quot;524&quot; y=&quot;128&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;③ 从节点升主&lt;/text&gt;
+        &lt;text x=&quot;524&quot; y=&quot;150&quot;&gt;甲写的那行消失了&lt;/text&gt;
+        &lt;rect x=&quot;740&quot; y=&quot;106&quot; width=&quot;238&quot; height=&quot;60&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ff3b30&quot; stroke-width=&quot;2&quot;/&gt;
+        &lt;text x=&quot;750&quot; y=&quot;128&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;④ 乙也拿到锁&lt;/text&gt;
+        &lt;text x=&quot;750&quot; y=&quot;150&quot;&gt;两个人同时干活 → 互斥失效&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;g stroke=&quot;#ff3b30&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot; marker-end=&quot;url(#k5a)&quot;&gt;
+        &lt;path d=&quot;M274,136 L285,136&quot;/&gt;&lt;path d=&quot;M500,136 L511,136&quot;/&gt;&lt;path d=&quot;M726,136 L737,136&quot;/&gt;
+      &lt;/g&gt;
+      &lt;text x=&quot;62&quot; y=&quot;202&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;Redlock（多个独立主节点投票）就是想补这个洞，但它自己也有争议。&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;224&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;Redis 官方原文把这一步叫 SAFETY VIOLATION（安全被打破）。&lt;/text&gt;
+
+      &lt;text x=&quot;44&quot; y=&quot;276&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;翻车现场二：就算锁服务完美，这三件事照样能让两人同时持锁&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;290&quot; width=&quot;306&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#ffd9a0&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;316&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a85c00&quot;&gt;进程停顿&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;340&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;甲持锁时被挂起，租约到期&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;362&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;乙拿锁，甲醒来继续写&lt;/text&gt;
+      &lt;rect x=&quot;367&quot; y=&quot;290&quot; width=&quot;306&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;385&quot; y=&quot;316&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;时钟跳变&lt;/text&gt;
+      &lt;text x=&quot;385&quot; y=&quot;340&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;某台机器的表往前跳&lt;/text&gt;
+      &lt;text x=&quot;385&quot; y=&quot;362&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;锁提前过期，别人进来&lt;/text&gt;
+      &lt;rect x=&quot;690&quot; y=&quot;290&quot; width=&quot;306&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;708&quot; y=&quot;316&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;网络延迟&lt;/text&gt;
+      &lt;text x=&quot;708&quot; y=&quot;340&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;甲的写在路上堵了一分钟&lt;/text&gt;
+      &lt;text x=&quot;708&quot; y=&quot;362&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;到达时租约早没了&lt;/text&gt;
+
+      &lt;text x=&quot;44&quot; y=&quot;418&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;正解：让存储服务认令牌，而不是只信锁&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;432&quot; width=&quot;952&quot; height=&quot;140&quot; rx=&quot;12&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;rect x=&quot;64&quot; y=&quot;450&quot; width=&quot;200&quot; height=&quot;52&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;164&quot; y=&quot;472&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;甲拿锁 → 令牌 33&lt;/text&gt;
+      &lt;text x=&quot;164&quot; y=&quot;492&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;然后被挂起，租约过期&lt;/text&gt;
+      &lt;rect x=&quot;288&quot; y=&quot;450&quot; width=&quot;200&quot; height=&quot;52&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;388&quot; y=&quot;472&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;乙拿锁 → 令牌 34&lt;/text&gt;
+      &lt;text x=&quot;388&quot; y=&quot;492&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;写入成功，存储记住 34&lt;/text&gt;
+      &lt;rect x=&quot;512&quot; y=&quot;450&quot; width=&quot;200&quot; height=&quot;52&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;612&quot; y=&quot;472&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;甲醒来 → 拿 33 去写&lt;/text&gt;
+      &lt;text x=&quot;612&quot; y=&quot;492&quot; font-size=&quot;10&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;令牌比 34 小&lt;/text&gt;
+      &lt;rect x=&quot;736&quot; y=&quot;450&quot; width=&quot;240&quot; height=&quot;52&quot; rx=&quot;8&quot; fill=&quot;#ffffff&quot; stroke=&quot;#ff3b30&quot; stroke-width=&quot;2&quot;/&gt;
+      &lt;text x=&quot;856&quot; y=&quot;472&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;存储服务直接拒绝&lt;/text&gt;
+      &lt;text x=&quot;856&quot; y=&quot;492&quot; font-size=&quot;10&quot; fill=&quot;#b71c1c&quot; text-anchor=&quot;middle&quot;&gt;旧持有者写不进去了&lt;/text&gt;
+      &lt;g stroke=&quot;#34c759&quot; stroke-width=&quot;1.6&quot; fill=&quot;none&quot; marker-end=&quot;url(#k5a)&quot;&gt;
+        &lt;path d=&quot;M266,476 L285,476&quot;/&gt;
+      &lt;/g&gt;
+      &lt;g stroke=&quot;#ff3b30&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot; marker-end=&quot;url(#k5a)&quot;&gt;
+        &lt;path d=&quot;M490,476 L509,476&quot;/&gt;&lt;path d=&quot;M714,476 L733,476&quot;/&gt;
+      &lt;/g&gt;
+      &lt;text x=&quot;64&quot; y=&quot;532&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;令牌必须单调递增，且由存储服务主动校验「比见过的小就拒绝」——这叫栅栏令牌。&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;556&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;Redis 的随机值不是栅栏令牌；它只能防误删，防不了过期持有者继续写。&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上半部分按箭头读四步，重点在第②步「还没同步就宕机」——这是 Redis 官方承认的竞态。中间三框说明锁服务再完美也没用，因为问题出在客户端停顿和时间上。最下面 33 → 34 → 33 的序列是整张图的关键：最后那次写入被存储层拒绝，才是真正的安全底线。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 6 判断清单 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;k6&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;什么时候需要锁：先过三问，再看用哪种 &lt;span class=&quot;tag&quot;&gt;第四问&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;三个问题全是「是」才需要考虑锁。能靠数据库唯一约束或版本号解决，就别再套一层锁。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 548&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;defs&gt;
+      &lt;marker id=&quot;k6a&quot; markerWidth=&quot;9&quot; markerHeight=&quot;9&quot; refX=&quot;8&quot; refY=&quot;3&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,3 L0,6 Z&quot; fill=&quot;#007aff&quot;/&gt;&lt;/marker&gt;
+    &lt;/defs&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;42&quot; font-size=&quot;14&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;先过三问：全是「是」才往下走&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;64&quot; font-size=&quot;11.5&quot; fill=&quot;#6e6e73&quot;&gt;只要有一个「否」，多半不需要锁&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;296&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;62&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 有共享状态吗？&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;138&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;同一份数据、文件、外部资源&lt;/text&gt;
+      &lt;text x=&quot;62&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;说不出具体是啥 → 不用锁&lt;/text&gt;
+      &lt;rect x=&quot;372&quot; y=&quot;88&quot; width=&quot;296&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;390&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;② 有多个执行者吗？&lt;/text&gt;
+      &lt;text x=&quot;390&quot; y=&quot;138&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;多线程、多进程、多机器&lt;/text&gt;
+      &lt;text x=&quot;390&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;只有一个人在改 → 不用锁&lt;/text&gt;
+      &lt;rect x=&quot;700&quot; y=&quot;88&quot; width=&quot;296&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#ffd9a0&quot;/&gt;
+      &lt;text x=&quot;718&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a85c00&quot;&gt;③ 读—改—写会出错吗？&lt;/text&gt;
+      &lt;text x=&quot;718&quot; y=&quot;138&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;结果必须正确、不能丢&lt;/text&gt;
+      &lt;text x=&quot;718&quot; y=&quot;160&quot; font-size=&quot;10.5&quot; fill=&quot;#a85c00&quot;&gt;只读或错了无所谓 → 不用锁&lt;/text&gt;
+      &lt;g stroke=&quot;#007aff&quot; stroke-width=&quot;1.8&quot; fill=&quot;none&quot; marker-end=&quot;url(#k6a)&quot;&gt;
+        &lt;path d=&quot;M342,134 L369,134&quot;/&gt;&lt;path d=&quot;M670,134 L697,134&quot;/&gt;
+      &lt;/g&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;208&quot; width=&quot;452&quot; height=&quot;180&quot; rx=&quot;12&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;234&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;该用锁的场景&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;260&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;单机锁就够了&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;282&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;同一进程的多个线程改同一对象&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;304&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;临界区很短，纯内存操作&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;330&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;分布式锁&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;352&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;定时任务只跑一个 · 防重复提交/发券&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;374&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;多节点争抢同一个外部资源&lt;/text&gt;
+
+      &lt;rect x=&quot;544&quot; y=&quot;208&quot; width=&quot;452&quot; height=&quot;180&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#d1d1d6&quot;/&gt;
+      &lt;text x=&quot;564&quot; y=&quot;234&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;不需要锁的场景&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;260&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;无状态服务：每个请求只用自己的局部变量&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;284&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;只读：大家看同一份不变的数据&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;308&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;不可变对象 / 线程隔离：天生不用抢&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;332&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;一个原子操作就够：单次读写本身是原子的&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;356&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;数据库有唯一约束 / 版本号 / 事务兜底&lt;/text&gt;
+      &lt;text x=&quot;564&quot; y=&quot;380&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;注意：原子 ≠ 可见，c++ 是三步不是一步&lt;/text&gt;
+
+      &lt;text x=&quot;44&quot; y=&quot;424&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;Kleppmann 的分类：你用锁，到底为了什么？&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;438&quot; width=&quot;470&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;464&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;为了效率&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;488&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;锁失效只是多算一次、多写一封邮件&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;512&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;简单方案够用，不必上锁集群&lt;/text&gt;
+      &lt;rect x=&quot;526&quot; y=&quot;438&quot; width=&quot;470&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;546&quot; y=&quot;464&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;为了正确性&lt;/text&gt;
+      &lt;text x=&quot;546&quot; y=&quot;488&quot; font-size=&quot;10.5&quot; fill=&quot;#b71c1c&quot;&gt;锁失效就是超卖、重复扣款、数据错乱&lt;/text&gt;
+      &lt;text x=&quot;546&quot; y=&quot;512&quot; font-size=&quot;10.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;用共识系统 + 栅栏令牌 + 存储层兜底&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上排三个框从左到右过一遍，任何一个答「否」就别急着加锁。中间左右对照：左栏是锁的主场，右栏是「不需要锁」的清单——尤其最后一条，数据库约束往往比再加一层 Redis 锁更可靠。下排那两句决定了你的技术选型：只为效率，简单就好；为了正确性，锁只是第一道防线。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;script&gt;
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll(&#39;svg[viewBox]&#39;));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&amp;&amp;svg.parentElement.classList.contains(&#39;pz-viewport&#39;))return;
+    var vp=document.createElement(&#39;div&#39;);vp.className=&#39;pz-viewport&#39;;
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement(&#39;div&#39;);bar.className=&#39;pz-toolbar&#39;;
+    var bOut=document.createElement(&#39;button&#39;);bOut.textContent=&#39;\u2212&#39;;bOut.title=&#39;\u7f29\u5c0f&#39;;
+    var bIn=document.createElement(&#39;button&#39;);bIn.textContent=&#39;+&#39;;bIn.title=&#39;\u653e\u5927&#39;;
+    var bReset=document.createElement(&#39;button&#39;);bReset.textContent=&#39;\u21bb&#39;;bReset.title=&#39;\u590d\u4f4d&#39;;
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType=&#39;mouse&#39;,downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+&#39;,0,0,&#39;+scale+&#39;,&#39;+tx+&#39;,&#39;+ty+&#39;)&#39;;}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length&gt;=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener(&#39;wheel&#39;,function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY&lt;0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener(&#39;pointerdown&#39;,function(e){
+      if(e.pointerType===&#39;mouse&#39;&amp;&amp;e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add(&#39;dragging&#39;);}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove(&#39;dragging&#39;);
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener(&#39;pointermove&#39;,function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)&gt;4)moved=true;
+      if(ids().length===2&amp;&amp;pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d&gt;0&amp;&amp;d&gt;0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&amp;&amp;dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length&lt;2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add(&#39;dragging&#39;);}
+      else if(k.length===0){dragging=false;vp.classList.remove(&#39;dragging&#39;);}
+    }
+    svg.addEventListener(&#39;pointerup&#39;,end);svg.addEventListener(&#39;pointercancel&#39;,end);
+    svg.addEventListener(&#39;click&#39;,function(){
+      if(lastType!==&#39;mouse&#39;||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle(&#39;zooming&#39;,zoomMode);
+    });
+    svg.addEventListener(&#39;dblclick&#39;,function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+" sandbox="allow-scripts" loading="lazy" style="height:1300px"></iframe></figure>
+  </div>
+</article>
+<nav class="toc" aria-label="文章目录"><div class="toc-head"><span class="toc-title">本页目录</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a></div><div class="toc-group"><a href="#sec-1" class="">一、背景：没有锁，到底会出什么事</a></div><div class="toc-group"><a href="#sec-2" class="">二、原理：锁凭什么能保证「只有一个人」</a><a href="#sec-3" class="lv3">2.1 一个好锁要满足的三条底线</a><a href="#sec-4" class="lv3">2.2 锁的两个「附加服务」</a><a href="#sec-5" class="lv3">2.3 悲观锁和乐观锁：两种性格</a></div><div class="toc-group"><a href="#sec-6" class="">三、核心区别：单机锁 vs 分布式锁</a><a href="#sec-7" class="lv3">3.1 最要命的误区：单机锁在集群里等于没锁</a><a href="#sec-8" class="lv3">3.2 分布式锁的正确打开方式（以 Redis 为例）</a><a href="#sec-9" class="lv3">3.3 主从切换那几毫秒，锁会丢</a><a href="#sec-10" class="lv3">3.4 连 Redlock 也有争议：栅栏令牌才是底牌</a></div><div class="toc-group"><a href="#sec-11" class="">四、什么时候需要锁：一张判断清单</a><a href="#sec-12" class="lv3">4.1 什么时候用单机锁</a><a href="#sec-13" class="lv3">4.2 什么时候用分布式锁</a><a href="#sec-14" class="lv3">4.3 什么时候不需要锁</a><a href="#sec-15" class="lv3">4.4 七个常见坑</a><a href="#sec-16" class="lv3">4.5 动手前六问</a></div><div class="toc-group"><a href="#sec-17" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-18" class="">出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">锁的四问图解（六张图）</a></div></nav>
+</div>
+</main>
+<div class="detail-actions"><a class="back-fab" href="../index.html" aria-label="返回文章列表"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>返回列表</a><button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button></div><div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
+  <div class="toc-backdrop" data-toc-close></div>
+  <div class="toc-panel">
+    <div class="toc-panel-head"><span>本页目录 · 19 节</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">一、背景：没有锁，到底会出什么事</a></div><div class="toc-group"><a href="#sec-2" class="">二、原理：锁凭什么能保证「只有一个人」</a><a href="#sec-3" class="lv3">2.1 一个好锁要满足的三条底线</a><a href="#sec-4" class="lv3">2.2 锁的两个「附加服务」</a><a href="#sec-5" class="lv3">2.3 悲观锁和乐观锁：两种性格</a></div><div class="toc-group"><a href="#sec-6" class="">三、核心区别：单机锁 vs 分布式锁</a><a href="#sec-7" class="lv3">3.1 最要命的误区：单机锁在集群里等于没锁</a><a href="#sec-8" class="lv3">3.2 分布式锁的正确打开方式（以 Redis 为例）</a><a href="#sec-9" class="lv3">3.3 主从切换那几毫秒，锁会丢</a><a href="#sec-10" class="lv3">3.4 连 Redlock 也有争议：栅栏令牌才是底牌</a></div><div class="toc-group"><a href="#sec-11" class="">四、什么时候需要锁：一张判断清单</a><a href="#sec-12" class="lv3">4.1 什么时候用单机锁</a><a href="#sec-13" class="lv3">4.2 什么时候用分布式锁</a><a href="#sec-14" class="lv3">4.3 什么时候不需要锁</a><a href="#sec-15" class="lv3">4.4 七个常见坑</a><a href="#sec-16" class="lv3">4.5 动手前六问</a></div><div class="toc-group"><a href="#sec-17" class="">术语小抄</a></div><div class="toc-group"><a href="#sec-18" class="">出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">锁的四问图解（六张图）</a></div></nav>
+  </div>
+</div>
+
+<script>
+(function(){
+  var fab = document.getElementById('toc-fab');
+  var sheet = document.getElementById('toc-sheet');
+
+  function openSheet(){
+    if (!sheet) return;
+    sheet.classList.add('on');
+    fab.setAttribute('aria-expanded','true');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSheet(){
+    if (!sheet || !sheet.classList.contains('on')) return;
+    sheet.classList.remove('on');
+    fab.setAttribute('aria-expanded','false');
+    document.body.style.overflow = '';
+  }
+
+  if (fab && sheet) {
+    fab.addEventListener('click', openSheet);
+    sheet.addEventListener('click', function(e){
+      if (e.target.closest('[data-toc-close]') || e.target.closest('a')) closeSheet();
+    });
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') closeSheet();
+    });
+  }
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  if (!links.length) return;
+  var targets = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); });
+  links.forEach(function(a){
+    a.addEventListener('click', function(e){
+      var el = document.getElementById(a.getAttribute('href').slice(1));
+      if (!el) return;
+      e.preventDefault();
+      closeSheet();
+      el.scrollIntoView({behavior:'smooth', block:'start'});
+      if (history.replaceState) history.replaceState(null, '', a.getAttribute('href'));
+    });
+  });
+  function update(){
+    var y = window.scrollY + 90, idx = 0;
+    for (var i=0;i<targets.length;i++){ if (targets[i] && targets[i].getBoundingClientRect().top + window.scrollY <= y) idx = i; }
+    links.forEach(function(a,i){ a.classList.toggle('active', i===idx); });
+  }
+  window.addEventListener('scroll', update, {passive:true});
+  window.addEventListener('resize', update);
+  update();
+})();
+</script>
+
+<script>
+(function(){
+  function fallbackCopy(text, done){
+    var ta=document.createElement('textarea');
+    ta.value=text; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='-2000px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta); done();
+  }
+  function copyText(text, done){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text, done); });
+    }else{ fallbackCopy(text, done); }
+  }
+  [].forEach.call(document.querySelectorAll('.code-block'), function(block){
+    var pre=block.querySelector('pre');
+    var toggle=block.querySelector('.code-toggle');
+    var copy=block.querySelector('.code-copy');
+    var label=block.getAttribute('data-expand-label')||'展开全部';
+    // 行数够长但实际没超高，就不必折叠，免得短代码也顶着「展开」
+    if(block.classList.contains('is-collapsed') && pre && pre.scrollHeight<=340){
+      block.classList.remove('is-collapsed');
+      if(toggle){ toggle.parentNode.removeChild(toggle); toggle=null; }
+    }
+    if(toggle){
+      toggle.addEventListener('click', function(){
+        var collapsed=block.classList.toggle('is-collapsed');
+        toggle.textContent = collapsed ? label : '收起';
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+    }
+    if(copy){
+      copy.addEventListener('click', function(){
+        var code=block.querySelector('code');
+        copyText(code ? code.textContent : '', function(){
+          copy.textContent='已复制';
+          copy.classList.add('done');
+          setTimeout(function(){ copy.textContent='复制'; copy.classList.remove('done'); }, 1600);
+        });
+      });
+    }
+  });
+})();
+</script>
+<div class="modal-overlay" id="imgModal" role="dialog" aria-modal="true" aria-label="嵌入内容预览">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">嵌入内容</span>
+      <button type="button" class="modal-btn modal-landscape" data-modal-landscape>横屏查看</button>
+      <button type="button" class="modal-btn" data-modal-newtab>新标签页打开</button>
+      <button type="button" class="modal-close" data-modal-close aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body"><iframe title="嵌入内容预览" sandbox="allow-scripts" loading="lazy"></iframe></div>
+  </div>
+  <div class="land-tools">
+    <button type="button" data-modal-landscape>退出横屏</button>
+    <button type="button" data-modal-close aria-label="关闭">×</button>
+  </div>
+  <div class="rotate-hint" data-rotate-hint aria-hidden="true">
+    <div class="rh-icon">▭↻</div>
+    <div class="rh-title">请旋转手机至横屏</div>
+    <div class="rh-sub">图会自动铺满屏幕，看得更清楚</div>
+  </div>
+</div>
+<script>
+
+(function(){
+  var overlay = document.getElementById('imgModal');
+  if (!overlay) return;
+  var frame = overlay.querySelector('iframe');
+  var titleEl = overlay.querySelector('.modal-title');
+  var landBtn = overlay.querySelector('.modal-head [data-modal-landscape]');
+  var hint = overlay.querySelector('[data-rotate-hint]');
+  var currentUrl = '';
+  var hintTimer = null;
+
+  function showHint(){
+    if (!hint) return;
+    hint.classList.add('show');
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(hideHint, 4000);
+  }
+  function hideHint(){
+    if (hint) hint.classList.remove('show');
+  }
+  function isFullscreen(){
+    return document.fullscreenElement === overlay || document.webkitFullscreenElement === overlay;
+  }
+  function orient(){
+    return window.screen && (window.screen.orientation || window.screen.mozOrientation);
+  }
+  function enterLandscape(){
+    overlay.classList.add('landscape-mode');
+    if (landBtn) landBtn.textContent = '退出横屏';
+    /* 真全屏：Android Chrome / Edge 支持，iPhone Safari 会静默失败 */
+    var req = overlay.requestFullscreen || overlay.webkitRequestFullscreen;
+    if (req) {
+      try { Promise.resolve(req.call(overlay)).catch(function(){}); } catch(e){}
+    }
+    /* 旋转锁定：需要全屏 + 浏览器支持，失败则提示用户自己转 */
+    var o = orient(), locked = false;
+    if (o && o.lock) {
+      try {
+        var p = o.lock('landscape');
+        if (p && typeof p.then === 'function') {
+          p.then(function(){ locked = true; hideHint(); }).catch(function(){ showHint(); });
+        } else { locked = true; }
+      } catch(e){}
+    }
+    if (!locked) setTimeout(function(){
+      if (overlay.classList.contains('landscape-mode') && window.innerWidth < window.innerHeight) showHint();
+    }, 350);
+  }
+  function exitLandscape(){
+    if (!overlay.classList.contains('landscape-mode')) return;
+    overlay.classList.remove('landscape-mode');
+    hideHint();
+    if (landBtn) landBtn.textContent = '横屏查看';
+    var o = orient();
+    if (o && o.unlock) { try { o.unlock(); } catch(e){} }
+    if (isFullscreen()) {
+      var ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) { try { Promise.resolve(ex.call(document)).catch(function(){}); } catch(e){} }
+    }
+  }
+  window.addEventListener('resize', function(){
+    if (overlay.classList.contains('landscape-mode') && window.innerWidth > window.innerHeight) hideHint();
+  });
+
+  function open(src, doc, title){
+    titleEl.textContent = title || '嵌入内容';
+    currentUrl = src || '';
+    frame.removeAttribute('srcdoc');
+    if (doc !== null && doc !== undefined && doc !== '') frame.srcdoc = doc;
+    else frame.src = src || 'about:blank';
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function close(){
+    exitLandscape();
+    overlay.classList.remove('open');
+    frame.removeAttribute('srcdoc');
+    frame.src = 'about:blank';
+    currentUrl = '';
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('.embed-open');
+    if (btn){
+      e.preventDefault();
+      var fig = btn.closest('.embed-figure');
+      var srcFrame = fig ? fig.querySelector('iframe') : null;
+      if (btn.hasAttribute('data-modal-idx') && srcFrame && srcFrame.hasAttribute('srcdoc')){
+        open('', srcFrame.getAttribute('srcdoc'), btn.getAttribute('data-modal-title'));
+      } else {
+        open(btn.getAttribute('data-modal-src'), null, btn.getAttribute('data-modal-title'));
+      }
+      return;
+    }
+    if (e.target.closest('[data-modal-landscape]')){
+      e.preventDefault();
+      if (overlay.classList.contains('landscape-mode')) exitLandscape(); else enterLandscape();
+      return;
+    }
+    if (e.target.closest('[data-modal-newtab]')){
+      if (frame.hasAttribute('srcdoc')){
+        var blob = new Blob([frame.getAttribute('srcdoc')], {type:'text/html'});
+        window.open(URL.createObjectURL(blob), '_blank');
+      } else if (currentUrl){ window.open(currentUrl, '_blank'); }
+      return;
+    }
+    if (e.target.closest('[data-modal-close]') || e.target === overlay) close();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') { if (overlay.classList.contains('landscape-mode')) exitLandscape(); else close(); }
+  });
+})();
+</script>
+
+<button type="button" class="theme-toggle" id="themeToggle" aria-label="切换显示模式" aria-haspopup="true" aria-expanded="false" title="显示模式"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/></svg></button>
+<div class="theme-menu" id="themeMenu" role="menu" aria-label="显示模式">
+  <button type="button" data-mode="normal" role="menuitemradio" aria-checked="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg><span>默认</span><i class="tick">✓</i></button>
+  <button type="button" data-mode="eye" role="menuitemradio" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg><span>护眼</span><i class="tick">✓</i></button>
+  <button type="button" data-mode="parchment" role="menuitemradio" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 0-2 2v10"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>羊皮纸</span><i class="tick">✓</i></button>
+  <button type="button" data-mode="dark" role="menuitemradio" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/></svg><span>深色</span><i class="tick">✓</i></button>
+</div>
+
+<script>
+(function(){
+  var btn=document.getElementById('themeToggle'), menu=document.getElementById('themeMenu');
+  if(!btn||!menu) return;
+  var root=document.documentElement;
+  function current(){ return root.getAttribute('data-mode')||'normal'; }
+  function sync(){
+    var m=current();
+    [].forEach.call(menu.querySelectorAll('button[data-mode]'), function(b){
+      var on=b.getAttribute('data-mode')===m;
+      b.classList.toggle('on',on);
+      b.setAttribute('aria-checked',on?'true':'false');
+    });
+    var names={normal:'默认',eye:'护眼',parchment:'羊皮纸',dark:'深色'};
+    btn.setAttribute('title','显示模式：'+(names[m]||'默认'));
+  }
+  function setMode(m){
+    if(m==='normal') root.removeAttribute('data-mode'); else root.setAttribute('data-mode',m);
+    try{ localStorage.setItem('blog-theme-mode',m); localStorage.removeItem('blog-eye-care'); }catch(e){}
+    sync();
+  }
+  function close(){ menu.classList.remove('on'); btn.setAttribute('aria-expanded','false'); }
+  btn.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=!menu.classList.contains('on');
+    menu.classList.toggle('on',open);
+    btn.setAttribute('aria-expanded',open?'true':'false');
+  });
+  menu.addEventListener('click',function(e){
+    var b=e.target.closest('button[data-mode]'); if(!b) return;
+    setMode(b.getAttribute('data-mode')); close();
+  });
+  document.addEventListener('click',function(e){ if(!menu.contains(e.target)&&e.target!==btn) close(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') close(); });
+  sync();
+})();
+</script>
+</body>
+</html>

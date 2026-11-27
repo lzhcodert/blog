@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>手机银行架构与上下游 · 六张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>手机银行架构与上下游：给程序员的一张地图</h1>
+  <p>手机银行不是一个 App，是一条流水线。用「谁找它、它找谁、一笔钱怎么走」三个问题，把网关、中台、总线、核心串起来。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#m1">定位</a><a href="#m2">五层架构</a><a href="#m3">上下游全景</a><a href="#m4">登录流程</a><a href="#m5">转账流程</a><a href="#m6">安全与发布</a>
+</div>
+
+<!-- 1 定位 -->
+<div class="card" id="m1">
+  <div class="card-head">
+    <h2><span class="num">1</span>定位：手机银行是门脸，不是账房 <span class="tag">总览</span></h2>
+    <p>你看到的余额，是核心算完返回来的结果；App 只负责把它画在屏幕上。</p>
+  </div>
+  <svg viewBox="0 0 1040 530" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">手机银行在银行版图里的位置</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">它属于渠道层，和网银、柜面、ATM 并列；后面是一整条流水线</text>
+
+      <rect x="44" y="90" width="150" height="80" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="119" y="120" font-size="12" font-weight="700" fill="#0a58ca" text-anchor="middle">你和用户</text>
+      <text x="119" y="146" font-size="10.5" fill="#48484a" text-anchor="middle">手指点一下屏幕</text>
+      <path d="M196,130 L226,130" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr)"/>
+
+      <rect x="228" y="90" width="170" height="80" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="313" y="118" font-size="12.5" font-weight="700" fill="#0a58ca" text-anchor="middle">手机银行 App</text>
+      <text x="313" y="141" font-size="10.5" fill="#48484a" text-anchor="middle">界面渲染 · 端侧校验</text>
+      <text x="313" y="160" font-size="10" fill="#6e6e73" text-anchor="middle">不存余额、不记账</text>
+      <path d="M400,130 L430,130" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr)"/>
+
+      <rect x="432" y="90" width="150" height="80" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="507" y="120" font-size="12" font-weight="700" fill="#5b3a9e" text-anchor="middle">网关</text>
+      <text x="507" y="146" font-size="10.5" fill="#48484a" text-anchor="middle">鉴权、限流、路由</text>
+      <path d="M584,130 L614,130" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr)"/>
+
+      <rect x="616" y="90" width="160" height="80" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="696" y="118" font-size="12" font-weight="700" fill="#5b3a9e" text-anchor="middle">业务中台</text>
+      <text x="696" y="141" font-size="10.5" fill="#48484a" text-anchor="middle">用户 · 账户 · 交易中心</text>
+      <text x="696" y="160" font-size="10" fill="#6e6e73" text-anchor="middle">判断在这里做</text>
+      <path d="M778,130 L808,130" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr)"/>
+
+      <rect x="810" y="90" width="182" height="80" rx="11" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="901" y="118" font-size="12" font-weight="700" fill="#a35b00" text-anchor="middle">企业服务总线 ESB</text>
+      <text x="901" y="141" font-size="10.5" fill="#48484a" text-anchor="middle">翻译报文、转接系统</text>
+      <text x="901" y="160" font-size="10" fill="#6e6e73" text-anchor="middle">银行的「总机」</text>
+
+      <path d="M901,172 L901,206" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr)"/>
+      <rect x="44" y="208" width="948" height="94" rx="12" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="64" y="234" font-size="12.5" font-weight="700" fill="#c62828">后端系统（手机银行自己不直连，都通过 ESB）</text>
+      <text x="64" y="262" font-size="11" fill="#48484a">核心记账 · 支付清算 · 信贷 · 理财 · 票据 · 风控 · 反洗钱 · ECIF · 统一认证 · 短信推送 · 影像 · 数据平台</text>
+      <text x="64" y="286" font-size="10.5" fill="#6e6e73">公开案例：一家农商联合银行通过 ESB 对接行内 30 余个业务系统</text>
+
+      <rect x="44" y="326" width="948" height="88" rx="11" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="64" y="352" font-size="12.5" font-weight="700" fill="#1d1d1f">一句话边界，记住就不会乱</text>
+      <text x="64" y="380" font-size="13" font-weight="700" fill="#007aff">界面归 App · 判断归中台 · 记账归核心</text>
+      <text x="64" y="402" font-size="10.5" fill="#6e6e73">手机银行属于渠道层：只收请求、做端侧安全校验、把结果画给用户看</text>
+
+      <rect x="44" y="438" width="948" height="72" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="64" y="464" font-size="11.5" font-weight="700" fill="#5b3a9e">监管口径：JR/T 0092—2019 把手机银行归为「资金交易类客户端应用软件」</text>
+      <text x="64" y="490" font-size="10.5" fill="#5b3a9e">要求符合资金交易、信息保护等所有技术及管理安全要求 —— 既要跑得快，又绝对不能出错</text>
+
+      <defs><marker id="mArr" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上面这条流水线从左到右读：用户 → App → 网关 → 中台 → ESB → 后端系统。注意第 2 格下面那行小字「不存余额、不记账」，这是手机银行最重要的边界。中间那句「界面归 App、判断归中台、记账归核心」是全文的口诀，后面几张图都在展开它。</div>
+</div>
+
+<!-- 2 五层架构 -->
+<div class="card" id="m2">
+  <div class="card-head">
+    <h2><span class="num">2</span>五层架构：一家真实银行怎么搭 <span class="tag">架构</span></h2>
+    <p>用江西农商联合银行公开案例的五层划分做样本，逐层翻译成人话。</p>
+  </div>
+  <svg viewBox="0 0 1040 640" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">从前端到后端，一共五层</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">原文：前端应用层 / 网关接入层 / 业务能力层 / 平台支撑中间件层 / 后端系统对接层</text>
+
+      <rect x="44" y="88" width="952" height="94" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <rect x="44" y="88" width="150" height="94" rx="10" fill="#d8ebff"/>
+      <text x="119" y="120" font-size="12" font-weight="700" fill="#0a58ca" text-anchor="middle">① 前端应用层</text>
+      <text x="119" y="146" font-size="10" fill="#48484a" text-anchor="middle">用户看得见</text>
+      <text x="210" y="120" font-size="11.5" font-weight="700" fill="#0a58ca">承载 App 页面和业务场景</text>
+      <text x="210" y="144" font-size="10.5" fill="#48484a">大白话：菜单、按钮、页面都在这层，兼容 iOS、Android、鸿蒙、H5</text>
+      <text x="210" y="166" font-size="10.5" fill="#6e6e73">公开案例：mPaaS + Vue3 框架，预留小程序等多端扩展</text>
+
+      <rect x="44" y="194" width="952" height="94" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <rect x="44" y="194" width="150" height="94" rx="10" fill="#e5dfff"/>
+      <text x="119" y="226" font-size="12" font-weight="700" fill="#5b3a9e" text-anchor="middle">② 网关接入层</text>
+      <text x="119" y="252" font-size="10" fill="#48484a" text-anchor="middle">门口的保安兼调度</text>
+      <text x="210" y="226" font-size="11.5" font-weight="700" fill="#5b3a9e">统一承接请求、流量调度、协议适配、全链路安全管控</text>
+      <text x="210" y="250" font-size="10.5" fill="#48484a">大白话：先查令牌、再看限流、最后决定把请求转给谁</text>
+      <text x="210" y="272" font-size="10.5" fill="#6e6e73">公开案例：交易网关 + API 网关双网关</text>
+
+      <rect x="44" y="300" width="952" height="94" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <rect x="44" y="300" width="150" height="94" rx="10" fill="#d9f5e2"/>
+      <text x="119" y="332" font-size="12" font-weight="700" fill="#1d7a45" text-anchor="middle">③ 业务能力层</text>
+      <text x="119" y="358" font-size="10" fill="#48484a" text-anchor="middle">可复用的业务积木</text>
+      <text x="210" y="332" font-size="11.5" font-weight="700" fill="#1d7a45">沉淀用户、账户、认证、审批、支付、电子合约等能力</text>
+      <text x="210" y="356" font-size="10.5" fill="#48484a">大白话：一次建设、多端复用，App 和网银共用同一块积木</text>
+      <text x="210" y="378" font-size="10.5" fill="#6e6e73">这就是常说的「中台」，判断逻辑大多在这一层</text>
+
+      <rect x="44" y="406" width="952" height="94" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <rect x="44" y="406" width="150" height="94" rx="10" fill="#ffeacc"/>
+      <text x="119" y="438" font-size="12" font-weight="700" fill="#a35b00" text-anchor="middle">④ 平台支撑层</text>
+      <text x="119" y="464" font-size="10" fill="#48484a" text-anchor="middle">地基和水管</text>
+      <text x="210" y="438" font-size="11.5" font-weight="700" fill="#a35b00">微服务框架、分布式数据库、缓存、消息队列</text>
+      <text x="210" y="462" font-size="10.5" fill="#48484a">大白话：不让系统在高并发时崩掉，也不让每个请求都直接压数据库</text>
+      <text x="210" y="484" font-size="10.5" fill="#6e6e73">公开案例：SOFA 框架、国产数据库、Redis、MQ，全栈信创适配</text>
+
+      <rect x="44" y="512" width="952" height="94" rx="10" fill="#fff5f5" stroke="#ffc9c9"/>
+      <rect x="44" y="512" width="150" height="94" rx="10" fill="#ffdada"/>
+      <text x="119" y="544" font-size="12" font-weight="700" fill="#c62828" text-anchor="middle">⑤ 后端系统对接层</text>
+      <text x="119" y="570" font-size="10" fill="#48484a" text-anchor="middle">插线板</text>
+      <text x="210" y="544" font-size="11.5" font-weight="700" fill="#c62828">依托企业服务总线对接核心、信贷、票据、支付等系统</text>
+      <text x="210" y="568" font-size="10.5" fill="#48484a">大白话：App 不认识 30 多个系统，ESB 替它认识</text>
+      <text x="210" y="590" font-size="10.5" fill="#6e6e73">没有 ESB，N 个渠道 × M 个系统 = 一堆意大利面；有了 ESB 变成 N + M</text>
+
+      <rect x="44" y="620" width="952" height="0" fill="none"/>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>五层从上往下读，每层看两件事：左边那格是层名和比喻，右边第一行是它真正的职责，第二行是公开案例里的技术选型。特别看第 ⑤ 层的 ESB——「App 不认识 30 多个系统，ESB 替它认识」是这层最值钱的一句话。</div>
+</div>
+
+<!-- 3 上下游全景 -->
+<div class="card" id="m3">
+  <div class="card-head">
+    <h2><span class="num">3</span>上下游全景：谁找它，它找谁 <span class="tag">关系图</span></h2>
+    <p>上游是给它派活的，下游是被它调用的。中间是手机银行自己。</p>
+  </div>
+  <svg viewBox="0 0 1040 670" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">上游四家：给它派活的</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">不只是用户点击，运营配置、第三方调用、监管采集都会驱动它</text>
+
+      <rect x="44" y="82" width="222" height="76" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="155" y="108" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">客户</text>
+      <text x="155" y="132" font-size="10" fill="#48484a" text-anchor="middle">查余额、转账、买理财</text>
+      <rect x="286" y="82" width="222" height="76" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="397" y="108" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">运营 / 营销平台</text>
+      <text x="397" y="132" font-size="10" fill="#48484a" text-anchor="middle">活动配置、弹窗、功能开关</text>
+      <rect x="528" y="82" width="222" height="76" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="639" y="108" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">开放银行 / 第三方</text>
+      <text x="639" y="132" font-size="10" fill="#48484a" text-anchor="middle">API 调用同一套能力</text>
+      <rect x="770" y="82" width="222" height="76" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="881" y="108" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">监管 / 运维</text>
+      <text x="881" y="132" font-size="10" fill="#48484a" text-anchor="middle">报送、日志、安全策略</text>
+
+      <path d="M155,160 L155,182 L520,182 L520,206" stroke="#8e8e93" stroke-width="1.8" fill="none" marker-end="url(#mArr2)"/>
+      <path d="M397,160 L397,182" stroke="#8e8e93" stroke-width="1.8" fill="none"/>
+      <path d="M639,160 L639,182" stroke="#8e8e93" stroke-width="1.8" fill="none"/>
+      <path d="M881,160 L881,182 L520,182" stroke="#8e8e93" stroke-width="1.8" fill="none"/>
+
+      <rect x="380" y="208" width="280" height="86" rx="12" fill="#5856d6" stroke="#4745b8"/>
+      <text x="520" y="240" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">手机银行</text>
+      <text x="520" y="266" font-size="10.5" fill="#e8e7ff" text-anchor="middle">App + 网关 + 中台（渠道层）</text>
+      <text x="520" y="284" font-size="10" fill="#e8e7ff" text-anchor="middle">只受理、只渲染、不做最终记账</text>
+
+      <text x="44" y="330" font-size="15" font-weight="700" fill="#1d1d1f">下游六堆：它去找的六类系统</text>
+      <rect x="44" y="348" width="300" height="86" rx="10" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="62" y="374" font-size="11.5" font-weight="700" fill="#c62828">① 账务类 · 核心系统</text>
+      <text x="62" y="398" font-size="10" fill="#48484a">余额、明细、转账、还款</text>
+      <text x="62" y="420" font-size="10" fill="#6e6e73">最重要、最不能出错的下游</text>
+      <rect x="370" y="348" width="300" height="86" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="388" y="374" font-size="11.5" font-weight="700" fill="#a35b00">② 支付类 · 清算网络</text>
+      <text x="388" y="398" font-size="10" fill="#48484a">行内支付、IBPS / HVPS</text>
+      <text x="388" y="420" font-size="10" fill="#6e6e73">银联、网联、扫码支付</text>
+      <rect x="696" y="348" width="296" height="86" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="714" y="374" font-size="11.5" font-weight="700" fill="#0a58ca">③ 身份类 · ECIF / 认证</text>
+      <text x="714" y="398" font-size="10" fill="#48484a">客户号、密码、短信、生物识别</text>
+      <text x="714" y="420" font-size="10" fill="#6e6e73">实名核验、设备绑定</text>
+
+      <rect x="44" y="452" width="300" height="86" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="62" y="478" font-size="11.5" font-weight="700" fill="#5b3a9e">④ 风控类 · 反欺诈/反洗钱</text>
+      <text x="62" y="502" font-size="10" fill="#48484a">实时打分、拦截、二次验证</text>
+      <text x="62" y="524" font-size="10" fill="#6e6e73">有权拦，无权记账</text>
+      <rect x="370" y="452" width="300" height="86" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="388" y="478" font-size="11.5" font-weight="700" fill="#1d7a45">⑤ 产品类 · 专业业务系统</text>
+      <text x="388" y="502" font-size="10" fill="#48484a">信贷、理财、票据、贵金属</text>
+      <text x="388" y="524" font-size="10" fill="#6e6e73">每个产品页背后都有一个系统</text>
+      <rect x="696" y="452" width="296" height="86" rx="10" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="714" y="478" font-size="11.5" font-weight="700" fill="#1d1d1f">⑥ 支撑类 · 通知/影像/数据</text>
+      <text x="714" y="502" font-size="10" fill="#48484a">短信、推送、电子回单、客服</text>
+      <text x="714" y="524" font-size="10" fill="#6e6e73">埋点、画像、经营分析</text>
+
+      <rect x="44" y="562" width="948" height="88" rx="11" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="64" y="588" font-size="12.5" font-weight="700" fill="#1d1d1f">一句话记住六个下游</text>
+      <text x="64" y="616" font-size="12" font-weight="700" fill="#007aff">账务找核心 · 跨行找支付 · 身份找认证 · 安全找风控 · 产品找业务系统 · 通知找短信推送</text>
+      <text x="64" y="638" font-size="10.5" fill="#6e6e73">这些调用大多数不直连，而是经网关 → 中台 → ESB 转接</text>
+
+      <defs><marker id="mArr2" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先看上半部分：上游四家不只是客户，还有运营平台、开放银行和监管运维——这解释了为什么首页换个 banner 不需要发版。下半部分六个下游按调用目的分组，最后那句口诀可以直接拿去用。中间的紫色方块是手机银行自己，注意它写的是「只受理、只渲染、不做最终记账」。</div>
+</div>
+
+<!-- 4 登录流程 -->
+<div class="card" id="m4">
+  <div class="card-head">
+    <h2><span class="num">4</span>登录一次手机银行发生了什么 <span class="tag">流程图</span></h2>
+    <p>不是输个密码就完事，至少有七步，而且服务端说了算。</p>
+  </div>
+  <svg viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">登录七步：从点开 App 到拿到令牌</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">从左到右、再从上到下读</text>
+
+      <rect x="26" y="88" width="222" height="106" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="42" y="112" font-size="10" fill="#6e6e73">第 1 步</text>
+      <text x="42" y="136" font-size="12" font-weight="700" fill="#0a58ca">App 启动</text>
+      <text x="42" y="160" font-size="10" fill="#48484a">检查版本、拉取配置</text>
+      <text x="42" y="180" font-size="10" fill="#48484a">初始化安全组件</text>
+      <rect x="280" y="88" width="222" height="106" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="296" y="112" font-size="10" fill="#6e6e73">第 2 步</text>
+      <text x="296" y="136" font-size="12" font-weight="700" fill="#0a58ca">设备识别</text>
+      <text x="296" y="160" font-size="10" fill="#48484a">采集设备指纹</text>
+      <text x="296" y="180" font-size="10" fill="#48484a">判断是否常用设备</text>
+      <rect x="534" y="88" width="222" height="106" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="550" y="112" font-size="10" fill="#6e6e73">第 3 步</text>
+      <text x="550" y="136" font-size="12" font-weight="700" fill="#5b3a9e">建立安全通道</text>
+      <text x="550" y="160" font-size="10" fill="#48484a">HTTPS + 国密算法加密</text>
+      <text x="550" y="180" font-size="10" fill="#48484a">校验证书，防中间人</text>
+      <rect x="788" y="88" width="222" height="106" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="804" y="112" font-size="10" fill="#6e6e73">第 4 步</text>
+      <text x="804" y="136" font-size="12" font-weight="700" fill="#5b3a9e">提交身份要素</text>
+      <text x="804" y="160" font-size="10" fill="#48484a">密码 / 短信码 / 指纹人脸</text>
+      <text x="804" y="180" font-size="10" fill="#48484a">按风险等级决定几种</text>
+      <path d="M250,140 L278,140" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr3)"/>
+      <path d="M504,140 L532,140" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr3)"/>
+      <path d="M758,140 L786,140" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr3)"/>
+      <path d="M899,196 L899,220" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr3)"/>
+
+      <rect x="544" y="222" width="222" height="106" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="560" y="246" font-size="10" fill="#6e6e73">第 5 步</text>
+      <text x="560" y="270" font-size="12" font-weight="700" fill="#a35b00">网关转发</text>
+      <text x="560" y="294" font-size="10" fill="#48484a">交易网关做协议适配</text>
+      <text x="560" y="314" font-size="10" fill="#48484a">API 网关鉴权、限流</text>
+      <rect x="290" y="222" width="222" height="106" rx="10" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="306" y="246" font-size="10" fill="#6e6e73">第 6 步</text>
+      <text x="306" y="270" font-size="12" font-weight="700" fill="#c62828">统一认证校验</text>
+      <text x="306" y="294" font-size="10" fill="#48484a">核对身份要素</text>
+      <text x="306" y="314" font-size="10" fill="#c62828">可能调风控判异常</text>
+      <rect x="36" y="222" width="222" height="106" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="52" y="246" font-size="10" fill="#6e6e73">第 7 步</text>
+      <text x="52" y="270" font-size="12" font-weight="700" fill="#1d7a45">发放令牌</text>
+      <text x="52" y="294" font-size="10" fill="#48484a">有时效、可吊销</text>
+      <text x="52" y="314" font-size="10" fill="#48484a">后续请求都带着它</text>
+      <path d="M542,274 L514,274" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr3)"/>
+      <path d="M288,274 L260,274" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr3)"/>
+
+      <rect x="26" y="352" width="984" height="102" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="46" y="378" font-size="12.5" font-weight="700" fill="#5b3a9e">为什么必须服务端说了算</text>
+      <text x="46" y="404" font-size="11" fill="#48484a">JR/T 0092 要求认证流程「无法被绕过」—— App 自己说「登录成功」不算数。</text>
+      <text x="46" y="428" font-size="11" fill="#48484a">令牌由服务端发放、有时效、可吊销；换设备或敏感操作要重新验证。</text>
+      <text x="46" y="448" font-size="10.5" fill="#6e6e73">常见误区：把令牌存在本地就完事。实际上服务端随时可以让它失效。</text>
+
+      <rect x="26" y="474" width="984" height="126" rx="11" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="46" y="500" font-size="12.5" font-weight="700" fill="#1d1d1f">监管要求的验证要素（JR/T 0092 原文列举）</text>
+      <rect x="46" y="516" width="222" height="64" rx="9" fill="#fff" stroke="#dcdce1"/>
+      <text x="157" y="542" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">口令</text>
+      <text x="157" y="564" font-size="10" fill="#48484a" text-anchor="middle">最基础的要素</text>
+      <rect x="292" y="516" width="222" height="64" rx="9" fill="#fff" stroke="#dcdce1"/>
+      <text x="403" y="542" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">短信验证码</text>
+      <text x="403" y="564" font-size="10" fill="#48484a" text-anchor="middle">要调短信平台</text>
+      <rect x="538" y="516" width="222" height="64" rx="9" fill="#fff" stroke="#dcdce1"/>
+      <text x="649" y="542" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">手势密码</text>
+      <text x="649" y="564" font-size="10" fill="#48484a" text-anchor="middle">本地轨迹比对</text>
+      <rect x="784" y="516" width="222" height="64" rx="9" fill="#fff" stroke="#dcdce1"/>
+      <text x="895" y="542" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">生物特征识别</text>
+      <text x="895" y="564" font-size="10" fill="#48484a" text-anchor="middle">指纹 / 人脸，配 TEE</text>
+
+      <defs><marker id="mArr3" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上排四步、下排三步，注意箭头在第二排是反方向的（从右往左），顺着箭头读就不会乱。第 6 步是全图重点：认证必须由服务端说了算，App 自己说成功不算数。下面是监管列举的四种验证要素，实际银行会按风险等级组合使用。</div>
+</div>
+
+<!-- 5 转账流程 -->
+<div class="card" id="m5">
+  <div class="card-head">
+    <h2><span class="num">5</span>一笔转账穿过了哪些系统 <span class="tag">流程图</span></h2>
+    <p>九个步骤里，App 真正参与的只有第 1 步和第 7 步的展示。</p>
+  </div>
+  <svg viewBox="0 0 1040 690" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">行内转账九步：从点按钮到事后分析</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">先读上排五步，再读下排四步</text>
+
+      <rect x="26" y="86" width="182" height="100" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="42" y="110" font-size="10" fill="#6e6e73">① App</text>
+      <text x="42" y="134" font-size="11.5" font-weight="700" fill="#0a58ca">组装请求</text>
+      <text x="42" y="158" font-size="10" fill="#48484a">收款人、金额、密码</text>
+      <text x="42" y="176" font-size="10" fill="#48484a">国密算法加密</text>
+      <rect x="228" y="86" width="182" height="100" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="244" y="110" font-size="10" fill="#6e6e73">② 网关</text>
+      <text x="244" y="134" font-size="11.5" font-weight="700" fill="#0a58ca">校验请求</text>
+      <text x="244" y="158" font-size="10" fill="#48484a">令牌有效吗</text>
+      <text x="244" y="176" font-size="10" fill="#48484a">App 签名、限流</text>
+      <rect x="430" y="86" width="182" height="100" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="446" y="110" font-size="10" fill="#6e6e73">③ 交易中心</text>
+      <text x="446" y="134" font-size="11.5" font-weight="700" fill="#5b3a9e">标准化请求</text>
+      <text x="446" y="158" font-size="10" fill="#48484a">转成内部格式</text>
+      <text x="446" y="176" font-size="10" fill="#48484a">准备往下派</text>
+      <rect x="632" y="86" width="182" height="100" rx="10" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="648" y="110" font-size="10" fill="#6e6e73">④ 风控引擎</text>
+      <text x="648" y="134" font-size="11.5" font-weight="700" fill="#c62828">实时打分</text>
+      <text x="648" y="158" font-size="10" fill="#48484a">设备、地点、金额</text>
+      <text x="648" y="176" font-size="10" fill="#c62828">放行 / 验证 / 拦截</text>
+      <rect x="834" y="86" width="176" height="100" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="850" y="110" font-size="10" fill="#6e6e73">⑤ ESB</text>
+      <text x="850" y="134" font-size="11.5" font-weight="700" fill="#a35b00">翻译并路由</text>
+      <text x="850" y="158" font-size="10" fill="#48484a">转成核心报文</text>
+      <text x="850" y="176" font-size="10" fill="#48484a">转发到核心</text>
+      <path d="M210,136 L226,136" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr4)"/>
+      <path d="M412,136 L428,136" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr4)"/>
+      <path d="M614,136 L630,136" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr4)"/>
+      <path d="M816,136 L832,136" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr4)"/>
+
+      <rect x="834" y="210" width="176" height="100" rx="10" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="850" y="234" font-size="10" fill="#6e6e73">⑥ 核心</text>
+      <text x="850" y="258" font-size="11.5" font-weight="700" fill="#c62828">记账</text>
+      <text x="850" y="282" font-size="10" fill="#48484a">借贷两边同时记</text>
+      <text x="850" y="300" font-size="10" fill="#c62828">同一事务完成</text>
+      <rect x="632" y="210" width="182" height="100" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="648" y="234" font-size="10" fill="#6e6e73">⑦ 回写状态</text>
+      <text x="648" y="258" font-size="11.5" font-weight="700" fill="#0a58ca">逐层返回结果</text>
+      <text x="648" y="282" font-size="10" fill="#48484a">App 显示成功</text>
+      <text x="648" y="300" font-size="10" fill="#6e6e73">App 只参与展示</text>
+      <rect x="430" y="210" width="182" height="100" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="446" y="234" font-size="10" fill="#6e6e73">⑧ 通知</text>
+      <text x="446" y="258" font-size="11.5" font-weight="700" fill="#1d7a45">短信 + 推送</text>
+      <text x="446" y="282" font-size="10" fill="#48484a">交易通知</text>
+      <text x="446" y="300" font-size="10" fill="#48484a">App 消息推送</text>
+      <rect x="228" y="210" width="182" height="100" rx="10" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="244" y="234" font-size="10" fill="#6e6e73">⑨ 事后</text>
+      <text x="244" y="258" font-size="11.5" font-weight="700" fill="#1d1d1f">日志与报送</text>
+      <text x="244" y="282" font-size="10" fill="#48484a">数据平台、埋点</text>
+      <text x="244" y="300" font-size="10" fill="#48484a">反洗钱报送</text>
+      <path d="M922,188 L922,208" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr4)"/>
+      <path d="M832,260 L816,260" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr4)"/>
+      <path d="M630,260 L614,260" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr4)"/>
+      <path d="M428,260 L412,260" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#mArr4)"/>
+
+      <rect x="26" y="334" width="984" height="86" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="46" y="360" font-size="12.5" font-weight="700" fill="#5b3a9e">最关键的一句</text>
+      <text x="46" y="386" font-size="12" font-weight="700" fill="#5b3a9e">九步里 App 真正参与的只有第 ① 步和第 ⑦ 步的展示，其余全是后台接力。</text>
+      <text x="46" y="408" font-size="10.5" fill="#6e6e73">所以「转账失败」要分清：是卡在网关、被风控拦了、ESB 路由错了，还是核心记账没成功。</text>
+
+      <rect x="26" y="440" width="984" height="86" rx="11" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="46" y="466" font-size="12.5" font-weight="700" fill="#a35b00">风控的三档决策</text>
+      <text x="46" y="492" font-size="11" fill="#48484a">低风险 → 直接放行　｜　中风险 → 要二次验证（短信 / 人脸）　｜　高风险 → 直接拦截</text>
+      <text x="46" y="514" font-size="10.5" fill="#6e6e73">公开案例：有银行把近 200 个关键交易场景纳入实时风险监测，用「专家规则 + 机器学习模型」双轨决策</text>
+
+      <rect x="26" y="546" width="984" height="124" rx="11" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="46" y="572" font-size="12.5" font-weight="700" fill="#1d1d1f">如果是跨行转账，第 ⑤ 步之后多走一段</text>
+      <text x="46" y="600" font-size="11.5" font-weight="700" fill="#007aff">核心 → 行内支付系统 → IBPS / HVPS / 银联 / 网联 → 对方银行 → 回执原路返回</text>
+      <text x="46" y="628" font-size="10.5" fill="#48484a">跨行的钱最终在央行的账户上完成清算，这就是手机银行必须接支付清算网络的原因。</text>
+      <text x="46" y="652" font-size="10.5" fill="#6e6e73">回执回来后，第 ⑦ ⑧ ⑨ 步照常进行；双方日终还要和央行账户对账。</text>
+
+      <defs><marker id="mArr4" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上排五步从左到右，下排四步从右往左（注意箭头方向），连起来就是一笔钱走过的完整路径。第 ④ 步风控的三档决策要重点看——它有权拦，但无权记账。最下面那段是跨行分支：手机银行自己不管跨行，它把请求交给核心和支付系统，后者去和央行网络对话。</div>
+</div>
+
+<!-- 6 安全与发布 -->
+<div class="card" id="m6">
+  <div class="card-head">
+    <h2><span class="num">6</span>安全不是一层，发布也不是发个包 <span class="tag">工程视角</span></h2>
+    <p>左边是四道安全防线，右边是端云一体的发布链路。</p>
+  </div>
+  <svg viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">四道安全防线：每一层都得有</text>
+      <rect x="44" y="60" width="470" height="76" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="86" font-size="11.5" font-weight="700" fill="#0a58ca">① 设备安全 —— 手机本身可信吗</text>
+      <text x="62" y="110" font-size="10.5" fill="#48484a">设备指纹、安全键盘、防截屏、TEE 可信执行环境</text>
+      <rect x="44" y="146" width="470" height="76" rx="10" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="62" y="172" font-size="11.5" font-weight="700" fill="#5b3a9e">② 通信安全 —— 传输会被偷看吗</text>
+      <text x="62" y="196" font-size="10.5" fill="#48484a">HTTPS、国密算法、数字证书、防中间人攻击</text>
+      <rect x="44" y="232" width="470" height="76" rx="10" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="62" y="258" font-size="11.5" font-weight="700" fill="#a35b00">③ 身份认证 —— 你是不是你</text>
+      <text x="62" y="282" font-size="10.5" fill="#48484a">口令、短信码、手势、生物识别、多因素认证</text>
+      <rect x="44" y="318" width="470" height="76" rx="10" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="62" y="344" font-size="11.5" font-weight="700" fill="#c62828">④ 交易风控 —— 这次操作可疑吗</text>
+      <text x="62" y="368" font-size="10.5" fill="#48484a">实时反欺诈、行为分析、规则引擎 + 机器学习双轨</text>
+
+      <text x="546" y="40" font-size="15" font-weight="700" fill="#1d1d1f">端云一体：发布是一条链路</text>
+      <rect x="546" y="60" width="446" height="72" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="564" y="86" font-size="11.5" font-weight="700" fill="#1d7a45">研发侧</text>
+      <text x="564" y="110" font-size="10.5" fill="#48484a">iOS / Android / 鸿蒙多端 IDE + H5 框架，一套体系覆盖多端</text>
+      <rect x="546" y="142" width="446" height="72" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="564" y="168" font-size="11.5" font-weight="700" fill="#1d7a45">App 层</text>
+      <text x="564" y="192" font-size="10.5" fill="#48484a">登录、转账、理财等场景 + H5容器 / 小程序容器 / 扫一扫</text>
+      <rect x="546" y="224" width="446" height="72" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="564" y="250" font-size="11.5" font-weight="700" fill="#1d7a45">核心服务层（云端）</text>
+      <text x="564" y="274" font-size="10.5" fill="#48484a">网关、消息推送、应用管控、数据同步四大服务</text>
+      <rect x="546" y="306" width="446" height="88" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="564" y="332" font-size="11.5" font-weight="700" fill="#1d7a45">发布与运维</text>
+      <text x="564" y="356" font-size="10.5" fill="#48484a">版本管控、灰度发布、配置下发、热修复</text>
+      <text x="564" y="380" font-size="10.5" fill="#48484a">全链路分析、运维监控、智能诊断</text>
+
+      <rect x="44" y="414" width="948" height="86" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="64" y="440" font-size="12.5" font-weight="700" fill="#5b3a9e">JR/T 0092 的四项管理要求：不止管代码，还管全生命周期</text>
+      <text x="64" y="466" font-size="11" fill="#48484a">设计：安全、可靠、易用、可维护、可扩展　｜　开发：严格流程、编码安全规范、完整测试</text>
+      <text x="64" y="490" font-size="11" fill="#48484a">发布：独立安装目录、唯一应用标识符、明确版本序号　｜　维护：规范日常运维流程</text>
+
+      <rect x="44" y="520" width="948" height="80" rx="11" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="64" y="546" font-size="12.5" font-weight="700" fill="#1d1d1f">一句话记住</text>
+      <text x="64" y="572" font-size="12" font-weight="700" fill="#007aff">安全是四道防线，一层都不能少；发布是一条链路，不是把包传应用市场</text>
+      <text x="64" y="592" font-size="10.5" fill="#6e6e73">真实案例：渤海银行「FIDO + 数字证书」用于登录和大额转账；北京银行近 200 个交易场景实时风控</text>
+
+      <defs><marker id="mArr5" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左边四道防线从上到下读，记住「安全不是某一层的事，是每层都要有」。右边是端云一体的发布链路，重点看「核心服务层」的四大服务和底下的发布运维。中间紫色框说明监管管的是全生命周期——设计、开发、发布、维护都在里面。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
