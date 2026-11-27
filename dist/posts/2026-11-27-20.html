@@ -1,0 +1,1343 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>银行里几百套系统到底怎么连？给程序员的一张上帝视角地图 · 札记</title>
+<style>
+
+/* ============ 主题变量（支持浅色/深色） ============ */
+:root{
+  --bg:#ffffff; --fg:#1c1c1e; --fg2:#6e6e73; --fg3:#a1a1a6;
+  --border:#e5e5ea; --card:#fafafa; --hover:#f2f2f7;
+  --accent:#007aff; --accent-soft:#eaf3ff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#141416; --fg:#f2f2f7; --fg2:#a1a1a6; --fg3:#6e6e73;
+    --border:#333337; --card:#1d1d20; --hover:#262629;
+    --accent:#0a84ff; --accent-soft:#1c2b40;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--fg);line-height:1.6;-webkit-font-smoothing:antialiased;
+  max-width:1120px;margin:0 auto;padding:32px 20px 64px;
+  transition:background .2s ease,color .2s ease;
+}
+a{color:inherit}
+
+/* ============ 头部 ============ */
+.site-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.site-title{font-size:24px;font-weight:650;letter-spacing:-.4px}
+.site-title span{font-weight:400;color:var(--fg3);font-size:14px;margin-left:8px;letter-spacing:0}
+.site-sub{font-size:13px;color:var(--fg3);margin-top:2px}
+.site-stats{display:flex;gap:14px;font-size:12px;color:var(--fg3);white-space:nowrap;align-items:center}
+.site-stats b{font-weight:600;color:var(--fg2);font-variant-numeric:tabular-nums}
+
+/* 搜索 */
+.search{position:relative;width:220px;flex:none}
+.search .si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--fg3);pointer-events:none}
+.search input{width:100%;height:34px;border:1px solid var(--border);background:var(--card);border-radius:9px;padding:0 30px 0 32px;font-size:13px;outline:none;color:var(--fg)}
+.search input::placeholder{color:var(--fg3)}
+.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,122,255,.12)}
+.search .clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:18px;height:18px;border:0;border-radius:50%;background:var(--fg3);color:var(--bg);font-size:12px;line-height:18px;text-align:center;cursor:pointer;padding:0}
+
+/* ============ 树舞台 ============ */
+.stage-scroll{position:relative;overflow-x:auto;border:1px solid var(--border);border-radius:16px;
+  background:radial-gradient(ellipse at 50% 118%,rgba(0,122,255,.07),transparent 68%);}
+.stage{position:relative;min-width:760px}
+#tree-svg{display:block;width:100%;height:auto}
+#tip{
+  position:absolute;opacity:0;pointer-events:none;z-index:3;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:9px 12px;font-size:12px;color:var(--fg2);width:236px;
+  box-shadow:0 8px 28px rgba(0,0,0,.12);transition:opacity .14s ease;
+}
+#tip .tt{font-weight:600;color:var(--fg);font-size:13px;line-height:1.4;margin-bottom:5px}
+#tip .tm{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg3);margin-bottom:5px}
+#tip .te{font-size:11.5px;color:var(--fg2);line-height:1.5}
+.swipe-hint{display:none;text-align:center;font-size:11px;color:var(--fg3);padding:6px 0 0}
+
+/* 图例筛选 */
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0;align-items:center}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  border:1px solid var(--border);border-radius:999px;padding:5px 13px;
+  background:transparent;color:var(--fg2);font-size:12.5px;font-family:inherit;
+  transition:color .15s ease,border-color .15s ease,background .15s ease;
+}
+.chip:hover{color:var(--fg);border-color:var(--fg3)}
+.chip.on{color:var(--fg);border-color:var(--fg);background:var(--hover)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.chip-all{margin-left:auto;border:0;background:none;color:var(--fg3);font-size:12px;padding:5px 2px}
+.chip-all:hover{color:var(--accent)}
+
+/* 树上元素 */
+.leaf{cursor:pointer}
+.leaf-scale{transition:transform .18s cubic-bezier(.2,.8,.2,1);transform-box:fill-box;transform-origin:center}
+.leaf:hover .leaf-scale,.leaf.sel .leaf-scale{transform:scale(1.45)}
+.leaf .halo{fill:none;stroke-width:1.5;opacity:0;transition:opacity .2s ease}
+.leaf:hover .halo,.leaf.sel .halo{opacity:.75}
+.leaf.sel .core{stroke:var(--fg);stroke-width:1.2}
+.leaf:focus{outline:none}
+.leaf:focus-visible .halo{opacity:.95;stroke:var(--fg)}
+.dim{opacity:.08;pointer-events:none}
+.branch-main{stroke-linecap:round;opacity:.62}
+.branch-twig{stroke-linecap:round;opacity:.5}
+
+/* 选中文章卡片 */
+.post-card{
+  border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:13px;background:var(--card);
+  padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:18px;
+  min-height:104px;transition:border-color .2s ease;
+}
+.pc-main{min-width:0}
+.pc-meta{display:flex;gap:11px;align-items:center;font-size:11.5px;color:var(--fg3);margin-bottom:5px;flex-wrap:wrap}
+.pc-meta .tag{display:inline-flex;align-items:center;gap:5px}
+.pc-title{font-size:17px;font-weight:650;line-height:1.4;letter-spacing:-.2px}
+.pc-ex{font-size:13px;color:var(--fg2);margin-top:5px;line-height:1.55}
+.pc-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+.pc-embed{font-size:11px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:3px 8px}
+.pc-read{text-decoration:none;background:var(--fg);color:var(--bg);border-radius:9px;padding:8px 15px;font-size:13px;transition:opacity .15s ease;white-space:nowrap}
+.pc-read:hover{opacity:.82}
+.pc-empty{font-size:13px;color:var(--fg3)}
+
+/* 文章列表（按年月分组，SEO / 无脚本回退 / 移动端正文共用） */
+.list-head{margin-top:30px;font-size:13px;color:var(--fg3);display:flex;justify-content:space-between;align-items:baseline}
+.group{margin-top:14px}
+.month{font-size:12px;font-weight:600;color:var(--fg3);margin-bottom:5px;letter-spacing:.3px}
+.post-list{list-style:none;border-top:1px solid var(--border)}
+.post-item{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s ease}
+.post-item:hover{background:var(--hover)}
+.post-item.sel .pl-title{color:var(--accent);font-weight:600}
+.pl-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.pl-date{font-size:12px;color:var(--fg3);flex:none;font-variant-numeric:tabular-nums;width:42px}
+.pl-title{font-size:14px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;color:inherit}
+.pl-cat{font-size:11.5px;color:var(--fg3);flex:none}
+.pl-em{font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;line-height:15px;flex:none}
+.empty{padding:40px 20px;text-align:center;color:var(--fg3);font-size:13px}
+
+.foot{margin-top:34px;font-size:11px;color:var(--fg3);text-align:center}
+
+/* 窄屏：树保留为可横向滚动的紧凑视图 */
+@media (max-width:760px){
+  body{padding:22px 14px 48px}
+  .site-head{align-items:flex-start}
+  .search{width:100%}
+  .site-stats{width:100%;justify-content:flex-start}
+  .stage{min-width:700px}
+  .swipe-hint{display:block}
+  .post-card{padding:14px;gap:12px}
+  .pc-side{gap:6px}
+  .pl-cat{display:none}
+}
+
+
+/* 详情页用到的语义色此前未定义（首页模板只提供 --fg/--border/--accent 一套），
+   这里补一层别名，避免目录、表格、弹层等元素出现透明背景或丢边框。 */
+:root{
+  --surface:#ffffff; --surface-3:#f2f2f7; --line:#e5e5ea;
+  --text:#1c1c1e; --muted:#6e6e73; --faint:#a1a1a6;
+  --blue:#007aff; --blue-soft:#eaf3ff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --surface:#1d1d20; --surface-3:#262629; --line:#333337;
+    --text:#f2f2f7; --muted:#a1a1a6; --faint:#6e6e73;
+    --blue:#0a84ff; --blue-soft:#1c2b40;
+  }
+}
+/* 返回列表：桌面端放在目录标题右侧，移动端改为底部悬浮按钮 */
+.back{font-size:12px;color:var(--blue);text-decoration:none;white-space:nowrap;padding:2px 4px;border-radius:6px}
+.back:hover{background:var(--blue-soft)}
+.detail-wrap{display:flex;gap:40px;align-items:flex-start;max-width:1240px;margin:0 auto;padding:28px 0 64px}
+.article{flex:1;min-width:0;max-width:820px;margin:0;padding:0}
+.article-meta-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.article-title{font-size:29px;line-height:1.3;letter-spacing:-.6px;margin:12px 0 10px}
+.article-meta{font-size:12px;color:var(--faint);margin-bottom:26px;padding-bottom:20px;border-bottom:.5px solid var(--line)}
+.article-body{font-size:15px;line-height:1.85;color:#2b2b2e}
+.article-body h2{font-size:20px;line-height:1.4;letter-spacing:-.3px;margin:34px 0 12px;color:var(--text);scroll-margin-top:72px}
+.article-body h3{font-size:17px;margin:26px 0 10px;color:var(--text);scroll-margin-top:72px}
+.article-body p{margin:0 0 16px}
+.article-body ul,.article-body ol{margin:0 0 18px;padding-left:22px}
+.article-body li{margin:6px 0}
+.article-body a{color:var(--blue)}
+.article-body strong{font-weight:600;color:var(--text)}
+.article-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--surface-3);padding:2px 5px;border-radius:5px;font-size:13px}
+.article-body pre{background:var(--surface-3);padding:14px;border-radius:10px;overflow:auto;margin:0 0 18px}
+.article-body pre code{background:transparent;padding:0}
+/* 代码块：超过 14 行默认折叠，所有代码块都能一键复制 */
+.code-block{margin:0 0 18px;border:.5px solid var(--line);border-radius:11px;background:var(--surface-3);overflow:hidden}
+.code-bar{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 12px;border-bottom:.5px solid var(--line)}
+.code-lang{font-size:11px;letter-spacing:.4px;color:var(--faint);text-transform:lowercase}
+.code-btns{margin-left:auto;display:flex;gap:2px}
+.code-btns button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;line-height:1;padding:6px 9px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s}
+.code-btns button:hover{background:var(--line);color:var(--text)}
+.code-btns button.done{color:#34c759}
+.code-block pre{margin:0;padding:12px 14px;border-radius:0;background:transparent}
+.code-body{position:relative}
+.code-block.is-collapsed .code-body{max-height:320px;overflow:hidden}
+.code-block.is-collapsed .code-body::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to bottom,transparent,var(--surface-3));pointer-events:none}
+@media(max-width:760px){.code-block pre{padding:11px 12px}.code-btns button{font-size:11.5px;padding:5px 8px}}
+.article-body table{border-collapse:collapse;width:100%;margin:0 0 20px;font-size:14px}
+.article-body th,.article-body td{border:.5px solid var(--line);padding:9px 11px;text-align:left}
+.article-body th{background:var(--surface-3);font-weight:600}
+.article-body blockquote{margin:0 0 18px;padding:10px 14px;border-left:3px solid var(--blue);background:var(--blue-soft);border-radius:0 8px 8px 0}
+.md-figure{margin:22px 0;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.md-figure img{display:block;width:100%;height:auto;background:#fff}
+.md-figure figcaption{padding:9px 12px;background:var(--surface-3);font-size:12px;line-height:1.6;color:var(--muted)}
+.article-embeds{margin-top:38px;padding-top:24px;border-top:.5px solid var(--line)}
+.article-embeds h2{font-size:20px;line-height:1.4;letter-spacing:-.3px;margin:0 0 14px;color:var(--text);scroll-margin-top:72px}
+.embed-figure{margin:0 0 20px;border:.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.embed-figure figcaption{padding:10px 13px;background:var(--surface-3);font-size:12px;color:var(--muted)}
+.embed-figure iframe{display:block;width:100%;border:0;background:#fff}
+/* 右侧子标题导航：按二级标题分组，三级标题缩进并从属于最近的二级标题 */
+.toc{position:sticky;top:78px;width:190px;flex:0 0 190px;max-height:calc(100vh - 110px);overflow:auto;padding:6px 4px 6px 16px;border-left:.5px solid var(--line)}
+.toc-title{font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--faint);margin:0 0 10px;padding-left:10px}
+.toc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px}
+.toc-head .toc-title{margin:0}
+.toc a{display:block;font-size:12.5px;line-height:1.45;color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:7px;border-left:2px solid transparent;transition:background .15s,color .15s}
+.toc a:hover{color:var(--blue);background:var(--surface-3)}
+.toc-group{margin:0 0 4px}
+.toc-group > a{color:var(--text);font-weight:600}
+.toc a.lv3{position:relative;padding-left:26px;font-size:12px;color:var(--faint);font-weight:400}
+.toc a.lv3::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:1px;background:var(--line)}
+.toc a.lv3::after{content:"";position:absolute;left:15px;top:50%;width:6px;border-top:1px solid var(--line)}
+.toc a.active{color:var(--blue);background:var(--blue-soft);border-left-color:var(--blue);font-weight:600}
+.toc a.lv3.active{border-left-color:transparent}
+/* 移动端目录：右下角「返回列表 + 目录」悬浮操作 + 底部弹层，桌面端完全隐藏 */
+.detail-actions{display:none}
+.toc-sheet{display:none}
+@media(max-width:980px){
+  .detail-wrap{display:block;padding:20px 0 64px}
+  .article{max-width:820px;margin:0 auto}
+  .toc{display:none}
+  .detail-actions{display:flex;position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;align-items:center;gap:8px}
+  .toc-fab,.back-fab{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 13px;border:.5px solid var(--line);border-radius:999px;background:var(--surface);color:var(--text);font:inherit;font-size:13px;text-decoration:none;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,.14);cursor:pointer}
+  .toc-fab:active,.back-fab:active{transform:scale(.97)}
+  .back-fab{color:var(--blue)}
+  .toc-sheet{display:none;position:fixed;inset:0;z-index:80}
+  .toc-sheet.on{display:block}
+  .toc-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.3)}
+  .toc-panel{position:absolute;left:0;right:0;bottom:0;max-height:72vh;overflow:auto;background:var(--surface);border-radius:16px 16px 0 0;padding:6px 10px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 34px rgba(0,0,0,.16);animation:tocUp .2s ease}
+  .toc-panel-head{display:flex;align-items:center;gap:10px;padding:8px 6px 2px}
+  .toc-panel-head span{font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--faint);margin-right:auto}
+  .toc-close{width:28px;height:28px;border:0;border-radius:50%;background:var(--surface-3);color:var(--muted);font-size:15px;line-height:1;cursor:pointer}
+  .toc-sheet .toc{display:block;position:static;width:auto;max-height:none;overflow:visible;padding:0;border-left:0}
+}
+@keyframes tocUp{from{transform:translateY(14px);opacity:.5}to{transform:none;opacity:1}}
+@media(max-width:700px){
+  .article-title{font-size:23px}
+  .article-body{font-size:14.5px}
+  .detail-actions{right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom));gap:6px}
+  .toc-fab,.back-fab{height:36px;padding:0 11px;font-size:12px}
+}
+
+/* 嵌入图弹窗查看器 */
+.embed-strip{display:flex;align-items:center;gap:8px}
+.strip-label{flex:1;min-width:0}
+.embed-open{display:inline-flex;align-items:center;gap:4px;flex:none;border:0;background:var(--blue-soft,#e5f1ff);color:var(--blue,#007aff);font-size:11px;line-height:1;padding:6px 9px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.embed-open:hover{background:#d5e8ff}
+.embed-figure figcaption{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.modal-overlay{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.modal-overlay.open{display:flex}
+.modal{width:min(1400px,100%);height:min(94vh,1100px);display:flex;flex-direction:column;background:var(--surface,#fff);border-radius:16px;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.35)}
+.modal-head{flex:none;display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:.5px solid var(--line,#e5e5ea);background:var(--surface,#fff)}
+.modal-title{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text,#1d1d1f);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal-btn{border:0;background:var(--surface-3,#f2f2f7);color:var(--blue,#007aff);font-size:12px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.modal-btn:hover{background:var(--blue-soft,#e5f1ff)}
+.modal-close{width:30px;height:30px;flex:none;border:0;border-radius:50%;background:var(--surface-3,#f2f2f7);color:var(--muted,#6e6e73);font-size:19px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.modal-close:hover{background:#e5e5ea;color:var(--text,#1d1d1f)}
+.modal-body{flex:1;min-height:0;background:#fff}
+.modal-body iframe{display:block;width:100%;height:100%;border:0;background:#fff}
+/* 横屏查看：全屏/旋转引导（仅手机端显示入口） */
+.modal-landscape{display:none}
+.land-tools{display:none;position:absolute;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:4;gap:8px}
+.land-tools button{border:0;border-radius:8px;padding:7px 11px;font-size:12px;background:rgba(255,255,255,.9);color:#007aff;box-shadow:0 2px 10px rgba(0,0,0,.12);cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.rotate-hint{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(280px,80vw);padding:20px;border-radius:16px;background:rgba(28,28,30,.92);color:#fff;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.rotate-hint.show{display:block}
+.rotate-hint .rh-icon{font-size:34px;line-height:1;margin-bottom:10px}
+.rotate-hint .rh-title{font-size:14px;font-weight:600;margin-bottom:6px}
+.rotate-hint .rh-sub{font-size:12px;color:rgba(255,255,255,.72);line-height:1.5}
+.modal-overlay.landscape-mode{padding:0;background:#fff}
+.modal-overlay.landscape-mode .modal{width:100vw;height:100vh;height:100dvh;border-radius:0}
+.modal-overlay.landscape-mode .modal-head{display:none}
+.modal-overlay.landscape-mode .land-tools{display:flex}
+.modal-overlay:fullscreen{background:#fff}
+.modal-overlay:fullscreen .modal{width:100vw;height:100vh}
+@media(max-width:700px){
+  .modal-overlay{padding:0}
+  .modal{width:100%;height:100%;border-radius:0}
+  .modal-head{padding:9px 11px}
+  .modal-landscape{display:inline-flex}
+}
+
+/* ---------- 显示模式：覆盖首页与详情页两套变量 ---------- */
+/* 护眼：暖色纸张 */
+html[data-mode="eye"]{
+  --bg:#f5efdf; --fg:#43392c; --fg2:#6f6250; --fg3:#9c8d76;
+  --border:#ddd0b6; --card:#fbf6e9; --hover:#efe4cd;
+  --accent:#8a6a3b; --accent-soft:#ecdfc2;
+  --surface:#fbf6e9; --surface-3:#efe4cd; --line:#ddd0b6;
+  --text:#43392c; --muted:#6f6250; --faint:#9c8d76;
+  --blue:#8a6a3b; --blue-soft:#ecdfc2;
+  color-scheme:light;
+}
+html[data-mode="eye"] body{background:var(--bg);color:var(--fg)}
+html[data-mode="eye"] .article-body{color:var(--text)}
+html[data-mode="eye"] .stage-scroll{background:radial-gradient(ellipse at 50% 118%,rgba(138,106,59,.08),transparent 68%)}
+html[data-mode="eye"] .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(138,106,59,.14)}
+html[data-mode="eye"] .embed-figure iframe,html[data-mode="eye"] .modal-body iframe{filter:sepia(.12) saturate(.94)}
+html[data-mode="eye"] .modal-body,html[data-mode="eye"] .modal-overlay.landscape-mode,html[data-mode="eye"] .modal-overlay:fullscreen{background:#f5efdf}
+/* 羊皮纸：更深的旧纸底色 + 细纹，正文改用衬线体，像翻一本旧书 */
+html[data-mode="parchment"]{
+  --bg:#eee0c0; --fg:#3b2f20; --fg2:#6b5740; --fg3:#9a8462;
+  --border:#cdb894; --card:#f7ecd2; --hover:#e7d7b2;
+  --accent:#8a5a2b; --accent-soft:#ead4aa;
+  --surface:#f7ecd2; --surface-3:#e7d7b2; --line:#cdb894;
+  --text:#3b2f20; --muted:#6b5740; --faint:#9a8462;
+  --blue:#8a5a2b; --blue-soft:#ead4aa;
+  color-scheme:light;
+}
+html[data-mode="parchment"] body{
+  color:var(--fg);
+  background-color:var(--bg);
+  background-image:
+    radial-gradient(circle at 12% 18%,rgba(122,84,42,.10) 0 1px,transparent 1.5px),
+    radial-gradient(circle at 78% 62%,rgba(122,84,42,.08) 0 1px,transparent 1.5px),
+    repeating-linear-gradient(0deg,rgba(122,84,42,.035) 0 1px,transparent 1px 6px);
+  background-size:38px 38px,52px 52px,100% 6px;
+}
+html[data-mode="parchment"] .article-title,
+html[data-mode="parchment"] .article-body{font-family:"Songti SC","STSong","Noto Serif SC",Georgia,serif}
+html[data-mode="parchment"] .article-body{color:var(--text)}
+html[data-mode="parchment"] .stage-scroll{background:radial-gradient(ellipse at 50% 118%,rgba(138,90,43,.12),transparent 68%)}
+html[data-mode="parchment"] .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(138,90,43,.16)}
+html[data-mode="parchment"] .embed-figure iframe,html[data-mode="parchment"] .modal-body iframe{filter:sepia(.28) saturate(.86) contrast(.97)}
+html[data-mode="parchment"] .modal-body,html[data-mode="parchment"] .modal-overlay.landscape-mode,html[data-mode="parchment"] .modal-overlay:fullscreen{background:#f7ecd2}
+/* 深色 */
+html[data-mode="dark"]{
+  --bg:#141416; --fg:#f2f2f7; --fg2:#a1a1a6; --fg3:#6e6e73;
+  --border:#333337; --card:#1d1d20; --hover:#262629;
+  --accent:#0a84ff; --accent-soft:#1c2b40;
+  --surface:#1d1d20; --surface-3:#262629; --line:#333337;
+  --text:#f2f2f7; --muted:#a1a1a6; --faint:#6e6e73;
+  --blue:#0a84ff; --blue-soft:#1c2b40;
+  color-scheme:dark;
+}
+html[data-mode="dark"] body{background:var(--bg);color:var(--fg)}
+html[data-mode="dark"] .article-body{color:var(--text)}
+html[data-mode="dark"] .stage-scroll{background:radial-gradient(ellipse at 50% 118%,rgba(10,132,255,.09),transparent 68%)}
+html[data-mode="dark"] .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,132,255,.18)}
+/* 嵌入图本身是白底 SVG，深色下反相+转相，尽量保持原彩色相位 */
+html[data-mode="dark"] .embed-figure iframe,html[data-mode="dark"] .modal-body iframe{filter:invert(.9) hue-rotate(180deg)}
+html[data-mode="dark"] .modal-body,html[data-mode="dark"] .modal-overlay.landscape-mode,html[data-mode="dark"] .modal-overlay:fullscreen{background:#1d1d20}
+html[data-mode="dark"] .vein{stroke:#8e8e93!important}
+/* 右上角模式开关与菜单：桌面与手机同位置，不与详情页右下角目录按钮冲突 */
+.theme-toggle{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:16px;z-index:150;width:38px;height:38px;border:1px solid var(--border);border-radius:50%;background:var(--card);color:var(--muted);display:grid;place-items:center;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.1);transition:background .18s,color .18s,border-color .18s}
+.theme-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.theme-toggle svg{width:19px;height:19px;display:block}
+.theme-menu{position:fixed;top:calc(58px + env(safe-area-inset-top,0px));right:16px;z-index:149;min-width:132px;padding:5px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 8px 28px rgba(0,0,0,.16);display:none}
+.theme-menu.on{display:block}
+.theme-menu button{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--fg2);font:inherit;font-size:13px;cursor:pointer;text-align:left}
+.theme-menu button:hover{background:var(--hover);color:var(--fg)}
+.theme-menu button.on{color:var(--accent);font-weight:600}
+.theme-menu button svg{width:16px;height:16px;flex:0 0 16px}
+.theme-menu button .tick{margin-left:auto;font-size:12px;opacity:0}
+.theme-menu button.on .tick{opacity:1}
+@media(max-width:760px){.theme-toggle{width:36px;height:36px;top:calc(12px + env(safe-area-inset-top,0px));right:12px}.theme-menu{top:calc(54px + env(safe-area-inset-top,0px));right:12px}}
+</style>
+
+<script>
+(function(){
+  try{
+    var m=localStorage.getItem('blog-theme-mode');
+    if(!m && localStorage.getItem('blog-eye-care')==='on') m='eye';
+    if(m==='eye'||m==='parchment'||m==='dark') document.documentElement.setAttribute('data-mode',m);
+  }catch(e){}
+})();
+</script>
+</head>
+<body>
+<main class="pad">
+<div class="detail-wrap">
+<article class="article">
+  <div class="article-meta-top"><span class="dot" style="background:#5856d6"></span>行业观察</div>
+  <h1 class="article-title">银行里几百套系统到底怎么连？给程序员的一张上帝视角地图</h1>
+  <div class="article-meta">2026-11-27 · 22 分钟阅读</div>
+  <div class="article-body">
+<p>刚进银行科技部的人，第一个星期基本都是懵的。</p>
+<p>开会时满耳朵都是缩写：手机银行、网银、CRM、ECIF、查控、存款、信贷、总账、反洗钱、前置、ODS、HVPS……你拿本子记了一页纸，散会一看，还是不知道<strong>这些系统之间到底是什么关系</strong>。</p>
+<p>更让人崩溃的是，同样一句「客户」：CRM 里是一份跟进记录，核心系统里是一个客户号，信贷系统里是一套授信材料，数仓里是一张宽表。你忍不住怀疑：这到底是同一个东西吗？</p>
+<p>这篇不让你背单词。我给你一张地图，先站稳了，再一个一个认门牌。</p>
+<blockquote>说明：文中的系统划分来自公开的银行 IT 架构资料、央行清算体系公开信息与最高法查控系统公开报道；具体银行的内部系统数量、命名和边界各有差异，这篇讲的是<strong>行业通用的理解框架</strong>，不是某一家银行的真实拓扑图。</blockquote>
+<h2 id="sec-1">先背一句话：渠道受理，外围算业务，核心记总账</h2>
+<p>这句话是理解银行 IT 的第一把钥匙，几乎所有资料都指向同一个三层结构：</p>
+<table><thead><tr><th>层次</th><th>干什么</th><th>典型系统</th><th>出错代价</th></tr></thead><tbody><tr><td>渠道层</td><td>把人接进来，收下请求</td><td>手机银行、网银、柜面、ATM、开放银行</td><td>影响体验</td></tr><tr><td>外围层（业务系统）</td><td>算专业业务、做判断</td><td>信贷、理财、反洗钱、CRM、查控</td><td>影响局部</td></tr><tr><td>核心层</td><td>记账、算总账、管账户</td><td>存款、贷款、支付、总账、客户信息</td><td>影响全局</td></tr></tbody></table>
+<p>一句话拆开说：</p>
+<ul><li><strong>渠道</strong>负责「受理」——它只是收件窗口，不该自己动账。</li><li><strong>外围</strong>负责「算业务」——判断你能不能贷、是不是洗钱、营销该给谁。</li><li><strong>核心</strong>负责「记总账」——全行只有它说了算，一笔账记下去就是记下了。</li></ul>
+<p>再补两条贯穿线，地图就完整了：</p>
+<ul><li><strong>数据线</strong>：把上面三层产生的数据抽走、洗好、给报表和监管看。</li><li><strong>外联线</strong>：把银行接到央行、银联、网联、法院这些外部世界。</li></ul>
+<p><strong>三层 + 两条线</strong>，银行系统的名字再多，都能往上贴。</p>
+<h2 id="sec-2">一、先看市场：这套地图不是拍脑袋画的</h2>
+<p>你可能会问：银行系统怎么这么碎？答案藏在历史里。</p>
+<p>国内银行 IT 大致走过四步：</p>
+<ol><li><strong>单机版（1980 年代—1990 年代中期）</strong>：一个网点一台机器，数据各管各的，跨网点通存通兑都费劲。</li><li><strong>数据大集中（2000 年代）</strong>：加入 WTO 后竞争和监管压力上来，工行、建行等大行率先把全行账集中到一套系统。<strong>核心系统就在这个阶段长出来的</strong>。</li><li><strong>瘦核心与外围解耦（约 2008—2014）</strong>：核心从「什么都干」变成「只管存贷汇和总账」，信贷、理财、风控这些被剥到外围。这一步直接造成了今天「系统特别多」的观感。</li><li><strong>分布式与信创（2015 至今）</strong>：2015 年微众银行上线国内首个完全分布式核心；2019 年张家港农商行落地首个国产分布式数据库核心；2020—2025 年间超过 60 家银行完成新一代核心「换心」。</li></ol>
+<p>数字也很直白：农业银行 2025 年核心系统工作日日均交易 <strong>17.36 亿笔</strong>、峰值 <strong>21.83 亿笔</strong>；邮储银行新一代个人核心 2022 年 4 月全量投产，公司核心 2024 年上线，2026 年 7 月完成 18 亿账户在线迁移。</p>
+<p><strong>所以系统多是必然结果</strong>：每剥出去一块业务就多一个系统，每加一条监管报送就多一个接口，每一代技术栈又留下一批老系统。你看到的混乱，是三十年演进叠出来的地层，不是谁随手画的。</p>
+<h2 id="sec-3">二、渠道层：银行的门脸，只收件不记账</h2>
+<p>用户点开手机银行点「转账」，这一刻发生的事比你想象的绕。</p>
+<p>手机银行本身<strong>不碰账本</strong>。它做的是：确认你是谁、把请求打包、按「交易码」发给后面的系统、把结果渲染成你看到的那一页。</p>
+<p>除了手机银行，渠道层还有：</p>
+<ul><li><strong>柜面系统</strong>：柜员用的那个有界面的系统，开户、挂失、异常账户状态都在这操作。</li><li><strong>网上银行 / 企业网银</strong>：对公客户的主阵地，审批流比个人版复杂得多。</li><li><strong>ATM / POS</strong>：自助设备渠道。</li><li><strong>开放银行 / 银企直连</strong>：把银行能力开放给第三方，比如企业 ERP 直接查余额。</li></ul>
+<p>中间通常还夹着一层<strong>前置系统 / 中间业务平台</strong>。它没有操作界面，专门干脏活：报文转换、交易码路由、鉴权、限流、把该送核心的送核心、能自己处理的自己处理。</p>
+<blockquote><strong>记住这条边界</strong>：渠道可以重装修，账本不能。你在手机上看到的「余额」，是核心算完返回来的结果，不是手机银行自己存的那个数。</blockquote>
+<h2 id="sec-4">三、外围系统：银行的四个专业科室</h2>
+<p>外围系统名字最多，但按「服务谁」一分就清楚，基本是四堆。</p>
+<h3 id="sec-5">1. 客户经营类：CRM、ECIF、画像</h3>
+<ul><li><strong>CRM（客户关系管理）</strong>：记的是「关系」——客户经理跟进到哪一步、营销策略、客户偏好、投诉记录。它<strong>不记账户余额</strong>。</li><li><strong>ECIF（企业级客户信息整合）</strong>：把同一个人在各个系统的身份拼成一个客户号。你在手机银行和柜面被认成同一个人，靠的就是它。</li><li><strong>客户画像 / 营销平台</strong>：基于数据做「谁可能买理财」这类判断。</li></ul>
+<h3 id="sec-6">2. 业务流程类：信贷、理财、票据、国际业务</h3>
+<ul><li><strong>信贷管理系统</strong>：从申请、审批、放款到贷后管理。注意，审批和贷后在信贷系统，<strong>真正放款记账那一笔还是要落到核心</strong>。</li><li><strong>理财 / 基金代销系统</strong>：产品、份额、申赎。</li><li><strong>票据系统</strong>：电子商业汇票的开立、背书、承兑、兑付。</li><li><strong>国际业务系统</strong>：结售汇、信用证、跨境汇款。</li></ul>
+<h3 id="sec-7">3. 风控合规类：反洗钱、反欺诈、查控</h3>
+<ul><li><strong>反洗钱系统</strong>：可疑交易识别、大额交易报送。</li><li><strong>反欺诈 / 风险监控</strong>：交易实时拦截，你突然在陌生城市大额消费被拦一下，多半是它。</li><li><strong>查控系统</strong>：法院来查、冻、扣被执行人账户的通道——后面单独讲，它其实不是银行自己的业务系统。</li></ul>
+<h3 id="sec-8">4. 运营支撑类：影像、工作流、报表、OA</h3>
+<ul><li><strong>影像系统</strong>：凭证扫描、电子档案。</li><li><strong>工作流 / 审批平台</strong>：跨部门流转。</li><li><strong>报表 / 绩效系统</strong>：给管理层看的经营数据，通常从数据线取数。</li></ul>
+<p><strong>判断一个系统属于哪堆，问一句「它是记关系的、办业务的、做判断的，还是管内部的」就够了。</strong></p>
+<h2 id="sec-9">四、核心系统：账房先生，只认借贷相等</h2>
+<p>核心系统（Core Banking System）是整个银行最不能出问题的一套东西。</p>
+<p>先纠正一个流传很广的说法：<strong>CORE 最初是 Centralized Online Real-time Exchange（集中、在线、实时交互）的缩写</strong>。清华金融评论的公开文章写得很清楚：这是相对于早期「分散、脱机、批处理、单向」而言的；后来行业不再纠结缩写，逐渐接受了「核心」这个本义。</p>
+<p>它管的事，用五个模块就能说完：</p>
+<table><thead><tr><th>模块</th><th>管什么</th><th>大白话</th></tr></thead><tbody><tr><td>客户信息（CIF）</td><td>客户主数据、身份与关系</td><td>这人是谁</td></tr><tr><td>存款</td><td>活期、定期、计息结息</td><td>钱怎么进</td></tr><tr><td>贷款</td><td>发放、还款、五级分类</td><td>钱怎么出</td></tr><tr><td>支付清算</td><td>汇划、清算、结算</td><td>钱怎么转</td></tr><tr><td>总账（GL）</td><td>会计核算、日终轧差、年终决算</td><td>钱怎么算</td></tr></tbody></table>
+<p>外加<strong>产品工厂</strong>（利率、期限、费用拼装成产品）和<strong>参数中心</strong>（利率、汇率、费率可配置可追溯）。</p>
+<p>核心的底层规则是<strong>复式记账</strong>：一笔交易必然同时记借方和贷方，两边金额相等。你转账 100 块，你的账户减 100，对方账户加 100——这一减一加必须在同一个事务里完成，不能只成功一半。</p>
+<p>这也是为什么核心最难的部分往往不是「交易处理」，而是<strong>会计核算与总账</strong>：日终轧差、利息计提、年终决算，每一分钱都要能追溯。</p>
+<blockquote><strong>核心系统出问题，最怕的不是宕机，是账对不上。</strong> 宕机能恢复，账错了要一笔笔找回来。所以核心改造必须「双轨运行 + 逐笔对账」，业界管这叫给飞行中的飞机换引擎。</blockquote>
+<h2 id="sec-10">五、两条贯穿线：数据线和外联线</h2>
+<h3 id="sec-11">数据线：从「能记账」到「能看懂账」</h3>
+<p>核心和外围负责把业务<strong>做掉</strong>，数据线负责把业务<strong>看明白</strong>。典型链路是：</p>
+<p><strong>源系统（核心/外围/渠道）→ ODS（贴源层）→ DWD（明细层）→ 数据集市 / 画像 → 报表与监管报送</strong></p>
+<p>两个关键词：</p>
+<ul><li><strong>OLTP vs OLAP</strong>：核心是联机交易，追求快和准；数仓是联机分析，追求全和深。两者必须分开，否则一条大查询就能把核心拖垮。</li><li><strong>ODS</strong>：Operational Data Store，贴源层，先把各系统的原始数据原样搬过来，再逐层清洗。</li></ul>
+<p>监管报送、反洗钱名单筛查、经营分析、客户经理的业绩看板，全在这一条线上。</p>
+<h3 id="sec-12">外联线：银行不是孤岛</h3>
+<p>一家银行再大，也只是支付网络里的一个节点。它必须接这些外部系统：</p>
+<table><thead><tr><th>外部系统</th><th>谁建的</th><th>干什么</th></tr></thead><tbody><tr><td>HVPS 大额实时支付</td><td>人民银行</td><td>大额跨行汇划，不到 1 分钟到账</td></tr><tr><td>BEPS 小额批量支付</td><td>人民银行</td><td>低成本、大批量零售支付</td></tr><tr><td>IBPS 网上支付跨行清算</td><td>人民银行</td><td>100 万元以下的网银、移动支付</td></tr><tr><td>CIPS 人民币跨境支付</td><td>人民银行</td><td>跨境人民币清算结算</td></tr><tr><td>银联 / 网联</td><td>清算组织</td><td>银行卡、第三方网络支付</td></tr><tr><td>最高法查控系统</td><td>最高人民法院</td><td>司法查询、冻结、扣划</td></tr></tbody></table>
+<p>这些不是「银行的系统」，但银行的系统必须和它们对话。<strong>你在手机银行跨行转出一笔钱，中途大概率经过银联或网联，最后在央行的账户上完成清算。</strong></p>
+<h2 id="sec-13">六、走一遍：一笔转账穿过哪些系统</h2>
+<p>把地图跑起来，比背一百个名字管用。</p>
+<p><strong>场景 A：行内转账（同一个银行）</strong></p>
+<ol><li>手机银行收下请求，做鉴权，按交易码发往渠道前置。</li><li>前置做报文转换、风控调用；反欺诈系统实时判断是否拦截。</li><li>请求到达核心的支付模块。</li><li>核心按复式记账：付款账户减、收款账户加，同一个事务里完成。</li><li>核心返回结果，渠道显示「转账成功」，同时触发短信通知。</li><li>这笔交易被写入日志，晚上被抽到数仓；如果金额触发规则，还会进入反洗钱报送队列。</li></ol>
+<p><strong>场景 B：跨行转账</strong></p>
+<p>前面 1—3 步一样，第 4 步开始不同：</p>
+<ol><li>核心先记本行账务，同时把支付指令发给<strong>行内支付清算系统</strong>。</li><li>按金额和渠道，走 <strong>IBPS / HVPS / 银联 / 网联</strong> 中的一条，到达对方银行。</li><li>对方银行核心入账，回执原路返回。</li><li>两边日终再和央行账户对账，确保「我付出的钱 = 对方收到的钱」。</li></ol>
+<p><strong>看明白没有？手机银行从头到尾只是个「收发室」，真正的动作发生在核心和外部清算网络。</strong></p>
+<h2 id="sec-14">七、查控系统到底是谁的？</h2>
+<p>你听过的「查控系统」，全称是<strong>全国法院网络执行查控系统</strong>，它不属于银行，属于最高人民法院。</p>
+<p>2013 年最高法出台《关于网络查询、冻结被执行人存款的规定》；2014 年 12 月 24 日「总对总」系统正式开通。公开报道显示，它已与 <strong>3700 多家银行</strong>以及公安、交通、工商、人民银行等单位联网，<strong>3400 多家银行上线冻结功能、2400 多家上线扣划功能</strong>，可查询存款、车辆、证券、网络资金等 15 类 20 项信息。</p>
+<p>银行侧要做的事，是建一个<strong>协助执行接口</strong>：法院发来查询/冻结/扣划指令 → 银行校验法律文书和权限 → 转到核心执行账户冻结或扣划 → 回执给法院。</p>
+<p>所以它和 CRM 完全不是一类东西：</p>
+<ul><li><strong>CRM</strong> 是银行自己的客户经营系统，目的是维护关系。</li><li><strong>查控</strong> 是外部司法系统的银行端接入，目的是履行协助执行义务。</li></ul>
+<p>但两者最终都可能碰到账户：<strong>查控动的是账户状态，核心记的是账</strong>。这条链路的存在，正是「银行不是孤岛」最典型的例子。</p>
+<h2 id="sec-15">八、为什么系统这么多？三个原因叠在一起</h2>
+<ol><li><strong>历史地层</strong>：数据大集中、瘦核心、分布式、信创，每一代都留下一批系统，老的未必能立刻下线。</li><li><strong>监管要求</strong>：反洗钱、监管报送、司法协助、数据本地化，每加一条合规要求就多一个接口或一套系统。</li><li><strong>组织边界</strong>：一个系统背后往往是一个业务条线和一个部门的职责。核心不改、外围先改，是风险最低的路径。</li></ol>
+<p>这也解释了为什么银行不喜欢「大爆炸式换系统」。行业里总结的渐进路径是：<strong>先外围后核心、先双轨后单轨、先迁移后优化、先可用后先进</strong>。核心改造的成功标准不是「换成了」，而是「换完后三年，账没差过一分钱」。</p>
+<h2 id="sec-16">九、建立上帝视角的三把钥匙</h2>
+<p>给你三个能立刻上手的方法。</p>
+<h3 id="sec-17">钥匙一：问「这笔钱动没动」</h3>
+<ul><li>动了账户余额或会计分录 → <strong>核心</strong>。</li><li>只是改了状态、批了流程、记了关系 → <strong>外围</strong>。</li><li>只是展示或收请求 → <strong>渠道</strong>。</li></ul>
+<p>这一问就能把 80% 的系统归位。</p>
+<h3 id="sec-18">钥匙二：问四个问题——谁发起、谁判断、谁记账、谁看</h3>
+<ul><li>谁发起：渠道</li><li>谁判断：外围（风控、信贷、营销）</li><li>谁记账：核心</li><li>谁看：数据线（数仓、报表、监管）</li></ul>
+<p>一个系统在这四个位置里必有归属。说不清它属于哪一格，多半是你还没搞清它的职责。</p>
+<h3 id="sec-19">钥匙三：拿一笔真实交易去追</h3>
+<p>别看架构图，看日志。挑一笔你自己发起的转账，拿交易流水号从渠道日志一路追到核心记账、再到数仓落库，把经过的系统名按顺序记下来。<strong>追三次，地图就长在你脑子里了。</strong></p>
+<h2 id="sec-20">十、常见误区</h2>
+<table><thead><tr><th>误区</th><th>真相</th></tr></thead><tbody><tr><td>手机银行里显示余额，所以余额存在手机银行</td><td>余额是核心算完返回的结果</td></tr><tr><td>CRM 里也有客户信息，所以客户信息在 CRM</td><td>CRM 记关系，核心的 CIF 记身份，ECIF 负责对齐</td></tr><tr><td>查控系统是银行自己的风控系统</td><td>它是最高法的司法协助通道，银行只是接了端</td></tr><tr><td>信贷系统放款了，钱就在信贷系统里</td><td>审批在信贷，记账在核心</td></tr><tr><td>分布式核心更先进，所以都要拆</td><td>分布式是手段不是目的，业务量没触到天花板就别硬拆</td></tr><tr><td>数据仓库是核心的备份</td><td>数仓是分析用的另一套模型，不是备份</td></tr></tbody></table>
+<h2 id="sec-21">十一、术语小抄</h2>
+<ul><li><strong>CORE</strong>：Centralized Online Real-time Exchange，集中、在线、实时交互；现在多按「核心」理解。</li><li><strong>CIF</strong>：Customer Information File，客户信息文件，核心里的客户主数据。</li><li><strong>ECIF</strong>：Enterprise CIF，企业级客户信息整合，把多个系统的身份拼成一个人。</li><li><strong>ECIF / CRM / 画像</strong>：分别管身份、管关系、管洞察。</li><li><strong>前置系统</strong>：渠道和核心之间的报文转换、路由、鉴权层。</li><li><strong>交易码</strong>：一笔请求的编号，系统靠它决定调哪个服务。</li><li><strong>复式记账</strong>：每笔交易借贷两边同时记、金额相等。</li><li><strong>总账（GL）</strong>：全行会计核算的总账簿，日终轧差、年终决算都在这。</li><li><strong>ODS / DWD</strong>：贴源层 / 明细层，数据仓库的分层。</li><li><strong>OLTP / OLAP</strong>：联机交易处理 / 联机分析处理。</li><li><strong>HVPS / BEPS / IBPS / CIPS</strong>：央行的大额、小额、超网、跨境四套支付清算系统。</li><li><strong>总对总</strong>：最高法直连全国银行的查控体系，区别于地方法院的「点对点」。</li><li><strong>瘦核心</strong>：把非核心业务剥离出去，核心只管存贷汇与总账。</li><li><strong>双轨运行</strong>：新旧系统并行、逐笔对账，确认无误再切换。</li></ul>
+<h2 id="sec-22">十二、权威出处</h2>
+<ol><li>清华大学《金融评论》：《信创及数字化转型双轮驱动银行核心系统变革》——CORE 缩写来源、核心系统演进与「1+N+2」框架。</li><li>百度百科「核心系统」「核心银行系统」——胖核心到瘦核心、国内核心系统里程碑与公开运行数据。</li><li>中国人民银行清算总中心：《持续推进支付体系高质量发展》《建设安全高效的支付清算基础设施》——多层次支付清算体系、HVPS/BEPS/IBPS/CIPS、ACS。</li><li>最高人民法院：《人民法院执行工作报告》（白皮书）、中国法院网访谈——网络执行查控体系沿革与联网银行数量。</li><li>最高人民法院：《关于网络查询、冻结被执行人存款的规定》（2013）。</li><li>中共湖南省委金融办：《如何理解支付清算系统的重要意义》——支付清算体系构成与各家职责。</li><li>《电子周刊：关于对商业银行开展信息系统审计的思考》——商业银行核心业务系统与外围系统划分、渠道分类。</li><li>CSDN《银行核心系统是什么：核心账务、业务架构与国产化改造路径》——三层架构、核心模块与渐进替换路径（行业实践观点，非监管口径）。</li></ol>
+<hr>
+<p><strong>最后留一句话给你</strong>：银行系统看着乱，是因为它同时是「一台记账机器」「一套监管接口」和「三十年的技术地层」。你不需要记住所有缩写，只要每次听到一个系统名，都能问出——它在哪一层？它动不动账？它跟谁说话？问得出来，你就已经有上帝视角了。</p>
+  </div>
+  <div class="article-embeds">
+    <h2 id="sec-embeds">银行系统版图图解（六张图）</h2>
+<figure class="embed-figure"><figcaption><span>图 1 · 全景地图 / 转账流程 / 核心解剖 / 外围四堆 / 外联查控 / 上帝视角（可缩放 / 可拖拽）</span><button type="button" class="embed-open" data-modal-idx="0" data-modal-src="../embed/bank-systems-map.html" data-modal-title="银行里几百套系统到底怎么连？给程序员的一张上帝视角地图 · 图 1 · 全景地图 / 转账流程 / 核心解剖 / 外围四堆 / 外联查控 / 上帝视角（可缩放 / 可拖拽）">⤢ 弹窗查看</button></figcaption><iframe title="图 1 · 全景地图 / 转账流程 / 核心解剖 / 外围四堆 / 外联查控 / 上帝视角（可缩放 / 可拖拽）" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;UTF-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;
+&lt;title&gt;银行系统版图 · 六张图讲明白&lt;/title&gt;
+&lt;style&gt;
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,&quot;PingFang SC&quot;,&quot;Segoe UI&quot;,sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport&gt;svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming&gt;svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging&gt;svg,.pz-viewport.dragging&gt;svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div class=&quot;hero&quot;&gt;
+  &lt;h1&gt;银行系统版图：给程序员的一张上帝视角地图&lt;/h1&gt;
+  &lt;p&gt;三层加两条线：渠道受理、外围算业务、核心记总账，数据管看、外联管通。看完能回答「这笔业务到底经过了哪些系统」。&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&quot;hint&quot;&gt;&lt;span&gt;&lt;b&gt;单击图&lt;/b&gt; 进入缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;滚轮 / 双指&lt;/b&gt; 缩放&lt;/span&gt;&lt;span&gt;&lt;b&gt;拖拽&lt;/b&gt; 平移&lt;/span&gt;&lt;span&gt;&lt;b&gt;双击&lt;/b&gt; 复位&lt;/span&gt;&lt;/div&gt;
+&lt;div class=&quot;nav&quot;&gt;
+  &lt;a href=&quot;#b1&quot;&gt;全景地图&lt;/a&gt;&lt;a href=&quot;#b2&quot;&gt;转账流程&lt;/a&gt;&lt;a href=&quot;#b3&quot;&gt;核心解剖&lt;/a&gt;&lt;a href=&quot;#b4&quot;&gt;外围四堆&lt;/a&gt;&lt;a href=&quot;#b5&quot;&gt;外联与查控&lt;/a&gt;&lt;a href=&quot;#b6&quot;&gt;上帝视角&lt;/a&gt;
+&lt;/div&gt;
+
+&lt;!-- 1 全景地图 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;b1&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;1&lt;/span&gt;全景地图：三层 + 两条线 &lt;span class=&quot;tag&quot;&gt;总览&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;银行系统名字再多，都能贴到这张图上。先记牢每一层「动不动账」。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 620&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;银行的地图：三层主干，两条贯穿线&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;主干从左到右是业务流转方向；右侧两条线不参与单笔交易，但贯穿所有系统&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;720&quot; height=&quot;118&quot; rx=&quot;13&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;60&quot; y=&quot;114&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 渠道层 · 受理请求，不动账&lt;/text&gt;
+      &lt;rect x=&quot;60&quot; y=&quot;128&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
+      &lt;text x=&quot;124&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;手机银行&lt;/text&gt;
+      &lt;text x=&quot;124&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;收请求 · 展示结果&lt;/text&gt;
+      &lt;rect x=&quot;196&quot; y=&quot;128&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
+      &lt;text x=&quot;260&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;网银 / 企业网银&lt;/text&gt;
+      &lt;text x=&quot;260&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;对公审批流复杂&lt;/text&gt;
+      &lt;rect x=&quot;332&quot; y=&quot;128&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
+      &lt;text x=&quot;396&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;柜面系统&lt;/text&gt;
+      &lt;text x=&quot;396&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;柜员操作界面&lt;/text&gt;
+      &lt;rect x=&quot;468&quot; y=&quot;128&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
+      &lt;text x=&quot;532&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;ATM / POS&lt;/text&gt;
+      &lt;text x=&quot;532&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;自助设备渠道&lt;/text&gt;
+      &lt;rect x=&quot;604&quot; y=&quot;128&quot; width=&quot;140&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#c7dff7&quot;/&gt;
+      &lt;text x=&quot;674&quot; y=&quot;152&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;开放银行&lt;/text&gt;
+      &lt;text x=&quot;674&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;银企直连 / 第三方&lt;/text&gt;
+
+      &lt;path d=&quot;M404,206 L404,220&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr)&quot;/&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;222&quot; width=&quot;720&quot; height=&quot;118&quot; rx=&quot;13&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;60&quot; y=&quot;248&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;② 外围层 · 算业务、做判断，改状态不改总账&lt;/text&gt;
+      &lt;rect x=&quot;60&quot; y=&quot;262&quot; width=&quot;158&quot; height=&quot;62&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d8d1f5&quot;/&gt;
+      &lt;text x=&quot;139&quot; y=&quot;286&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;客户经营&lt;/text&gt;
+      &lt;text x=&quot;139&quot; y=&quot;307&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;CRM · ECIF · 画像&lt;/text&gt;
+      &lt;rect x=&quot;238&quot; y=&quot;262&quot; width=&quot;158&quot; height=&quot;62&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d8d1f5&quot;/&gt;
+      &lt;text x=&quot;317&quot; y=&quot;286&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;业务流程&lt;/text&gt;
+      &lt;text x=&quot;317&quot; y=&quot;307&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;信贷 · 理财 · 票据&lt;/text&gt;
+      &lt;rect x=&quot;416&quot; y=&quot;262&quot; width=&quot;158&quot; height=&quot;62&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d8d1f5&quot;/&gt;
+      &lt;text x=&quot;495&quot; y=&quot;286&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;风控合规&lt;/text&gt;
+      &lt;text x=&quot;495&quot; y=&quot;307&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;反洗钱 · 查控 · 反欺诈&lt;/text&gt;
+      &lt;rect x=&quot;594&quot; y=&quot;262&quot; width=&quot;150&quot; height=&quot;62&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#d8d1f5&quot;/&gt;
+      &lt;text x=&quot;669&quot; y=&quot;286&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;运营支撑&lt;/text&gt;
+      &lt;text x=&quot;669&quot; y=&quot;307&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;影像 · 报表 · OA&lt;/text&gt;
+
+      &lt;path d=&quot;M404,340 L404,354&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr)&quot;/&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;356&quot; width=&quot;720&quot; height=&quot;118&quot; rx=&quot;13&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;60&quot; y=&quot;382&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;③ 核心层 · 记账、算总账，全行只有它说了算&lt;/text&gt;
+      &lt;rect x=&quot;60&quot; y=&quot;396&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
+      &lt;text x=&quot;124&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;客户信息 CIF&lt;/text&gt;
+      &lt;text x=&quot;124&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;这人是谁&lt;/text&gt;
+      &lt;rect x=&quot;196&quot; y=&quot;396&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
+      &lt;text x=&quot;260&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;存款&lt;/text&gt;
+      &lt;text x=&quot;260&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;钱怎么进&lt;/text&gt;
+      &lt;rect x=&quot;332&quot; y=&quot;396&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
+      &lt;text x=&quot;396&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;贷款&lt;/text&gt;
+      &lt;text x=&quot;396&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;钱怎么出&lt;/text&gt;
+      &lt;rect x=&quot;468&quot; y=&quot;396&quot; width=&quot;128&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
+      &lt;text x=&quot;532&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;支付清算&lt;/text&gt;
+      &lt;text x=&quot;532&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;钱怎么转&lt;/text&gt;
+      &lt;rect x=&quot;604&quot; y=&quot;396&quot; width=&quot;140&quot; height=&quot;58&quot; rx=&quot;9&quot; fill=&quot;#fff&quot; stroke=&quot;#ffd4d4&quot;/&gt;
+      &lt;text x=&quot;674&quot; y=&quot;420&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;总账 GL&lt;/text&gt;
+      &lt;text x=&quot;674&quot; y=&quot;440&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;钱怎么算&lt;/text&gt;
+
+      &lt;rect x=&quot;784&quot; y=&quot;88&quot; width=&quot;212&quot; height=&quot;182&quot; rx=&quot;13&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;802&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;贯穿线一 · 数据线&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;144&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;源系统 → ODS → DWD&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;168&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;→ 集市 / 画像 / 报表&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;196&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;OLTP 和 OLAP 必须分开&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;220&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;一条大查询不能拖垮核心&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;246&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;管的是「看明白」&lt;/text&gt;
+
+      &lt;rect x=&quot;784&quot; y=&quot;284&quot; width=&quot;212&quot; height=&quot;190&quot; rx=&quot;13&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;802&quot; y=&quot;310&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;贯穿线二 · 外联线&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;338&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;央行支付 HVPS / BEPS&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;362&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;IBPS / CIPS&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;386&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;银联 / 网联&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;最高法查控系统&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;438&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;管的是「连外部」&lt;/text&gt;
+      &lt;text x=&quot;802&quot; y=&quot;460&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;不属于银行，但必须对话&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;494&quot; width=&quot;952&quot; height=&quot;106&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;522&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话背下来&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;552&quot; font-size=&quot;16&quot; font-weight=&quot;700&quot; fill=&quot;#007aff&quot;&gt;渠道受理 · 外围算业务 · 核心记总账 · 数据管看 · 外联管通&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;580&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;听到任何系统名，先问三件事：它在哪一层？它动不动账？它跟谁说话？&lt;/text&gt;
+
+      &lt;defs&gt;&lt;marker id=&quot;bArr&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先竖着读三层——渠道只收请求、外围做判断、核心才记账，出错代价从上到下越来越重。右边两条线横穿所有层：数据线负责事后分析，外联线负责和外部世界对话，它们都不参与单笔交易。最下面那句话是全篇的口诀，后面五张图都在展开它。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 2 转账流程 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;b2&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;2&lt;/span&gt;走一遍：一笔转账穿过哪些系统 &lt;span class=&quot;tag&quot;&gt;流程图&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;行内转账和跨行转账的分叉点，就在核心的支付模块。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 650&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;场景 A · 行内转账（同一个银行）&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;从上排左到右读，每一步都标了「谁在干活」&lt;/text&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;42&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;① 发起&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;手机银行&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;确认身份，打包请求&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;按交易码发出&lt;/text&gt;
+      &lt;rect x=&quot;192&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;208&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;② 转接&lt;/text&gt;
+      &lt;text x=&quot;208&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;渠道前置&lt;/text&gt;
+      &lt;text x=&quot;208&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;报文转换、路由&lt;/text&gt;
+      &lt;text x=&quot;208&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;鉴权、限流&lt;/text&gt;
+      &lt;rect x=&quot;358&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;374&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;③ 判断&lt;/text&gt;
+      &lt;text x=&quot;374&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;反欺诈系统&lt;/text&gt;
+      &lt;text x=&quot;374&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;实时风险评分&lt;/text&gt;
+      &lt;text x=&quot;374&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#c62828&quot;&gt;可疑就在这里拦下&lt;/text&gt;
+      &lt;rect x=&quot;524&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;540&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;④ 记账&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;核心支付模块&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;借贷两边同时记&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#c62828&quot;&gt;同一事务，不可拆&lt;/text&gt;
+      &lt;rect x=&quot;690&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;706&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑤ 返回&lt;/text&gt;
+      &lt;text x=&quot;706&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;渠道展示结果&lt;/text&gt;
+      &lt;text x=&quot;706&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;「转账成功」&lt;/text&gt;
+      &lt;text x=&quot;706&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;触发短信通知&lt;/text&gt;
+      &lt;rect x=&quot;856&quot; y=&quot;110&quot; width=&quot;150&quot; height=&quot;98&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;872&quot; y=&quot;132&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑥ 事后&lt;/text&gt;
+      &lt;text x=&quot;872&quot; y=&quot;156&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;数仓 / 报送&lt;/text&gt;
+      &lt;text x=&quot;872&quot; y=&quot;178&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;日志抽到 ODS&lt;/text&gt;
+      &lt;text x=&quot;872&quot; y=&quot;196&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;命中规则进报送&lt;/text&gt;
+
+      &lt;path d=&quot;M178,158 L190,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+      &lt;path d=&quot;M344,158 L356,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+      &lt;path d=&quot;M510,158 L522,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+      &lt;path d=&quot;M676,158 L688,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+      &lt;path d=&quot;M842,158 L854,158&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;230&quot; width=&quot;980&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;42&quot; y=&quot;252&quot; font-size=&quot;11&quot; fill=&quot;#a35b00&quot;&gt;到第 ④ 步为止两种方式一样。跨行转账在这一步之后多走一段「外部清算网络」，钱才会到对方银行。&lt;/text&gt;
+
+      &lt;text x=&quot;44&quot; y=&quot;298&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;场景 B · 跨行转账（多出来的四步）&lt;/text&gt;
+      &lt;rect x=&quot;26&quot; y=&quot;316&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;42&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;④ 本行记账&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;核心先记本行账&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;付款账户减记&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;生成支付指令&lt;/text&gt;
+      &lt;rect x=&quot;222&quot; y=&quot;316&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;238&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑤ 送出&lt;/text&gt;
+      &lt;text x=&quot;238&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;行内支付清算&lt;/text&gt;
+      &lt;text x=&quot;238&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;按金额和渠道&lt;/text&gt;
+      &lt;text x=&quot;238&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;选一条外部通路&lt;/text&gt;
+      &lt;rect x=&quot;418&quot; y=&quot;316&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;434&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑥ 跨行清算&lt;/text&gt;
+      &lt;text x=&quot;434&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;外部清算网络&lt;/text&gt;
+      &lt;text x=&quot;434&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;IBPS / HVPS&lt;/text&gt;
+      &lt;text x=&quot;434&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;银联 / 网联&lt;/text&gt;
+      &lt;rect x=&quot;614&quot; y=&quot;316&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;630&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑦ 对方入账&lt;/text&gt;
+      &lt;text x=&quot;630&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;对方银行核心&lt;/text&gt;
+      &lt;text x=&quot;630&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;收款账户加记&lt;/text&gt;
+      &lt;text x=&quot;630&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;回执原路返回&lt;/text&gt;
+      &lt;rect x=&quot;810&quot; y=&quot;316&quot; width=&quot;196&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;826&quot; y=&quot;340&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;⑧ 日终&lt;/text&gt;
+      &lt;text x=&quot;826&quot; y=&quot;364&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;两边对账&lt;/text&gt;
+      &lt;text x=&quot;826&quot; y=&quot;388&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;我付出的 = 对方收到的&lt;/text&gt;
+      &lt;text x=&quot;826&quot; y=&quot;406&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;和央行账户核对&lt;/text&gt;
+      &lt;path d=&quot;M204,368 L220,368&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+      &lt;path d=&quot;M400,368 L416,368&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+      &lt;path d=&quot;M596,368 L612,368&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+      &lt;path d=&quot;M792,368 L808,368&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr2)&quot;/&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;446&quot; width=&quot;980&quot; height=&quot;180&quot; rx=&quot;12&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;46&quot; y=&quot;474&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;三条关键边界，看流程时别搞混&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;506&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;① 手机银行从头到尾只是「收发室」——它从不自己改余额，只显示核心算完返回的结果。&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;538&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;② 反欺诈是外围系统，它只有「拦不拦」的权力，没有「记不记账」的权力。&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;570&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;③ 跨行的钱最终在央行的账户上完成清算，所以银行必须接 HVPS / BEPS / IBPS / CIPS。&lt;/text&gt;
+      &lt;text x=&quot;46&quot; y=&quot;602&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;数仓是事后抽取，不在交易链路里。这条分不清，就容易把「报表数不对」怪到核心头上。&lt;/text&gt;
+
+      &lt;defs&gt;&lt;marker id=&quot;bArr2&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上排六步从左到右读，注意第 ③ 步反欺诈「只拦不记账」、第 ④ 步核心才真正动账。下排看跨行多出来的四步，分叉点就在核心的支付模块。最下面三条边界是排查问题的关键：用户说「钱没到账」时，先判断卡在上排第几步、还是下排的第 ⑥ 步。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 3 核心解剖 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;b3&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;3&lt;/span&gt;核心系统解剖：一台全行级的记账机器 &lt;span class=&quot;tag&quot;&gt;核心层&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;CORE 最初是「集中、在线、实时交互」的缩写；现在行业按「核心」理解。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 580&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;核心系统管的事，用五个模块就能说完&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;五个模块 + 两个支撑中心，就是「账房先生」的全部家当&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;84&quot; width=&quot;952&quot; height=&quot;64&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;110&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;CORE = Centralized Online Real-time Exchange（集中、在线、实时交互）&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;134&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;相对于早期「分散、脱机、批处理、单向」而言；后来行业不再纠结缩写，接受了「核心」本义&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;60&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块一&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;客户信息 CIF&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;全行统一的客户身份&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;与关系的主数据&lt;/text&gt;
+      &lt;rect x=&quot;236&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;252&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块二&lt;/text&gt;
+      &lt;text x=&quot;252&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;存款&lt;/text&gt;
+      &lt;text x=&quot;252&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;活期、定期&lt;/text&gt;
+      &lt;text x=&quot;252&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;计息结息&lt;/text&gt;
+      &lt;rect x=&quot;428&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;444&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块三&lt;/text&gt;
+      &lt;text x=&quot;444&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;贷款&lt;/text&gt;
+      &lt;text x=&quot;444&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;发放、还款、计息&lt;/text&gt;
+      &lt;text x=&quot;444&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;五级分类&lt;/text&gt;
+      &lt;rect x=&quot;620&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;636&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块四&lt;/text&gt;
+      &lt;text x=&quot;636&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;支付清算&lt;/text&gt;
+      &lt;text x=&quot;636&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;汇划、清算、结算&lt;/text&gt;
+      &lt;text x=&quot;636&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;连接外部网络&lt;/text&gt;
+      &lt;rect x=&quot;812&quot; y=&quot;192&quot; width=&quot;180&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;828&quot; y=&quot;216&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;模块五&lt;/text&gt;
+      &lt;text x=&quot;828&quot; y=&quot;242&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;总账 GL&lt;/text&gt;
+      &lt;text x=&quot;828&quot; y=&quot;268&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;会计核算、日终轧差&lt;/text&gt;
+      &lt;text x=&quot;828&quot; y=&quot;288&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;年终决算&lt;/text&gt;
+
+      &lt;text x=&quot;44&quot; y=&quot;338&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;底层规则：复式记账 —— 一笔交易借贷两边金额相等，必须在同一个事务里完成&lt;/text&gt;
+      &lt;rect x=&quot;44&quot; y=&quot;352&quot; width=&quot;952&quot; height=&quot;128&quot; rx=&quot;12&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;rect x=&quot;64&quot; y=&quot;372&quot; width=&quot;280&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;204&quot; y=&quot;398&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;付款账户&lt;/text&gt;
+      &lt;text x=&quot;204&quot; y=&quot;430&quot; font-size=&quot;20&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;− 100 元&lt;/text&gt;
+      &lt;text x=&quot;204&quot; y=&quot;451&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;借方（钱从哪来）&lt;/text&gt;
+      &lt;rect x=&quot;380&quot; y=&quot;372&quot; width=&quot;280&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;520&quot; y=&quot;398&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;收款账户&lt;/text&gt;
+      &lt;text x=&quot;520&quot; y=&quot;430&quot; font-size=&quot;20&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;+ 100 元&lt;/text&gt;
+      &lt;text x=&quot;520&quot; y=&quot;451&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;贷方（钱到哪去）&lt;/text&gt;
+      &lt;rect x=&quot;696&quot; y=&quot;372&quot; width=&quot;280&quot; height=&quot;86&quot; rx=&quot;10&quot; fill=&quot;#fff&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;836&quot; y=&quot;398&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;总账&lt;/text&gt;
+      &lt;text x=&quot;836&quot; y=&quot;430&quot; font-size=&quot;17&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;借贷平衡&lt;/text&gt;
+      &lt;text x=&quot;836&quot; y=&quot;451&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot; text-anchor=&quot;middle&quot;&gt;要么都成功，要么都回滚&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;500&quot; width=&quot;952&quot; height=&quot;64&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;526&quot; font-size=&quot;11&quot; fill=&quot;#1d1d1f&quot;&gt;两个支撑中心：产品工厂（利率、期限、费用拼装成产品）· 参数中心（利率汇率费率可配置可追溯）&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;550&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;宕机可以恢复，账错了要一笔笔找回 —— 所以核心改造必须双轨运行、逐笔对账&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;先看五个模块的分工——「这人是谁、钱怎么进、怎么出、怎么转、怎么算」。中间那组借贷示意是核心的底层规则：一减一加必须在同一事务里完成，不能只成功一半。最下面一句是全图重点：核心怕的不是宕机，是账对不上。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 4 外围四堆 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;b4&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;4&lt;/span&gt;外围系统：按「服务谁」分成四堆 &lt;span class=&quot;tag&quot;&gt;外围层&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;名字最多的那一层。按职责一分类，就没有那么乱了。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 600&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;外围系统四堆：客户经营 / 业务流程 / 风控合规 / 运营支撑&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;判断口诀：它是记关系的、办业务的、做判断的，还是管内部的？&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;12&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;116&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 客户经营类 —— 记关系、管身份&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;CRM：跟进记录、营销策略、投诉，不记余额&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;170&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;ECIF：把同一个人在各系统的身份拼成一个客户号&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;198&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;客户画像：谁可能买理财、谁要流失&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;226&quot; font-size=&quot;10.5&quot; fill=&quot;#0a58ca&quot;&gt;客户经理工作台：管日常跟进和任务&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;256&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;一句话：让银行「认识」客户，但不负责记账&lt;/text&gt;
+
+      &lt;rect x=&quot;532&quot; y=&quot;88&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;12&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;552&quot; y=&quot;116&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;② 业务流程类 —— 办专业业务&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;信贷管理：申请、审批、放款、贷后&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;170&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;理财 / 基金代销：产品、份额、申赎&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;198&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;票据系统：电票的开立、背书、承兑、兑付&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;226&quot; font-size=&quot;10.5&quot; fill=&quot;#5b3a9e&quot;&gt;国际业务：结售汇、信用证、跨境汇款&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;256&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;一句话：审批在它们这儿，真正记账仍落核心&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;300&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;12&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;328&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;③ 风控合规类 —— 做判断、拦风险&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;354&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;反洗钱：可疑交易识别、大额交易报送&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;382&quot; font-size=&quot;10.5&quot; fill=&quot;#c62828&quot;&gt;反欺诈 / 风险监控：交易实时拦截&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#c62828&quot;&gt;查控接口：法院的查询、冻结、扣划通道&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;438&quot; font-size=&quot;10.5&quot; fill=&quot;#c62828&quot;&gt;风险预警：额度、敞口、集中度监控&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;468&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;一句话：有「说不」的权力，但没有「动账」的权力&lt;/text&gt;
+
+      &lt;rect x=&quot;532&quot; y=&quot;300&quot; width=&quot;464&quot; height=&quot;196&quot; rx=&quot;12&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;552&quot; y=&quot;328&quot; font-size=&quot;13&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;④ 运营支撑类 —— 管内部、留痕迹&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;354&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;影像系统：凭证扫描、电子档案&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;382&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;工作流 / 审批平台：跨部门流转&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;410&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;报表 / 绩效：从数据线取数，不直连核心&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;438&quot; font-size=&quot;10.5&quot; fill=&quot;#1d7a45&quot;&gt;OA / 人力：纯内部管理，不碰客户账&lt;/text&gt;
+      &lt;text x=&quot;552&quot; y=&quot;468&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;一句话：给银行自己人用的，客户感知不到&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;516&quot; width=&quot;952&quot; height=&quot;64&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;542&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;最容易搞混的两组：CRM 有客户信息，但客户主数据在核心 CIF；信贷系统放款了，但记账那一笔在核心。&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;566&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;系统多是历史地层：瘦核心把业务剥到外围，监管每加一条报送就多一个接口，每一代技术栈又留下一批老系统。&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;这四个框按「服务谁」划分，比按系统名字背单词有效得多。特别看每个框最后那句灰色小字——它说的都是「边界」：外围有判断权、没有记账权。最下面黄色框点出两组最容易搞混的关系，这也是面试和业务沟通里最常被问到的。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 5 外联与查控 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;b5&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;5&lt;/span&gt;外联与查控：银行不是孤岛 &lt;span class=&quot;tag&quot;&gt;流程图&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;上半张讲钱怎么出去，下半张讲法院怎么进来。两条链路都在核心落地。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 650&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;上半 · 支付外联：一笔跨行汇款怎么出去&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;外部清算系统不属于银行，但银行的系统必须和它们对话&lt;/text&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;82&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;42&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;起点&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;本行核心&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;先记本行账务&lt;/text&gt;
+      &lt;text x=&quot;42&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;生成支付指令&lt;/text&gt;
+      &lt;rect x=&quot;222&quot; y=&quot;82&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;238&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;行内&lt;/text&gt;
+      &lt;text x=&quot;238&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;支付清算系统&lt;/text&gt;
+      &lt;text x=&quot;238&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;按金额和渠道&lt;/text&gt;
+      &lt;text x=&quot;238&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;选择外部通路&lt;/text&gt;
+      &lt;rect x=&quot;418&quot; y=&quot;82&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;434&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;外部基础设施&lt;/text&gt;
+      &lt;text x=&quot;434&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;央行 / 清算网络&lt;/text&gt;
+      &lt;text x=&quot;434&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;HVPS · BEPS · IBPS&lt;/text&gt;
+      &lt;text x=&quot;434&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;CIPS · 银联 · 网联&lt;/text&gt;
+      &lt;rect x=&quot;614&quot; y=&quot;82&quot; width=&quot;176&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;630&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;终点&lt;/text&gt;
+      &lt;text x=&quot;630&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;对方银行核心&lt;/text&gt;
+      &lt;text x=&quot;630&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;收款账户加记&lt;/text&gt;
+      &lt;text x=&quot;630&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;回执原路返回&lt;/text&gt;
+      &lt;rect x=&quot;810&quot; y=&quot;82&quot; width=&quot;196&quot; height=&quot;106&quot; rx=&quot;10&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;826&quot; y=&quot;106&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;日终&lt;/text&gt;
+      &lt;text x=&quot;826&quot; y=&quot;130&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;央行账户对账&lt;/text&gt;
+      &lt;text x=&quot;826&quot; y=&quot;154&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;ACS 系统簿记&lt;/text&gt;
+      &lt;text x=&quot;826&quot; y=&quot;172&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;双方的账要相等&lt;/text&gt;
+      &lt;path d=&quot;M204,134 L220,134&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+      &lt;path d=&quot;M400,134 L416,134&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+      &lt;path d=&quot;M596,134 L612,134&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+      &lt;path d=&quot;M792,134 L808,134&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+
+      &lt;rect x=&quot;26&quot; y=&quot;212&quot; width=&quot;980&quot; height=&quot;34&quot; rx=&quot;9&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;42&quot; y=&quot;234&quot; font-size=&quot;11&quot; fill=&quot;#0a58ca&quot;&gt;HVPS 大额实时（不到 1 分钟到账）· BEPS 小额批量 · IBPS 网银与移动支付（100 万元以下）· CIPS 跨境人民币&lt;/text&gt;
+
+      &lt;text x=&quot;44&quot; y=&quot;288&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;下半 · 查控链路：法院的指令怎么进来&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;310&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;查控系统属于最高人民法院，银行这边只是一个协助执行接口&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;326&quot; width=&quot;214&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;60&quot; y=&quot;352&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;发起方&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;376&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;最高法「总对总」&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;400&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;2014 年 12 月开通&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;418&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;法院发查询 / 冻结 / 扣划&lt;/text&gt;
+      &lt;rect x=&quot;286&quot; y=&quot;326&quot; width=&quot;214&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;302&quot; y=&quot;352&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;银行端&lt;/text&gt;
+      &lt;text x=&quot;302&quot; y=&quot;376&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;协助执行接口&lt;/text&gt;
+      &lt;text x=&quot;302&quot; y=&quot;400&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;校验法律文书和权限&lt;/text&gt;
+      &lt;text x=&quot;302&quot; y=&quot;418&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;转成银行内部指令&lt;/text&gt;
+      &lt;rect x=&quot;528&quot; y=&quot;326&quot; width=&quot;214&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#fff5f5&quot; stroke=&quot;#ffc9c9&quot;/&gt;
+      &lt;text x=&quot;544&quot; y=&quot;352&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;落地&lt;/text&gt;
+      &lt;text x=&quot;544&quot; y=&quot;376&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot;&gt;核心执行&lt;/text&gt;
+      &lt;text x=&quot;544&quot; y=&quot;400&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;冻结账户状态&lt;/text&gt;
+      &lt;text x=&quot;544&quot; y=&quot;418&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;扣划走账务记账&lt;/text&gt;
+      &lt;rect x=&quot;770&quot; y=&quot;326&quot; width=&quot;214&quot; height=&quot;112&quot; rx=&quot;10&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;786&quot; y=&quot;352&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;闭环&lt;/text&gt;
+      &lt;text x=&quot;786&quot; y=&quot;376&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;回执法院&lt;/text&gt;
+      &lt;text x=&quot;786&quot; y=&quot;400&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;反馈查询结果&lt;/text&gt;
+      &lt;text x=&quot;786&quot; y=&quot;418&quot; font-size=&quot;10&quot; fill=&quot;#48484a&quot;&gt;留痕备查&lt;/text&gt;
+      &lt;path d=&quot;M260,382 L284,382&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+      &lt;path d=&quot;M502,382 L526,382&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+      &lt;path d=&quot;M744,382 L768,382&quot; stroke=&quot;#8e8e93&quot; stroke-width=&quot;2&quot; fill=&quot;none&quot; marker-end=&quot;url(#bArr3)&quot;/&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;458&quot; width=&quot;940&quot; height=&quot;62&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;482&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;公开数据：3700 多家银行联网 · 3400 多家上线冻结 · 2400 多家上线扣划&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;505&quot; font-size=&quot;10.5&quot; fill=&quot;#a35b00&quot;&gt;可查询存款、车辆、证券、网络资金等 15 类 20 项信息&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;540&quot; width=&quot;940&quot; height=&quot;92&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;566&quot; font-size=&quot;11.5&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;一句话分清 CRM 和查控&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;592&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;CRM 是银行自己的客户经营系统，目的是维护关系；查控是外部司法通道的银行端，目的是履行协助执行义务。&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;616&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;两者都能碰到账户：查控动的是账户状态，核心记的是账。&lt;/text&gt;
+
+      &lt;defs&gt;&lt;marker id=&quot;bArr3&quot; markerWidth=&quot;8&quot; markerHeight=&quot;8&quot; refX=&quot;5&quot; refY=&quot;4&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0,0 L8,4 L0,8 z&quot; fill=&quot;#8e8e93&quot;/&gt;&lt;/marker&gt;&lt;/defs&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上半张从左到右读，重点是第 ③ 格那一串外部基础设施——HVPS、BEPS、IBPS、CIPS、银联、网联，记住「汇划走央行、银行卡走银联、网络支付走网联」就够入门。下半张注意起点不是银行而是法院，银行只是协助执行；不管查控还是 CRM，最终落账的都还是核心。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- 6 上帝视角 --&gt;
+&lt;div class=&quot;card&quot; id=&quot;b6&quot;&gt;
+  &lt;div class=&quot;card-head&quot;&gt;
+    &lt;h2&gt;&lt;span class=&quot;num&quot;&gt;6&lt;/span&gt;建立上帝视角：三把钥匙 &lt;span class=&quot;tag&quot;&gt;方法&lt;/span&gt;&lt;/h2&gt;
+    &lt;p&gt;不用背所有缩写。每次听到一个系统名，用这三把钥匙去套。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;svg viewBox=&quot;0 0 1040 640&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;g font-family=&quot;-apple-system,PingFang SC,sans-serif&quot;&gt;
+      &lt;text x=&quot;44&quot; y=&quot;40&quot; font-size=&quot;15&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;三把钥匙：从「听不懂」到「能定位」&lt;/text&gt;
+      &lt;text x=&quot;44&quot; y=&quot;62&quot; font-size=&quot;11&quot; fill=&quot;#6e6e73&quot;&gt;第一把判层级，第二把判职责，第三把靠实战把地图刻进脑子&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;88&quot; width=&quot;300&quot; height=&quot;126&quot; rx=&quot;11&quot; fill=&quot;#eef6ff&quot; stroke=&quot;#a9cdf5&quot;/&gt;
+      &lt;text x=&quot;60&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot;&gt;① 问「这笔钱动没动」&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;动了余额或会计分录 → 核心&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;166&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;改状态、批流程、记关系 → 外围&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;190&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;只展示或收请求 → 渠道&lt;/text&gt;
+      &lt;text x=&quot;60&quot; y=&quot;208&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;这一问能把 80% 系统归位&lt;/text&gt;
+      &lt;rect x=&quot;358&quot; y=&quot;88&quot; width=&quot;300&quot; height=&quot;126&quot; rx=&quot;11&quot; fill=&quot;#f3f0ff&quot; stroke=&quot;#cfc9f5&quot;/&gt;
+      &lt;text x=&quot;374&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot;&gt;② 问「四个谁」&lt;/text&gt;
+      &lt;text x=&quot;374&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;谁发起 → 渠道&lt;/text&gt;
+      &lt;text x=&quot;374&quot; y=&quot;166&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;谁判断 → 外围（风控、信贷）&lt;/text&gt;
+      &lt;text x=&quot;374&quot; y=&quot;190&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;谁记账 → 核心；谁看 → 数据线&lt;/text&gt;
+      &lt;text x=&quot;374&quot; y=&quot;208&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;说不清属于哪一格，就是没搞清职责&lt;/text&gt;
+      &lt;rect x=&quot;672&quot; y=&quot;88&quot; width=&quot;300&quot; height=&quot;126&quot; rx=&quot;11&quot; fill=&quot;#f2fff5&quot; stroke=&quot;#a9e5bb&quot;/&gt;
+      &lt;text x=&quot;688&quot; y=&quot;114&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot;&gt;③ 追一笔真实交易&lt;/text&gt;
+      &lt;text x=&quot;688&quot; y=&quot;142&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;挑自己发起的一笔转账&lt;/text&gt;
+      &lt;text x=&quot;688&quot; y=&quot;166&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;拿流水号从渠道日志一路追&lt;/text&gt;
+      &lt;text x=&quot;688&quot; y=&quot;190&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot;&gt;到核心记账、再到数仓落库&lt;/text&gt;
+      &lt;text x=&quot;688&quot; y=&quot;208&quot; font-size=&quot;10&quot; fill=&quot;#6e6e73&quot;&gt;追三次，地图就长在脑子里&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;236&quot; width=&quot;952&quot; height=&quot;110&quot; rx=&quot;11&quot; fill=&quot;#f2f2f7&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;262&quot; font-size=&quot;12&quot; font-weight=&quot;700&quot; fill=&quot;#1d1d1f&quot;&gt;四问定位法：任何业务都能拆成四个位置&lt;/text&gt;
+      &lt;rect x=&quot;64&quot; y=&quot;278&quot; width=&quot;204&quot; height=&quot;54&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;166&quot; y=&quot;299&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#0a58ca&quot; text-anchor=&quot;middle&quot;&gt;谁发起&lt;/text&gt;
+      &lt;text x=&quot;166&quot; y=&quot;320&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;渠道层&lt;/text&gt;
+      &lt;rect x=&quot;286&quot; y=&quot;278&quot; width=&quot;204&quot; height=&quot;54&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;388&quot; y=&quot;299&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#5b3a9e&quot; text-anchor=&quot;middle&quot;&gt;谁判断&lt;/text&gt;
+      &lt;text x=&quot;388&quot; y=&quot;320&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;外围层&lt;/text&gt;
+      &lt;rect x=&quot;508&quot; y=&quot;278&quot; width=&quot;204&quot; height=&quot;54&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;610&quot; y=&quot;299&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#c62828&quot; text-anchor=&quot;middle&quot;&gt;谁记账&lt;/text&gt;
+      &lt;text x=&quot;610&quot; y=&quot;320&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;核心层&lt;/text&gt;
+      &lt;rect x=&quot;730&quot; y=&quot;278&quot; width=&quot;244&quot; height=&quot;54&quot; rx=&quot;8&quot; fill=&quot;#fff&quot; stroke=&quot;#dcdce1&quot;/&gt;
+      &lt;text x=&quot;852&quot; y=&quot;299&quot; font-size=&quot;11&quot; font-weight=&quot;700&quot; fill=&quot;#1d7a45&quot; text-anchor=&quot;middle&quot;&gt;谁看&lt;/text&gt;
+      &lt;text x=&quot;852&quot; y=&quot;320&quot; font-size=&quot;10.5&quot; fill=&quot;#48484a&quot; text-anchor=&quot;middle&quot;&gt;数据线：数仓、报表、监管&lt;/text&gt;
+
+      &lt;rect x=&quot;44&quot; y=&quot;366&quot; width=&quot;952&quot; height=&quot;258&quot; rx=&quot;11&quot; fill=&quot;#fff8ec&quot; stroke=&quot;#f5d7a1&quot;/&gt;
+      &lt;text x=&quot;64&quot; y=&quot;394&quot; font-size=&quot;12.5&quot; font-weight=&quot;700&quot; fill=&quot;#a35b00&quot;&gt;六个常见误区，对照着改口&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;424&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;误区&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;424&quot; font-size=&quot;10.5&quot; fill=&quot;#6e6e73&quot;&gt;真相&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;450&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;手机银行显示余额，所以余额在手机银行&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;450&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;余额是核心算完返回的结果&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;480&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;CRM 有客户信息，所以客户信息在 CRM&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;480&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;CRM 记关系，核心 CIF 记身份&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;510&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;查控系统是银行自己的风控系统&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;510&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;是最高法的司法协助通道，银行只是接了端&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;540&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;信贷系统放款了，钱就在信贷系统里&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;540&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;审批在信贷，记账在核心&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;570&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;数据仓库是核心的备份&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;570&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;数仓是分析用的另一套模型，不是备份&lt;/text&gt;
+      &lt;text x=&quot;64&quot; y=&quot;600&quot; font-size=&quot;11&quot; fill=&quot;#b71c1c&quot;&gt;分布式核心更先进，所以都要拆&lt;/text&gt;
+      &lt;text x=&quot;540&quot; y=&quot;600&quot; font-size=&quot;11&quot; fill=&quot;#1d7a45&quot;&gt;分布式是手段不是目的，业务量没到天花板就别硬拆&lt;/text&gt;
+    &lt;/g&gt;
+  &lt;/svg&gt;
+  &lt;div class=&quot;foot&quot;&gt;&lt;b&gt;怎么看：&lt;/b&gt;上面三张卡是递进关系：先判层、再判职责、最后靠实战固化。中间「四问定位法」可以拿去用在任何一个新系统上——它在这四个位置里必有归属。下面是六个常见误区，左列是新人最容易说的话，右列是更准确的说法；改口之日，就是你开始有上帝视角之时。&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;script&gt;
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll(&#39;svg[viewBox]&#39;));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&amp;&amp;svg.parentElement.classList.contains(&#39;pz-viewport&#39;))return;
+    var vp=document.createElement(&#39;div&#39;);vp.className=&#39;pz-viewport&#39;;
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement(&#39;div&#39;);bar.className=&#39;pz-toolbar&#39;;
+    var bOut=document.createElement(&#39;button&#39;);bOut.textContent=&#39;\u2212&#39;;bOut.title=&#39;\u7f29\u5c0f&#39;;
+    var bIn=document.createElement(&#39;button&#39;);bIn.textContent=&#39;+&#39;;bIn.title=&#39;\u653e\u5927&#39;;
+    var bReset=document.createElement(&#39;button&#39;);bReset.textContent=&#39;\u21bb&#39;;bReset.title=&#39;\u590d\u4f4d&#39;;
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType=&#39;mouse&#39;,downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+&#39;,0,0,&#39;+scale+&#39;,&#39;+tx+&#39;,&#39;+ty+&#39;)&#39;;}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length&gt;=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener(&#39;click&#39;,function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener(&#39;wheel&#39;,function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY&lt;0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener(&#39;pointerdown&#39;,function(e){
+      if(e.pointerType===&#39;mouse&#39;&amp;&amp;e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add(&#39;dragging&#39;);}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove(&#39;dragging&#39;);
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener(&#39;pointermove&#39;,function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)&gt;4)moved=true;
+      if(ids().length===2&amp;&amp;pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d&gt;0&amp;&amp;d&gt;0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&amp;&amp;dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length&lt;2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add(&#39;dragging&#39;);}
+      else if(k.length===0){dragging=false;vp.classList.remove(&#39;dragging&#39;);}
+    }
+    svg.addEventListener(&#39;pointerup&#39;,end);svg.addEventListener(&#39;pointercancel&#39;,end);
+    svg.addEventListener(&#39;click&#39;,function(){
+      if(lastType!==&#39;mouse&#39;||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle(&#39;zooming&#39;,zoomMode);
+    });
+    svg.addEventListener(&#39;dblclick&#39;,function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+" sandbox="allow-scripts" loading="lazy" style="height:1300px"></iframe></figure>
+  </div>
+</article>
+<nav class="toc" aria-label="文章目录"><div class="toc-head"><span class="toc-title">本页目录</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a></div><div class="toc-group"><a href="#sec-1" class="">先背一句话：渠道受理，外围算业务，核心记总账</a></div><div class="toc-group"><a href="#sec-2" class="">一、先看市场：这套地图不是拍脑袋画的</a></div><div class="toc-group"><a href="#sec-3" class="">二、渠道层：银行的门脸，只收件不记账</a></div><div class="toc-group"><a href="#sec-4" class="">三、外围系统：银行的四个专业科室</a><a href="#sec-5" class="lv3">1. 客户经营类：CRM、ECIF、画像</a><a href="#sec-6" class="lv3">2. 业务流程类：信贷、理财、票据、国际业务</a><a href="#sec-7" class="lv3">3. 风控合规类：反洗钱、反欺诈、查控</a><a href="#sec-8" class="lv3">4. 运营支撑类：影像、工作流、报表、OA</a></div><div class="toc-group"><a href="#sec-9" class="">四、核心系统：账房先生，只认借贷相等</a></div><div class="toc-group"><a href="#sec-10" class="">五、两条贯穿线：数据线和外联线</a><a href="#sec-11" class="lv3">数据线：从「能记账」到「能看懂账」</a><a href="#sec-12" class="lv3">外联线：银行不是孤岛</a></div><div class="toc-group"><a href="#sec-13" class="">六、走一遍：一笔转账穿过哪些系统</a></div><div class="toc-group"><a href="#sec-14" class="">七、查控系统到底是谁的？</a></div><div class="toc-group"><a href="#sec-15" class="">八、为什么系统这么多？三个原因叠在一起</a></div><div class="toc-group"><a href="#sec-16" class="">九、建立上帝视角的三把钥匙</a><a href="#sec-17" class="lv3">钥匙一：问「这笔钱动没动」</a><a href="#sec-18" class="lv3">钥匙二：问四个问题——谁发起、谁判断、谁记账、谁看</a><a href="#sec-19" class="lv3">钥匙三：拿一笔真实交易去追</a></div><div class="toc-group"><a href="#sec-20" class="">十、常见误区</a></div><div class="toc-group"><a href="#sec-21" class="">十一、术语小抄</a></div><div class="toc-group"><a href="#sec-22" class="">十二、权威出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">银行系统版图图解（六张图）</a></div></nav>
+</div>
+</main>
+<div class="detail-actions"><a class="back-fab" href="../index.html" aria-label="返回文章列表"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>返回列表</a><button class="toc-fab" id="toc-fab" type="button" aria-expanded="false" aria-controls="toc-sheet"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h10" stroke-linecap="round"/><path d="M18 6h2M18 12h2M18 18h2" stroke-linecap="round"/></svg>目录</button></div><div class="toc-sheet" id="toc-sheet" role="dialog" aria-modal="true" aria-label="本页目录">
+  <div class="toc-backdrop" data-toc-close></div>
+  <div class="toc-panel">
+    <div class="toc-panel-head"><span>本页目录 · 23 节</span><a class="back" href="../index.html" aria-label="返回文章列表">← 返回列表</a><button class="toc-close" type="button" data-toc-close aria-label="关闭目录">×</button></div>
+    <nav class="toc" aria-label="文章目录"><div class="toc-group"><a href="#sec-1" class="">先背一句话：渠道受理，外围算业务，核心记总账</a></div><div class="toc-group"><a href="#sec-2" class="">一、先看市场：这套地图不是拍脑袋画的</a></div><div class="toc-group"><a href="#sec-3" class="">二、渠道层：银行的门脸，只收件不记账</a></div><div class="toc-group"><a href="#sec-4" class="">三、外围系统：银行的四个专业科室</a><a href="#sec-5" class="lv3">1. 客户经营类：CRM、ECIF、画像</a><a href="#sec-6" class="lv3">2. 业务流程类：信贷、理财、票据、国际业务</a><a href="#sec-7" class="lv3">3. 风控合规类：反洗钱、反欺诈、查控</a><a href="#sec-8" class="lv3">4. 运营支撑类：影像、工作流、报表、OA</a></div><div class="toc-group"><a href="#sec-9" class="">四、核心系统：账房先生，只认借贷相等</a></div><div class="toc-group"><a href="#sec-10" class="">五、两条贯穿线：数据线和外联线</a><a href="#sec-11" class="lv3">数据线：从「能记账」到「能看懂账」</a><a href="#sec-12" class="lv3">外联线：银行不是孤岛</a></div><div class="toc-group"><a href="#sec-13" class="">六、走一遍：一笔转账穿过哪些系统</a></div><div class="toc-group"><a href="#sec-14" class="">七、查控系统到底是谁的？</a></div><div class="toc-group"><a href="#sec-15" class="">八、为什么系统这么多？三个原因叠在一起</a></div><div class="toc-group"><a href="#sec-16" class="">九、建立上帝视角的三把钥匙</a><a href="#sec-17" class="lv3">钥匙一：问「这笔钱动没动」</a><a href="#sec-18" class="lv3">钥匙二：问四个问题——谁发起、谁判断、谁记账、谁看</a><a href="#sec-19" class="lv3">钥匙三：拿一笔真实交易去追</a></div><div class="toc-group"><a href="#sec-20" class="">十、常见误区</a></div><div class="toc-group"><a href="#sec-21" class="">十一、术语小抄</a></div><div class="toc-group"><a href="#sec-22" class="">十二、权威出处</a></div><div class="toc-group"><a href="#sec-embeds" class="">银行系统版图图解（六张图）</a></div></nav>
+  </div>
+</div>
+
+<script>
+(function(){
+  var fab = document.getElementById('toc-fab');
+  var sheet = document.getElementById('toc-sheet');
+
+  function openSheet(){
+    if (!sheet) return;
+    sheet.classList.add('on');
+    fab.setAttribute('aria-expanded','true');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSheet(){
+    if (!sheet || !sheet.classList.contains('on')) return;
+    sheet.classList.remove('on');
+    fab.setAttribute('aria-expanded','false');
+    document.body.style.overflow = '';
+  }
+
+  if (fab && sheet) {
+    fab.addEventListener('click', openSheet);
+    sheet.addEventListener('click', function(e){
+      if (e.target.closest('[data-toc-close]') || e.target.closest('a')) closeSheet();
+    });
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') closeSheet();
+    });
+  }
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  if (!links.length) return;
+  var targets = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); });
+  links.forEach(function(a){
+    a.addEventListener('click', function(e){
+      var el = document.getElementById(a.getAttribute('href').slice(1));
+      if (!el) return;
+      e.preventDefault();
+      closeSheet();
+      el.scrollIntoView({behavior:'smooth', block:'start'});
+      if (history.replaceState) history.replaceState(null, '', a.getAttribute('href'));
+    });
+  });
+  function update(){
+    var y = window.scrollY + 90, idx = 0;
+    for (var i=0;i<targets.length;i++){ if (targets[i] && targets[i].getBoundingClientRect().top + window.scrollY <= y) idx = i; }
+    links.forEach(function(a,i){ a.classList.toggle('active', i===idx); });
+  }
+  window.addEventListener('scroll', update, {passive:true});
+  window.addEventListener('resize', update);
+  update();
+})();
+</script>
+
+<script>
+(function(){
+  function fallbackCopy(text, done){
+    var ta=document.createElement('textarea');
+    ta.value=text; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='-2000px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta); done();
+  }
+  function copyText(text, done){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fallbackCopy(text, done); });
+    }else{ fallbackCopy(text, done); }
+  }
+  [].forEach.call(document.querySelectorAll('.code-block'), function(block){
+    var pre=block.querySelector('pre');
+    var toggle=block.querySelector('.code-toggle');
+    var copy=block.querySelector('.code-copy');
+    var label=block.getAttribute('data-expand-label')||'展开全部';
+    // 行数够长但实际没超高，就不必折叠，免得短代码也顶着「展开」
+    if(block.classList.contains('is-collapsed') && pre && pre.scrollHeight<=340){
+      block.classList.remove('is-collapsed');
+      if(toggle){ toggle.parentNode.removeChild(toggle); toggle=null; }
+    }
+    if(toggle){
+      toggle.addEventListener('click', function(){
+        var collapsed=block.classList.toggle('is-collapsed');
+        toggle.textContent = collapsed ? label : '收起';
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      });
+    }
+    if(copy){
+      copy.addEventListener('click', function(){
+        var code=block.querySelector('code');
+        copyText(code ? code.textContent : '', function(){
+          copy.textContent='已复制';
+          copy.classList.add('done');
+          setTimeout(function(){ copy.textContent='复制'; copy.classList.remove('done'); }, 1600);
+        });
+      });
+    }
+  });
+})();
+</script>
+<div class="modal-overlay" id="imgModal" role="dialog" aria-modal="true" aria-label="嵌入内容预览">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">嵌入内容</span>
+      <button type="button" class="modal-btn modal-landscape" data-modal-landscape>横屏查看</button>
+      <button type="button" class="modal-btn" data-modal-newtab>新标签页打开</button>
+      <button type="button" class="modal-close" data-modal-close aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body"><iframe title="嵌入内容预览" sandbox="allow-scripts" loading="lazy"></iframe></div>
+  </div>
+  <div class="land-tools">
+    <button type="button" data-modal-landscape>退出横屏</button>
+    <button type="button" data-modal-close aria-label="关闭">×</button>
+  </div>
+  <div class="rotate-hint" data-rotate-hint aria-hidden="true">
+    <div class="rh-icon">▭↻</div>
+    <div class="rh-title">请旋转手机至横屏</div>
+    <div class="rh-sub">图会自动铺满屏幕，看得更清楚</div>
+  </div>
+</div>
+<script>
+
+(function(){
+  var overlay = document.getElementById('imgModal');
+  if (!overlay) return;
+  var frame = overlay.querySelector('iframe');
+  var titleEl = overlay.querySelector('.modal-title');
+  var landBtn = overlay.querySelector('.modal-head [data-modal-landscape]');
+  var hint = overlay.querySelector('[data-rotate-hint]');
+  var currentUrl = '';
+  var hintTimer = null;
+
+  function showHint(){
+    if (!hint) return;
+    hint.classList.add('show');
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(hideHint, 4000);
+  }
+  function hideHint(){
+    if (hint) hint.classList.remove('show');
+  }
+  function isFullscreen(){
+    return document.fullscreenElement === overlay || document.webkitFullscreenElement === overlay;
+  }
+  function orient(){
+    return window.screen && (window.screen.orientation || window.screen.mozOrientation);
+  }
+  function enterLandscape(){
+    overlay.classList.add('landscape-mode');
+    if (landBtn) landBtn.textContent = '退出横屏';
+    /* 真全屏：Android Chrome / Edge 支持，iPhone Safari 会静默失败 */
+    var req = overlay.requestFullscreen || overlay.webkitRequestFullscreen;
+    if (req) {
+      try { Promise.resolve(req.call(overlay)).catch(function(){}); } catch(e){}
+    }
+    /* 旋转锁定：需要全屏 + 浏览器支持，失败则提示用户自己转 */
+    var o = orient(), locked = false;
+    if (o && o.lock) {
+      try {
+        var p = o.lock('landscape');
+        if (p && typeof p.then === 'function') {
+          p.then(function(){ locked = true; hideHint(); }).catch(function(){ showHint(); });
+        } else { locked = true; }
+      } catch(e){}
+    }
+    if (!locked) setTimeout(function(){
+      if (overlay.classList.contains('landscape-mode') && window.innerWidth < window.innerHeight) showHint();
+    }, 350);
+  }
+  function exitLandscape(){
+    if (!overlay.classList.contains('landscape-mode')) return;
+    overlay.classList.remove('landscape-mode');
+    hideHint();
+    if (landBtn) landBtn.textContent = '横屏查看';
+    var o = orient();
+    if (o && o.unlock) { try { o.unlock(); } catch(e){} }
+    if (isFullscreen()) {
+      var ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) { try { Promise.resolve(ex.call(document)).catch(function(){}); } catch(e){} }
+    }
+  }
+  window.addEventListener('resize', function(){
+    if (overlay.classList.contains('landscape-mode') && window.innerWidth > window.innerHeight) hideHint();
+  });
+
+  function open(src, doc, title){
+    titleEl.textContent = title || '嵌入内容';
+    currentUrl = src || '';
+    frame.removeAttribute('srcdoc');
+    if (doc !== null && doc !== undefined && doc !== '') frame.srcdoc = doc;
+    else frame.src = src || 'about:blank';
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function close(){
+    exitLandscape();
+    overlay.classList.remove('open');
+    frame.removeAttribute('srcdoc');
+    frame.src = 'about:blank';
+    currentUrl = '';
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('.embed-open');
+    if (btn){
+      e.preventDefault();
+      var fig = btn.closest('.embed-figure');
+      var srcFrame = fig ? fig.querySelector('iframe') : null;
+      if (btn.hasAttribute('data-modal-idx') && srcFrame && srcFrame.hasAttribute('srcdoc')){
+        open('', srcFrame.getAttribute('srcdoc'), btn.getAttribute('data-modal-title'));
+      } else {
+        open(btn.getAttribute('data-modal-src'), null, btn.getAttribute('data-modal-title'));
+      }
+      return;
+    }
+    if (e.target.closest('[data-modal-landscape]')){
+      e.preventDefault();
+      if (overlay.classList.contains('landscape-mode')) exitLandscape(); else enterLandscape();
+      return;
+    }
+    if (e.target.closest('[data-modal-newtab]')){
+      if (frame.hasAttribute('srcdoc')){
+        var blob = new Blob([frame.getAttribute('srcdoc')], {type:'text/html'});
+        window.open(URL.createObjectURL(blob), '_blank');
+      } else if (currentUrl){ window.open(currentUrl, '_blank'); }
+      return;
+    }
+    if (e.target.closest('[data-modal-close]') || e.target === overlay) close();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') { if (overlay.classList.contains('landscape-mode')) exitLandscape(); else close(); }
+  });
+})();
+</script>
+
+<button type="button" class="theme-toggle" id="themeToggle" aria-label="切换显示模式" aria-haspopup="true" aria-expanded="false" title="显示模式"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/></svg></button>
+<div class="theme-menu" id="themeMenu" role="menu" aria-label="显示模式">
+  <button type="button" data-mode="normal" role="menuitemradio" aria-checked="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg><span>默认</span><i class="tick">✓</i></button>
+  <button type="button" data-mode="eye" role="menuitemradio" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/></svg><span>护眼</span><i class="tick">✓</i></button>
+  <button type="button" data-mode="parchment" role="menuitemradio" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 0-2 2v10"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>羊皮纸</span><i class="tick">✓</i></button>
+  <button type="button" data-mode="dark" role="menuitemradio" aria-checked="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/></svg><span>深色</span><i class="tick">✓</i></button>
+</div>
+
+<script>
+(function(){
+  var btn=document.getElementById('themeToggle'), menu=document.getElementById('themeMenu');
+  if(!btn||!menu) return;
+  var root=document.documentElement;
+  function current(){ return root.getAttribute('data-mode')||'normal'; }
+  function sync(){
+    var m=current();
+    [].forEach.call(menu.querySelectorAll('button[data-mode]'), function(b){
+      var on=b.getAttribute('data-mode')===m;
+      b.classList.toggle('on',on);
+      b.setAttribute('aria-checked',on?'true':'false');
+    });
+    var names={normal:'默认',eye:'护眼',parchment:'羊皮纸',dark:'深色'};
+    btn.setAttribute('title','显示模式：'+(names[m]||'默认'));
+  }
+  function setMode(m){
+    if(m==='normal') root.removeAttribute('data-mode'); else root.setAttribute('data-mode',m);
+    try{ localStorage.setItem('blog-theme-mode',m); localStorage.removeItem('blog-eye-care'); }catch(e){}
+    sync();
+  }
+  function close(){ menu.classList.remove('on'); btn.setAttribute('aria-expanded','false'); }
+  btn.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=!menu.classList.contains('on');
+    menu.classList.toggle('on',open);
+    btn.setAttribute('aria-expanded',open?'true':'false');
+  });
+  menu.addEventListener('click',function(e){
+    var b=e.target.closest('button[data-mode]'); if(!b) return;
+    setMode(b.getAttribute('data-mode')); close();
+  });
+  document.addEventListener('click',function(e){ if(!menu.contains(e.target)&&e.target!==btn) close(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') close(); });
+  sync();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CRM 规范架构 · 六张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>CRM 规范架构：用四种架构分层讲清楚</h1>
+  <p>从市场真实背景出发，用业务、应用、数据、技术四个视角，把一套「买了还能用起来」的 CRM 拆开看。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#c1">市场背景</a><a href="#c2">四层总览</a><a href="#c3">业务架构</a><a href="#c4">应用架构</a><a href="#c5">数据架构</a><a href="#c6">技术架构</a>
+</div>
+
+<!-- 1 市场背景 -->
+<div class="card" id="c1">
+  <div class="card-head">
+    <h2><span class="num">1</span>市场背景：1280 亿美元的大生意，为什么买了用不起来 <span class="tag">开篇</span></h2>
+    <p>Gartner 口径 2024 年全球 CRM 软件约 1280 亿美元、增 13.4%；IDC 口径约 1040 亿美元，差别在边界怎么画。</p>
+  </div>
+  <svg viewBox="0 0 1040 520" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">一门大生意，和一个尴尬现象</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">市场在涨、厂商在卷 AI，但不少企业上线后系统里只剩历史名单和月末补录</text>
+
+      <rect x="44" y="88" width="452" height="150" rx="13" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="118" font-size="13" font-weight="700" fill="#0a58ca">市场有多大（口径不同，别平均）</text>
+      <text x="64" y="146" font-size="11.5" fill="#0a58ca">Gartner：2024 年约 1280 亿美元，同比 +13.4%</text>
+      <text x="64" y="170" font-size="11.5" fill="#0a58ca">IDC：按份额反推约 1040 亿美元</text>
+      <text x="64" y="194" font-size="10.5" fill="#6e6e73">Gartner 称其为跟踪的最大软件品类</text>
+      <text x="64" y="220" font-size="10.5" fill="#6e6e73">两家都把销售/营销/服务/电商算进来，边界略不同</text>
+
+      <rect x="544" y="88" width="452" height="150" rx="13" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="564" y="118" font-size="13" font-weight="700" fill="#1d7a45">格局：一超多强</text>
+      <text x="564" y="146" font-size="11.5" fill="#1d7a45">Salesforce 约占 20%（IDC：216 亿美元）</text>
+      <text x="564" y="170" font-size="11.5" fill="#1d7a45">Microsoft、SAP、Oracle 紧随其后</text>
+      <text x="564" y="194" font-size="10.5" fill="#1d7a45">国内更强调复杂审批、多组织与信创适配</text>
+      <text x="564" y="220" font-size="10.5" fill="#1d7a45">大厂都在卖 AI 坐席，定价按对话/结果</text>
+
+      <text x="44" y="272" font-size="13" font-weight="700" fill="#1d1d1f">尴尬现象：功能买齐了，就是没人用</text>
+      <rect x="44" y="286" width="952" height="106" rx="12" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="64" y="314" font-size="11.5" fill="#b71c1c">真实案例：某制造企业花一年选型、八个月上线，系统里只剩财务导入的名单和月末补录的拜访记录。</text>
+      <text x="64" y="340" font-size="11.5" font-weight="700" fill="#c62828">销售总监：「系统最大的作用是让我知道谁在裸奔。」</text>
+      <text x="64" y="368" font-size="11" fill="#b71c1c">根因不在功能少，在架构没分层：流程没理顺就定制字段、没有主数据就上画像、多系统各存一份客户却指望报表对得上。</text>
+
+      <rect x="44" y="414" width="952" height="88" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="64" y="442" font-size="12.5" font-weight="700" fill="#5b3a9e">CRM 早已不是一个销售通讯录</text>
+      <text x="64" y="468" font-size="11" fill="#5b3a9e">它是一捆软件：销售自动化 + 营销自动化 + 客户服务 + 电商 + 把数据串起来的平台</text>
+      <text x="64" y="490" font-size="11" font-weight="700" fill="#5b3a9e">只画一张功能清单，根本接不住现实 → 必须分层看架构</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先看左右两个框的口径差别——Gartner 和 IDC 数字不同但都对，引用时注明机构即可。中间那段红色案例是全图的引子：买的不是功能不够，是架构没搭对。最下面一句点题：CRM 是一捆软件，得靠分层来管。</div>
+</div>
+
+<!-- 2 四层总览 -->
+<div class="card" id="c2">
+  <div class="card-head">
+    <h2><span class="num">2</span>四层总览：不是四份 PPT，是同一系统的四种画法 <span class="tag">框架</span></h2>
+    <p>TOGAF 把企业架构分成业务、数据、应用、技术四个域（BDAT）。上层提要求，下层给能力。</p>
+  </div>
+  <svg viewBox="0 0 1040 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="c2a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">用一栋房子记住四层</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">听他抱怨什么，就知道他说的是哪一层</text>
+
+      <rect x="44" y="90" width="640" height="76" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="118" font-size="13" font-weight="700" fill="#0a58ca">① 业务架构 · 做什么生意</text>
+      <text x="64" y="142" font-size="10.5" fill="#0a58ca">价值链、能力地图、业务规则　｜　比喻：住几口人、要几个房间</text>
+      <text x="64" y="160" font-size="10" fill="#6e6e73">抱怨：「流程走不通，客户要填三遍」</text>
+
+      <rect x="44" y="186" width="640" height="76" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="64" y="214" font-size="13" font-weight="700" fill="#5b3a9e">② 应用架构 · 功能放哪个系统</text>
+      <text x="64" y="238" font-size="10.5" fill="#5b3a9e">模块边界、调用关系、套件还是自建　｜　比喻：房间怎么隔、门开在哪</text>
+      <text x="64" y="256" font-size="10" fill="#6e6e73">抱怨：「改一个客户信息要改五个系统」</text>
+
+      <rect x="44" y="282" width="640" height="76" rx="11" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="64" y="310" font-size="13" font-weight="700" fill="#a85c00">③ 数据架构 · 数据从哪来到哪去</text>
+      <text x="64" y="334" font-size="10.5" fill="#a85c00">主数据、ODS/DWD、指标口径　｜　比喻：水管电线怎么走</text>
+      <text x="64" y="352" font-size="10" fill="#6e6e73">抱怨：「三个报表三个数，财务不认」</text>
+
+      <rect x="44" y="378" width="640" height="76" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="64" y="406" font-size="13" font-weight="700" fill="#1d7a45">④ 技术架构 · 跑在什么上面</text>
+      <text x="64" y="430" font-size="10.5" fill="#1d7a45">五层技术栈、可观测与安全　｜　比喻：地基、钢筋、电梯</text>
+      <text x="64" y="448" font-size="10" fill="#6e6e73">抱怨：「一到高峰就超时，扩容还得停机」</text>
+
+      <rect x="708" y="90" width="288" height="364" rx="12" fill="#f2f2f7"/>
+      <text x="728" y="118" font-size="12.5" font-weight="700" fill="#1d1d1f">四层的关系</text>
+      <text x="728" y="150" font-size="11" fill="#48484a">上层提要求</text>
+      <text x="728" y="172" font-size="11" fill="#48484a">下层给能力</text>
+      <path d="M772,190 L772,382" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#c2a)"/>
+      <text x="792" y="240" font-size="10.5" fill="#48484a">业务规则一变</text>
+      <text x="792" y="262" font-size="10.5" fill="#48484a">下面三层跟着动</text>
+      <text x="728" y="404" font-size="10.5" font-weight="700" fill="#0a58ca">先定业务，不是流程洁癖</text>
+      <text x="728" y="428" font-size="10.5" fill="#6e6e73">想不清就开工，改四处</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>四层从上到下读，每层看三样：它回答什么问题、对应什么比喻、听到什么抱怨就是在说它。右边那句是关键——业务规则一变，下面三层都要跟着改，所以「先想清楚业务」不是走流程。</div>
+</div>
+
+<!-- 3 业务架构 -->
+<div class="card" id="c3">
+  <div class="card-head">
+    <h2><span class="num">3</span>业务架构：先把「客户关系」这门生意讲清楚 <span class="tag">第一层</span></h2>
+    <p>价值链是客户视角，能力地图是公司视角。两者要对得上，业务规则要写清。</p>
+  </div>
+  <svg viewBox="0 0 1040 540" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="c3a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">一条价值链，七个环节，七种能力托住</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">以连锁企业为例（虚构示例）：客户从留资到复购的完整旅程</text>
+
+      <g>
+        <rect x="44" y="94" width="126" height="58" rx="9" fill="#eef6ff" stroke="#a9cdf5"/>
+        <text x="107" y="118" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">线上留资</text>
+        <text x="107" y="138" font-size="10" fill="#0a58ca" text-anchor="middle">获客能力</text>
+        <rect x="182" y="94" width="126" height="58" rx="9" fill="#eef6ff" stroke="#a9cdf5"/>
+        <text x="245" y="118" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">线索分配</text>
+        <text x="245" y="138" font-size="10" fill="#0a58ca" text-anchor="middle">线索能力</text>
+        <rect x="320" y="94" width="126" height="58" rx="9" fill="#eef6ff" stroke="#a9cdf5"/>
+        <text x="383" y="118" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">跟进转化</text>
+        <text x="383" y="138" font-size="10" fill="#0a58ca" text-anchor="middle">销售能力</text>
+        <rect x="458" y="94" width="126" height="58" rx="9" fill="#eef6ff" stroke="#a9cdf5"/>
+        <text x="521" y="118" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">签约开卡</text>
+        <text x="521" y="138" font-size="10" fill="#0a58ca" text-anchor="middle">交易能力</text>
+        <rect x="596" y="94" width="126" height="58" rx="9" fill="#eef6ff" stroke="#a9cdf5"/>
+        <text x="659" y="118" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">到店消费</text>
+        <text x="659" y="138" font-size="10" fill="#0a58ca" text-anchor="middle">会员能力</text>
+        <rect x="734" y="94" width="126" height="58" rx="9" fill="#eef6ff" stroke="#a9cdf5"/>
+        <text x="797" y="118" font-size="11" font-weight="700" fill="#0a58ca" text-anchor="middle">售后服务</text>
+        <text x="797" y="138" font-size="10" fill="#0a58ca" text-anchor="middle">服务能力</text>
+        <rect x="872" y="94" width="124" height="58" rx="9" fill="#f3f0ff" stroke="#cfc9f5"/>
+        <text x="934" y="118" font-size="11" font-weight="700" fill="#5b3a9e" text-anchor="middle">复购推荐</text>
+        <text x="934" y="138" font-size="10" fill="#5b3a9e" text-anchor="middle">分析能力</text>
+      </g>
+      <g stroke="#007aff" stroke-width="1.6" fill="none" marker-end="url(#c3a)">
+        <path d="M172,122 L180,122"/><path d="M310,122 L318,122"/><path d="M448,122 L456,122"/>
+        <path d="M586,122 L594,122"/><path d="M724,122 L732,122"/><path d="M862,122 L870,122"/>
+      </g>
+
+      <text x="44" y="192" font-size="12.5" font-weight="700" fill="#1d1d1f">三类 CRM，对应三种业务价值</text>
+      <rect x="44" y="206" width="306" height="96" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="232" font-size="12" font-weight="700" fill="#0a58ca">操作型 · 让一线干得规范</text>
+      <text x="62" y="256" font-size="10.5" fill="#0a58ca">销售 / 营销 / 服务自动化</text>
+      <text x="62" y="280" font-size="10.5" fill="#0a58ca">线索别漏跟、流程别断档</text>
+      <rect x="367" y="206" width="306" height="96" rx="11" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="385" y="232" font-size="12" font-weight="700" fill="#a85c00">分析型 · 让后台看得清楚</text>
+      <text x="385" y="256" font-size="10.5" fill="#a85c00">画像 / 预测 / 流失预警</text>
+      <text x="385" y="280" font-size="10.5" fill="#a85c00">谁值得跟、谁要跑了</text>
+      <rect x="690" y="206" width="306" height="96" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="708" y="232" font-size="12" font-weight="700" fill="#5b3a9e">协作型 · 让各方看到同一个客户</text>
+      <text x="708" y="256" font-size="10.5" fill="#5b3a9e">渠道门户 / 消息中心 / 知识库</text>
+      <text x="708" y="280" font-size="10.5" fill="#5b3a9e">销售、客服、经销商信息同步</text>
+
+      <text x="44" y="338" font-size="12.5" font-weight="700" fill="#1d1d1f">最容易被漏掉、又最值钱的是业务规则</text>
+      <rect x="44" y="352" width="952" height="120" rx="12" fill="#f2f2f7"/>
+      <text x="64" y="378" font-size="11" fill="#48484a">· 线索多久没跟进就回收？回收给谁？</text>
+      <text x="64" y="400" font-size="11" fill="#48484a">· 一个客户归销售还是归客服？冲突时谁说了算？</text>
+      <text x="64" y="422" font-size="11" fill="#48484a">· 积分按消费额还是次数？退货怎么扣？</text>
+      <text x="64" y="444" font-size="11" fill="#48484a">· 营销一天最多触达几次？客户投诉后是否自动停推？</text>
+      <text x="64" y="466" font-size="11" font-weight="700" fill="#c62828">这些写不清，后面三层全是猜——上线就是「系统跟业务说的不一样」。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上排从左到右读七环节，上排是客户经历的流程、下排是公司要有的能力，两者要一一对上。中间三框是 Salesforce 官方的三类 CRM 口径：一类管「干」、一类管「看」、一类管「一起干」。最下面五条业务规则是全图重点——它们不写清，技术再好也白搭。</div>
+</div>
+
+<!-- 4 应用架构 -->
+<div class="card" id="c4">
+  <div class="card-head">
+    <h2><span class="num">4</span>应用架构：功能到底放在哪个系统里 <span class="tag">第二层</span></h2>
+    <p>核心词只有一个：边界。触点只采集不存主数据，业务模块一份数据只有一个系统能改。</p>
+  </div>
+  <svg viewBox="0 0 1040 546" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">从触点到平台：一套规范 CRM 的应用分层</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">每一层只做自己的事，谁存主数据、谁只引用，必须说清楚</text>
+
+      <rect x="44" y="88" width="952" height="66" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="112" font-size="12" font-weight="700" fill="#0a58ca">触点层 · 只采集和展示，不存业务主数据</text>
+      <text x="64" y="136" font-size="10.5" fill="#0a58ca">官网　·　App　·　小程序　·　企业微信　·　门店终端　·　呼叫中心　·　开放 API</text>
+
+      <rect x="44" y="170" width="952" height="76" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="64" y="196" font-size="12" font-weight="700" fill="#1d7a45">业务应用层 · 操作型 CRM 主战场</text>
+      <text x="64" y="220" font-size="10.5" fill="#1d7a45">线索管理　·　客户管理　·　商机与销售漏斗　·　营销活动　·　工单与服务　·　会员与权益</text>
+      <text x="64" y="238" font-size="10" fill="#1d7a45">一份数据只有一个系统能改：客户主数据只在客户中心改，营销系统只能引用</text>
+
+      <rect x="44" y="262" width="470" height="80" rx="11" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="64" y="288" font-size="12" font-weight="700" fill="#a85c00">分析应用层 · 分析型 CRM</text>
+      <text x="64" y="312" font-size="10.5" fill="#a85c00">客户画像　·　标签体系　·　流失预警　·　营销归因</text>
+      <text x="64" y="332" font-size="10" fill="#a85c00">数据来自数据层，不直接改业务库</text>
+      <rect x="526" y="262" width="470" height="80" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="546" y="288" font-size="12" font-weight="700" fill="#5b3a9e">协同应用层 · 协作型 CRM</text>
+      <text x="546" y="312" font-size="10.5" fill="#5b3a9e">渠道门户　·　内部知识库　·　消息中心</text>
+      <text x="546" y="332" font-size="10" fill="#5b3a9e">把销售、客服、经销商拉到同一张桌</text>
+
+      <rect x="44" y="358" width="952" height="60" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="382" font-size="12" font-weight="700" fill="#1d1d1f">平台能力 · 贯穿上面各层</text>
+      <text x="64" y="405" font-size="10.5" fill="#48484a">流程引擎　·　规则引擎　·　权限与审批　·　消息总线　·　开放 API</text>
+
+      <text x="44" y="450" font-size="12.5" font-weight="700" fill="#1d1d1f">边界划得好不好，三条土办法</text>
+      <rect x="44" y="464" width="306" height="68" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="490" font-size="11" font-weight="700" fill="#0a58ca">① 一份数据一处改</text>
+      <text x="62" y="514" font-size="10" fill="#0a58ca">否则迟早两个版本</text>
+      <rect x="367" y="464" width="306" height="68" rx="10" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="385" y="490" font-size="11" font-weight="700" fill="#1d7a45">② 一个挂了别家能用</text>
+      <text x="385" y="514" font-size="10" fill="#1d7a45">画像挂了照样录商机</text>
+      <rect x="690" y="464" width="306" height="68" rx="10" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="708" y="490" font-size="11" font-weight="700" fill="#a85c00">③ 换实现不改别家</text>
+      <text x="708" y="514" font-size="10" fill="#a85c00">换短信商别动五个系统</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>从上到下读五层，注意触点层那句「只采集不存主数据」——这是很多企业客户信息打架的起点。中间四个框对应三类 CRM 加平台能力。最下面三条检验标准拿去评审时用：违反任何一条，边界就该重画。</div>
+</div>
+
+<!-- 5 数据架构 -->
+<div class="card" id="c5">
+  <div class="card-head">
+    <h2><span class="num">5</span>数据架构：客户只有一份，口径只有一套 <span class="tag">第三层</span></h2>
+    <p>难点不在画客户表，而在数据从哪来、怎么加工、口径谁说了算，以及 OLTP 与 OLAP 分开。</p>
+  </div>
+  <svg viewBox="0 0 1040 552" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="c5a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">一条数据旅程：四段加工，两个世界</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">左边交易要快要准（OLTP），右边分析要全要能算（OLAP），别混在一个库</text>
+
+      <rect x="44" y="90" width="210" height="112" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="116" font-size="12" font-weight="700" fill="#0a58ca">源系统</text>
+      <text x="62" y="140" font-size="10.5" fill="#0a58ca">CRM 交易数据</text>
+      <text x="62" y="160" font-size="10.5" fill="#0a58ca">ERP 订单 / 财务回款</text>
+      <text x="62" y="180" font-size="10.5" fill="#0a58ca">App 埋点 / 录音转写</text>
+
+      <rect x="292" y="90" width="210" height="112" rx="11" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="310" y="116" font-size="12" font-weight="700" fill="#48484a">贴源层 ODS</text>
+      <text x="310" y="140" font-size="10.5" fill="#48484a">原样同步，不加工</text>
+      <text x="310" y="164" font-size="10.5" fill="#48484a">出事能回溯到</text>
+      <text x="310" y="184" font-size="10.5" fill="#48484a">原始数据</text>
+
+      <rect x="540" y="90" width="210" height="112" rx="11" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="558" y="116" font-size="12" font-weight="700" fill="#a85c00">明细层 DWD</text>
+      <text x="558" y="140" font-size="10.5" fill="#a85c00">清洗、去重、统一字段</text>
+      <text x="558" y="164" font-size="10.5" fill="#a85c00">让全公司认同</text>
+      <text x="558" y="184" font-size="10.5" fill="#a85c00">「一个客户」是什么</text>
+
+      <rect x="788" y="90" width="208" height="112" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="806" y="116" font-size="12" font-weight="700" fill="#5b3a9e">画像 / 标签 / 集市</text>
+      <text x="806" y="140" font-size="10.5" fill="#5b3a9e">按主题组装宽表</text>
+      <text x="806" y="164" font-size="10.5" fill="#5b3a9e">让画像和营销</text>
+      <text x="806" y="184" font-size="10.5" fill="#5b3a9e">跑得快</text>
+
+      <g stroke="#007aff" stroke-width="1.8" fill="none" marker-end="url(#c5a)">
+        <path d="M256,146 L289,146"/><path d="M504,146 L537,146"/><path d="M752,146 L785,146"/>
+      </g>
+      <text x="44" y="222" font-size="10.5" fill="#0a58ca">◀ OLTP：一行一条，要快要准</text>
+      <text x="788" y="222" font-size="10.5" fill="#5b3a9e">OLAP：一批一堆，要全要能算 ▶</text>
+
+      <text x="44" y="264" font-size="12.5" font-weight="700" fill="#1d1d1f">最容易出事的不是存储，是口径</text>
+      <rect x="44" y="278" width="952" height="96" rx="12" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="64" y="304" font-size="11" fill="#b71c1c">同一个「活跃客户」：运营说七天内有登录，销售说七天内有跟进，财务说七天内有付款。</text>
+      <text x="64" y="328" font-size="11" font-weight="700" fill="#c62828">三个数都对，放在同一场会上就是吵架。</text>
+      <text x="64" y="354" font-size="10.5" fill="#b71c1c">所以数据架构的产出不只是表结构，还要有主数据、指标口径、数据流与生命周期。</text>
+
+      <rect x="44" y="394" width="306" height="94" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="420" font-size="12" font-weight="700" fill="#0a58ca">客户主数据</text>
+      <text x="62" y="444" font-size="10.5" fill="#0a58ca">客户 ID 全公司唯一</text>
+      <text x="62" y="466" font-size="10.5" fill="#0a58ca">手机号 / 等级 / 归属人一处维护</text>
+      <rect x="367" y="394" width="306" height="94" rx="11" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="385" y="420" font-size="12" font-weight="700" fill="#a85c00">指标口径</text>
+      <text x="385" y="444" font-size="10.5" fill="#a85c00">一句话定义 + 一个负责人</text>
+      <text x="385" y="466" font-size="10.5" fill="#a85c00">写到别人能复算出来</text>
+      <rect x="690" y="394" width="306" height="94" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="708" y="420" font-size="12" font-weight="700" fill="#5b3a9e">数据流与生命周期</text>
+      <text x="708" y="444" font-size="10.5" fill="#5b3a9e">哪些实时、哪些 T+1</text>
+      <text x="708" y="466" font-size="10.5" fill="#5b3a9e">存多久、谁能看、能否导出</text>
+
+      <rect x="44" y="508" width="952" height="32" rx="9" fill="#1d1d1f"/>
+      <text x="64" y="529" font-size="11" font-weight="700" fill="#ffffff">强监管行业再加一条：数据不出域、访问留痕、脱敏可配置——合规不是上线后补的功能。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上排四框从左到右是数据加工链，重点看下方两条标注：左边是交易、右边是分析，混在一个库里白天跑报表交易就卡。中间红框说明「口径」才是真正的战场。下面三框是数据架构除表结构外必须交付的三样东西，最后一行是金融政企的合规底线。</div>
+</div>
+
+<!-- 6 技术架构 -->
+<div class="card" id="c6">
+  <div class="card-head">
+    <h2><span class="num">6</span>技术架构：跑在什么上面，坏了怎么办 <span class="tag">第四层</span></h2>
+    <p>五层技术栈 + 两条贯穿能力。选型要能回答：为什么是它、出问题怎么恢复、涨十倍怎么办。</p>
+  </div>
+  <svg viewBox="0 0 1040 552" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">五层技术栈，加两条贯穿所有层的线</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">它最容易被当成全部架构，其实只是最底下那层</text>
+
+      <rect x="44" y="90" width="640" height="52" rx="9" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="114" font-size="11.5" font-weight="700" fill="#0a58ca">接入层</text>
+      <text x="180" y="114" font-size="10.5" fill="#0a58ca">网关　·　负载均衡　·　WAF　·　移动端与开放 API</text>
+      <rect x="44" y="152" width="640" height="52" rx="9" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="62" y="176" font-size="11.5" font-weight="700" fill="#5b3a9e">应用运行层</text>
+      <text x="180" y="176" font-size="10.5" fill="#5b3a9e">容器与编排　·　虚机　·　Serverless</text>
+      <rect x="44" y="214" width="640" height="52" rx="9" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="62" y="238" font-size="11.5" font-weight="700" fill="#a85c00">中间件层</text>
+      <text x="180" y="238" font-size="10.5" fill="#a85c00">消息队列　·　缓存　·　流程引擎　·　分布式任务　·　统一认证</text>
+      <rect x="44" y="276" width="640" height="52" rx="9" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="62" y="300" font-size="11.5" font-weight="700" fill="#1d7a45">数据存储层</text>
+      <text x="180" y="300" font-size="10.5" fill="#1d7a45">关系库　·　对象存储　·　搜索引擎　·　数仓与数据集市</text>
+      <rect x="44" y="338" width="640" height="52" rx="9" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="62" y="362" font-size="11.5" font-weight="700" fill="#48484a">基础设施层</text>
+      <text x="180" y="362" font-size="10.5" fill="#48484a">公有云 / 私有云 / 信创环境　·　网络　·　备份　·　容灾</text>
+
+      <rect x="708" y="90" width="288" height="150" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="728" y="118" font-size="12" font-weight="700" fill="#0a58ca">贯穿线一 · 可观测</text>
+      <text x="728" y="144" font-size="10.5" fill="#0a58ca">日志、指标、链路追踪</text>
+      <text x="728" y="166" font-size="10.5" fill="#0a58ca">告警与值班</text>
+      <text x="728" y="192" font-size="10.5" fill="#6e6e73">不是一个层</text>
+      <text x="728" y="214" font-size="10.5" fill="#6e6e73">每层都要有</text>
+      <rect x="708" y="252" width="288" height="138" rx="11" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="728" y="280" font-size="12" font-weight="700" fill="#c62828">贯穿线二 · 安全</text>
+      <text x="728" y="306" font-size="10.5" fill="#b71c1c">认证授权、传输加密</text>
+      <text x="728" y="328" font-size="10.5" fill="#b71c1c">密钥管理、审计留痕</text>
+      <text x="728" y="354" font-size="10.5" fill="#6e6e73">同样不是一个层</text>
+      <text x="728" y="376" font-size="10.5" fill="#6e6e73">每层都要有</text>
+
+      <text x="44" y="428" font-size="12.5" font-weight="700" fill="#1d1d1f">市场现实让这一层多了三个必答题</text>
+      <rect x="44" y="442" width="306" height="94" rx="10" fill="#f2f2f7"/>
+      <text x="62" y="468" font-size="11" font-weight="700" fill="#1d1d1f">① 云还是私有化？</text>
+      <text x="62" y="492" font-size="10" fill="#48484a">SaaS 迭代快，数据在外</text>
+      <text x="62" y="514" font-size="10" fill="#48484a">政企金融常要信创适配</text>
+      <rect x="367" y="442" width="306" height="94" rx="10" fill="#f2f2f7"/>
+      <text x="385" y="468" font-size="11" font-weight="700" fill="#1d1d1f">② 出问题怎么恢复？</text>
+      <text x="385" y="492" font-size="10" fill="#48484a">RTO 多久恢复</text>
+      <text x="385" y="514" font-size="10" fill="#48484a">RPO 能丢多少数据</text>
+      <rect x="690" y="442" width="306" height="94" rx="10" fill="#f2f2f7"/>
+      <text x="708" y="468" font-size="11" font-weight="700" fill="#1d1d1f">③ 涨十倍怎么办？</text>
+      <text x="708" y="492" font-size="10" fill="#48484a">客户量、坐席翻十倍</text>
+      <text x="708" y="514" font-size="10" fill="#c62828">答不上就开始还债</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左侧五层从上到下读，注意右边两条贯穿线——可观测和安全不是单独一层，是每层都该有的能力。下面三个必答题拿去问选型：合规红线在哪、RTO/RPO 多少、十倍流量怎么扩。第三题答不上来的方案，通常半年后开始还债。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
