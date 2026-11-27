@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = __dirname;
 const LOCAL_MD_DIR = path.join(ROOT, 'new_ai_blog');
@@ -55,10 +56,12 @@ function splitList(value) {
   return String(value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 }
 
-function slugify(name, index) {
-  const ascii = String(name).toLowerCase().replace(/\.md$/i, '')
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return (ascii || 'post') + '-' + index;
+// slug 固定为「日期-标题哈希」：只由 date 和 title 决定，与文件遍历顺序、文章总数无关，
+// 新增或删除文章都不会让历史链接失效。同一天同一标题视为同一篇（会走下面的撞号兜底）。
+function slugFor(meta) {
+  const datePart = String(meta.date || '').replace(/[^0-9-]/g, '') || 'undated';
+  const h = crypto.createHash('sha1').update(String(meta.title || '').trim(), 'utf8').digest('hex').slice(0, 6);
+  return datePart + '-' + h;
 }
 
 function parseMarkdown(file, index) {
@@ -92,7 +95,7 @@ function parseMarkdown(file, index) {
   const time = /^\d{2}:\d{2}$/.test(meta.time || '') ? meta.time : '00:00';
 
   return {
-    slug: slugify(path.basename(file), index),
+    slug: slugFor(meta),
     title: meta.title,
     date: meta.date,
     stamp: meta.date + 'T' + time,
@@ -959,6 +962,14 @@ function build() {
     return parseMarkdown(path.join(MD_DIR, name), i + 1);
   }).filter(Boolean).sort(function(a, b) {
     return b.stamp.localeCompare(a.stamp);
+  });
+
+  // 极端情况：同一天、同一标题会被算出同一个 slug，这里加序号兜底，避免静默覆盖文件
+  const slugSeen = {};
+  posts.forEach(function(p) {
+    if (!slugSeen[p.slug]) { slugSeen[p.slug] = 1; return; }
+    slugSeen[p.slug] += 1;
+    p.slug = p.slug + '-' + slugSeen[p.slug];
   });
 
   // 先根据当前文章重建分类，后续首页/详情页都使用动态分类表
