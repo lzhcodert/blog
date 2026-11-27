@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>「央行负债」到底什么意思 · 五张图讲明白</title>
+<title>「央行负债」到底什么意思 · 八张图讲明白</title>
 <style>
   :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
   *{box-sizing:border-box}
@@ -38,11 +38,11 @@
 <body>
 <div class="hero">
   <h1>「央行负债」到底什么意思</h1>
-  <p>钱不是东西，是欠条。谁开的欠条，这笔钱就是谁的负债。五张图，从一张 100 元讲到数币 2.0。</p>
+  <p>钱不是东西，是欠条。谁开的欠条，这笔钱就是谁的负债。八张图，从一张 100 元讲到它怎么来到你手上，再到数币 2.0 换了发行人。</p>
 </div>
 <div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
 <div class="nav">
-  <a href="#e1">三层欠条</a><a href="#e2">央行资产负债表</a><a href="#e3">负债搬家</a><a href="#e4">为什么必须是央行</a><a href="#e5">1.0 与 2.0</a>
+  <a href="#e1">三层欠条</a><a href="#e2">央行资产负债表</a><a href="#e3">传递链条</a><a href="#e4">三种投放</a><a href="#e5">三次背书</a><a href="#e6">负债搬家</a><a href="#e7">为什么必须是央行</a><a href="#e8">1.0 与 2.0</a>
 </div>
 
 <!-- 1 三层欠条 -->
@@ -175,10 +175,213 @@
   <div class="foot"><b>怎么看：</b>左右两栏是一张 T 型账，左边资产、右边负债，中间那根双向箭头告诉你两件事同时发生、金额相同。先看右栏第一行「货币发行（M0）」——这一行才是你钱包里那些钱的会计身份；再看左栏第一行「外汇储备 +100 亿」，那是它的来处。两栏底部各有一条浅色说明，左边写「凭据」，右边写「流到公众手里的钱」，这一对照就懂了两边的关系。下面三行文字是判断标准：判断钱是不是白印，看资产端有没有对应项，不看负债数字。黑条是全图结论。</div>
 </div>
 
-<!-- 3 负债搬家 -->
+<!-- 3 传递链条 -->
 <div class="card" id="e3">
   <div class="card-head">
-    <h2><span class="num">3</span>1.0 的数币，是一次「负债搬家」 <span class="tag">流程</span></h2>
+    <h2><span class="num">3</span>从央行到你手里，这张条子转了四道手 <span class="tag">链条</span></h2>
+    <p>央行主动开条子的对象只有银行和政府；你是末端，不是起点。</p>
+  </div>
+  <svg viewBox="0 0 1040 600" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">这张欠条怎么从央行走到你手里</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">前三步走完，欠你钱的还是银行；第四步一取现，债务人才换成央行</text>
+
+      <rect x="44" y="84" width="952" height="36" rx="8" fill="#efeff4"/>
+      <text x="76" y="107" font-size="10.5" font-weight="700" fill="#6e6e73">步</text>
+      <text x="152" y="107" font-size="10.5" font-weight="700" fill="#6e6e73">发生了什么</text>
+      <text x="556" y="107" font-size="10.5" font-weight="700" fill="#6e6e73">账上怎么记</text>
+      <text x="836" y="107" font-size="10.5" font-weight="700" fill="#6e6e73">此刻谁欠你</text>
+
+      <rect x="44" y="120" width="952" height="68" fill="#ffffff"/>
+      <circle cx="80" cy="154" r="13" fill="#e6e2ff"/>
+      <text x="80" y="158" font-size="12" font-weight="700" fill="#4b3fa8" text-anchor="middle">1</text>
+      <text x="152" y="148" font-size="11.5" fill="#1d1d1f">央行向银行买外汇，或给银行放贷</text>
+      <text x="152" y="170" font-size="10" fill="#8e8e93">发生在央行和银行之间，和你无关</text>
+      <text x="556" y="158" font-size="10.5" fill="#48484a">外汇 +100 ／ 准备金存款 +100</text>
+      <text x="836" y="158" font-size="11.5" font-weight="700" fill="#4b3fa8">央行欠银行</text>
+
+      <rect x="44" y="188" width="952" height="68" fill="#fafafa"/>
+      <circle cx="80" cy="222" r="13" fill="#e6e2ff"/>
+      <text x="80" y="226" font-size="12" font-weight="700" fill="#4b3fa8" text-anchor="middle">2</text>
+      <text x="152" y="216" font-size="11.5" fill="#1d1d1f">银行把这 100 元放贷给企业</text>
+      <text x="152" y="238" font-size="10" fill="#8e8e93">企业账户上多出一笔存款</text>
+      <text x="556" y="226" font-size="10.5" fill="#48484a">贷款 +100 ／ 企业存款 +100</text>
+      <text x="836" y="226" font-size="11.5" font-weight="700" fill="#4b3fa8">银行欠企业</text>
+
+      <rect x="44" y="256" width="952" height="68" fill="#ffffff"/>
+      <circle cx="80" cy="290" r="13" fill="#e6e2ff"/>
+      <text x="80" y="294" font-size="12" font-weight="700" fill="#4b3fa8" text-anchor="middle">3</text>
+      <text x="152" y="284" font-size="11.5" fill="#1d1d1f">企业发你 100 元工资</text>
+      <text x="152" y="306" font-size="10" fill="#8e8e93">钱进了你的活期账户，此时还叫存款</text>
+      <text x="556" y="294" font-size="10.5" fill="#48484a">企业存款 −100 ／ 你的活期 +100</text>
+      <text x="836" y="294" font-size="11.5" font-weight="700" fill="#4b3fa8">银行欠你</text>
+
+      <rect x="44" y="324" width="952" height="68" fill="#eafaf2"/>
+      <circle cx="80" cy="358" r="13" fill="#d3f2e5"/>
+      <text x="80" y="362" font-size="12" font-weight="700" fill="#0f6e56" text-anchor="middle">4</text>
+      <text x="152" y="352" font-size="11.5" font-weight="700" fill="#0f6e56">你取现，或把活期兑成数币</text>
+      <text x="152" y="374" font-size="10" fill="#27500a">你主动把银行的欠条，换成了央行的</text>
+      <text x="556" y="362" font-size="10.5" fill="#27500a">准备金 −100 ／ 货币发行 +100</text>
+      <text x="836" y="362" font-size="11.5" font-weight="700" fill="#0f6e56">换人：央行欠你</text>
+
+      <rect x="44" y="402" width="952" height="64" rx="10" fill="#eafaf2" stroke="#5dcaa5"/>
+      <text x="64" y="428" font-size="12.5" font-weight="700" fill="#0f6e56">结果：钱到了你的口袋，或数币钱包里</text>
+      <text x="64" y="450" font-size="10.5" fill="#27500a">这一刻，央行负债直接落到个人头上——这一步叫「兑出」，换回去叫「兑回」</text>
+
+      <text x="44" y="490" font-size="11.5" fill="#48484a">卡里的 100 元是「银行欠你」；口袋和钱包里的 100 元才是「央行欠你」</text>
+      <text x="44" y="512" font-size="10.5" fill="#6e6e73">同一笔钱换个形态，债务人就换了：总数一分没多，风险等级变了一档</text>
+
+      <rect x="44" y="530" width="952" height="58" rx="12" fill="#1d1d1f"/>
+      <text x="64" y="556" font-size="13" font-weight="700" fill="#7dd3fc">不是央行把钱发给你，是你把「银行欠你的」换成了「央行欠你的」</text>
+      <text x="64" y="576" font-size="10.5" fill="#d1d5db">这就是 1.0 数币的全部动作：一次负债搬家，不是一笔新钱</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>这张表要竖着读，只看最右一列「此刻谁欠你」。前三行写的都是银行——企业存款是银行欠企业，你的活期是银行欠你，一路下来央行根本没露过面。到第四行颜色变了，债务人第一次变成央行，靠的动作只有一个：你取现，或把活期兑成数币。表格下面那条绿底是收口：钱到你手里那一刻，央行负债才真正落到个人头上。最下面一行是全文最容易混的地方——同一笔钱，卡里和口袋里是两个债务人，别把它们当成一回事。</div>
+</div>
+
+<!-- 4 三种投放 -->
+<div class="card" id="e4">
+  <div class="card-head">
+    <h2><span class="num">4</span>央行凭什么敢一直开：三条投放渠道 <span class="tag">机制</span></h2>
+    <p>每开一张条子，手里都多一笔资产；「印钱」其实是一次资产交换。</p>
+  </div>
+  <svg viewBox="0 0 1040 500" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">三种投放方式，三种抵押物</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">同样是把钱放出去，央行换回来的东西完全不同</text>
+
+      <rect x="44" y="96" width="308" height="252" rx="12" fill="#fff8ec" stroke="#f5cf8a"/>
+      <rect x="44" y="96" width="308" height="46" rx="12" fill="#fdeccd"/>
+      <text x="62" y="124" font-size="12.5" font-weight="700" fill="#854f0b">买外汇（早年主力）</text>
+      <text x="62" y="172" font-size="10.5" fill="#6e6e73">换到</text>
+      <text x="334" y="172" font-size="10.5" fill="#1d1d1f" text-anchor="end">外汇储备</text>
+      <text x="62" y="200" font-size="10.5" fill="#6e6e73">投放</text>
+      <text x="334" y="200" font-size="10.5" fill="#1d1d1f" text-anchor="end">人民币（准备金）</text>
+      <text x="62" y="228" font-size="10.5" fill="#6e6e73">对象</text>
+      <text x="334" y="228" font-size="10.5" fill="#1d1d1f" text-anchor="end">结汇的企业与个人</text>
+      <text x="62" y="256" font-size="10.5" fill="#6e6e73">期限</text>
+      <text x="334" y="256" font-size="10.5" fill="#1d1d1f" text-anchor="end">无到期日</text>
+      <rect x="62" y="276" width="272" height="50" rx="9" fill="#fdeccd"/>
+      <text x="78" y="298" font-size="10.5" font-weight="700" fill="#854f0b">抵押物最实在</text>
+      <text x="78" y="316" font-size="10" fill="#8a6a2f">但被动：外汇流入多，投放就多</text>
+
+      <rect x="366" y="96" width="308" height="252" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <rect x="366" y="96" width="308" height="46" rx="12" fill="#dcecff"/>
+      <text x="384" y="124" font-size="12.5" font-weight="700" fill="#0a58ca">给银行放贷（现在主力）</text>
+      <text x="384" y="172" font-size="10.5" fill="#6e6e73">换到</text>
+      <text x="656" y="172" font-size="10.5" fill="#1d1d1f" text-anchor="end">对银行的债权</text>
+      <text x="384" y="200" font-size="10.5" fill="#6e6e73">投放</text>
+      <text x="656" y="200" font-size="10.5" fill="#1d1d1f" text-anchor="end">准备金，再变成贷款</text>
+      <text x="384" y="228" font-size="10.5" fill="#6e6e73">对象</text>
+      <text x="656" y="228" font-size="10.5" fill="#1d1d1f" text-anchor="end">银行、借款人</text>
+      <text x="384" y="256" font-size="10.5" fill="#6e6e73">期限</text>
+      <text x="656" y="256" font-size="10.5" fill="#1d1d1f" text-anchor="end">7 天到 1 年，到期收回</text>
+      <rect x="384" y="276" width="272" height="50" rx="9" fill="#dcecff"/>
+      <text x="400" y="298" font-size="10.5" font-weight="700" fill="#0a58ca">有期限、可收回</text>
+      <text x="400" y="316" font-size="10" fill="#3f5f8a">最灵活，也是现在的主渠道</text>
+
+      <rect x="688" y="96" width="308" height="252" rx="12" fill="#f3f0ff" stroke="#8f8ae8"/>
+      <rect x="688" y="96" width="308" height="46" rx="12" fill="#e6e2ff"/>
+      <text x="706" y="124" font-size="12.5" font-weight="700" fill="#4b3fa8">二级市场买国债</text>
+      <text x="706" y="172" font-size="10.5" fill="#6e6e73">换到</text>
+      <text x="978" y="172" font-size="10.5" fill="#1d1d1f" text-anchor="end">国债</text>
+      <text x="706" y="200" font-size="10.5" fill="#6e6e73">投放</text>
+      <text x="978" y="200" font-size="10.5" fill="#1d1d1f" text-anchor="end">流动性（间接）</text>
+      <text x="706" y="228" font-size="10.5" fill="#6e6e73">对象</text>
+      <text x="978" y="228" font-size="10.5" fill="#1d1d1f" text-anchor="end">持券的金融机构</text>
+      <text x="706" y="256" font-size="10.5" fill="#6e6e73">期限</text>
+      <text x="978" y="256" font-size="10.5" fill="#1d1d1f" text-anchor="end">随债券到期</text>
+      <rect x="706" y="276" width="272" height="50" rx="9" fill="#e6e2ff"/>
+      <text x="722" y="298" font-size="10.5" font-weight="700" fill="#4b3fa8">背后是政府信用</text>
+      <text x="722" y="316" font-size="10" fill="#4b3f8f">一级市场直接认购被法律禁止</text>
+
+      <text x="44" y="376" font-size="11.5" fill="#48484a">三条路的共同点：放出去的是负债，收进来的是资产</text>
+      <text x="44" y="398" font-size="10.5" fill="#6e6e73">区别只在抵押物——外汇最实在，债权有期限，国债背后是政府信用</text>
+
+      <rect x="44" y="416" width="952" height="58" rx="12" fill="#1d1d1f"/>
+      <text x="64" y="442" font-size="13" font-weight="700" fill="#7dd3fc">唯一的硬约束是物价：条子比商品多，就没人愿意长期拿着</text>
+      <text x="64" y="462" font-size="10.5" fill="#d1d5db">所以法律把「保持币值稳定」写成目标——那是在维护自己条子的信用</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>三张卡横着对比，每一行都对着看：换到什么、投放什么、给谁、期限多长。第一行是重点，它决定了这张条子的底气——外汇最实在，债权有期限，国债背后是政府信用。每张卡底部的色块是这条路线的脾性：买外汇被动，放贷灵活，买国债受法律约束。注意第三张写的是「二级市场」，因为《中国人民银行法》第二十九条禁止央行直接从财政部认购国债，这条红线常被忽略。黑条是全图的落点：投放不是凭空造购买力，真正的约束从来是物价。</div>
+</div>
+
+<!-- 5 三次背书 -->
+<div class="card" id="e5">
+  <div class="card-head">
+    <h2><span class="num">5</span>抵押物换了三次：银子、黄金、一句「我认」 <span class="tag">历史</span></h2>
+    <p>背书一路变轻，约束一路变软，最后全靠信任撑着。</p>
+  </div>
+  <svg viewBox="0 0 1040 500" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">中国货币背书的三个阶段</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">每一代都在回答同一个问题：这张条子凭什么值钱</text>
+
+      <rect x="44" y="100" width="292" height="252" rx="12" fill="#eafaf2" stroke="#5dcaa5"/>
+      <rect x="44" y="100" width="292" height="46" rx="12" fill="#d3f2e5"/>
+      <text x="62" y="128" font-size="10.5" fill="#0f6e56">明清至 1935 年</text>
+      <text x="62" y="172" font-size="13.5" font-weight="700" fill="#0f6e56">银铜本位</text>
+      <line x1="62" y1="184" x2="318" y2="184" stroke="#9fe1cb"/>
+      <text x="62" y="208" font-size="10.5" fill="#6e6e73">抵押物</text>
+      <text x="318" y="208" font-size="10.5" fill="#1d1d1f" text-anchor="end">白银、铜钱本身</text>
+      <text x="62" y="234" font-size="10.5" fill="#6e6e73">信用来自</text>
+      <text x="318" y="234" font-size="10.5" fill="#1d1d1f" text-anchor="end">银子本身就值钱</text>
+      <text x="62" y="260" font-size="10.5" fill="#6e6e73">约束在</text>
+      <text x="318" y="260" font-size="10.5" fill="#1d1d1f" text-anchor="end">银矿、铜矿产量</text>
+      <rect x="62" y="278" width="256" height="52" rx="9" fill="#d3f2e5"/>
+      <text x="78" y="300" font-size="10.5" font-weight="700" fill="#0f6e56">钱就是货，货就是钱</text>
+      <text x="78" y="318" font-size="10" fill="#27500a">不需要谁担保，称重就行</text>
+
+      <rect x="374" y="100" width="292" height="252" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <rect x="374" y="100" width="292" height="46" rx="12" fill="#dcecff"/>
+      <text x="392" y="128" font-size="10.5" fill="#0a58ca">1935—1970 年代</text>
+      <text x="392" y="172" font-size="13.5" font-weight="700" fill="#0a58ca">法币与金汇兑本位</text>
+      <line x1="392" y1="184" x2="648" y2="184" stroke="#a9cdf5"/>
+      <text x="392" y="208" font-size="10.5" fill="#6e6e73">抵押物</text>
+      <text x="648" y="208" font-size="10.5" fill="#1d1d1f" text-anchor="end">黄金、外汇储备</text>
+      <text x="392" y="234" font-size="10.5" fill="#6e6e73">信用来自</text>
+      <text x="648" y="234" font-size="10.5" fill="#1d1d1f" text-anchor="end">承诺可兑换</text>
+      <text x="392" y="260" font-size="10.5" fill="#6e6e73">约束在</text>
+      <text x="648" y="260" font-size="10.5" fill="#1d1d1f" text-anchor="end">黄金存量</text>
+      <rect x="392" y="278" width="256" height="52" rx="9" fill="#dcecff"/>
+      <text x="408" y="300" font-size="10.5" font-weight="700" fill="#0a58ca">纸比金属轻，但要能兑</text>
+      <text x="408" y="318" font-size="10" fill="#3f5f8a">兑换承诺守不住，体系就崩</text>
+
+      <rect x="704" y="100" width="292" height="252" rx="12" fill="#f3f0ff" stroke="#8f8ae8"/>
+      <rect x="704" y="100" width="292" height="46" rx="12" fill="#e6e2ff"/>
+      <text x="722" y="128" font-size="10.5" fill="#4b3fa8">1970 年代至今</text>
+      <text x="722" y="172" font-size="13.5" font-weight="700" fill="#4b3fa8">现代法币</text>
+      <line x1="722" y1="184" x2="978" y2="184" stroke="#cecbf6"/>
+      <text x="722" y="208" font-size="10.5" fill="#6e6e73">抵押物</text>
+      <text x="978" y="208" font-size="10.5" fill="#1d1d1f" text-anchor="end">国家信用加资产组合</text>
+      <text x="722" y="234" font-size="10.5" fill="#6e6e73">信用来自</text>
+      <text x="978" y="234" font-size="10.5" fill="#1d1d1f" text-anchor="end">法律强制与税收</text>
+      <text x="722" y="260" font-size="10.5" fill="#6e6e73">约束在</text>
+      <text x="978" y="260" font-size="10.5" fill="#1d1d1f" text-anchor="end">物价与信任</text>
+      <rect x="722" y="278" width="256" height="52" rx="9" fill="#e6e2ff"/>
+      <text x="738" y="300" font-size="10.5" font-weight="700" fill="#4b3fa8">只剩一句：我认</text>
+      <text x="738" y="318" font-size="10" fill="#4b3f8f">最怕的不是还不上，是没人信</text>
+
+      <path d="M342,226 L364,226" stroke="#8e8e93" stroke-width="2" fill="none"/>
+      <path d="M364,221 L374,226 L364,231 z" fill="#8e8e93"/>
+      <path d="M672,226 L694,226" stroke="#8e8e93" stroke-width="2" fill="none"/>
+      <path d="M694,221 L704,226 L694,231 z" fill="#8e8e93"/>
+
+      <text x="44" y="384" font-size="11.5" fill="#48484a">抵押物一路变轻：银子 → 黄金 → 一句「我认」，约束也跟着变软</text>
+      <text x="44" y="406" font-size="10.5" fill="#6e6e73">软约束全靠信任撑着——所以现代央行天天盯的不是金库，是物价和预期</text>
+
+      <rect x="44" y="424" width="952" height="58" rx="12" fill="#1d1d1f"/>
+      <text x="64" y="450" font-size="13" font-weight="700" fill="#7dd3fc">现代央行最怕的不是还不上，是没人信</text>
+      <text x="64" y="470" font-size="10.5" fill="#d1d5db">抵押物越轻，越靠信任；信任一散，条子就毛</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>三张卡按时间从左往右读，每张卡三行是同一套问题：抵押物是什么、信用从哪来、被什么约束住。第一行最关键，它一路在变轻——从摸得着的银子，到堆在库房里的黄金，最后只剩一句「我认」。第二行跟着变：从「本身值钱」，到「承诺能兑」，到「法律强制收税」。第三行是最反直觉的地方——约束没有变硬，反而变软了，所以现代央行最怕的不是还不上，而是没人信。黑条就是这句话。</div>
+</div>
+
+<!-- 6 负债搬家 -->
+<div class="card" id="e6">
+  <div class="card-head">
+    <h2><span class="num">6</span>1.0 的数币，是一次「负债搬家」 <span class="tag">流程</span></h2>
     <p>同一笔 100 元，三处同时记账，总量一分不多。</p>
   </div>
   <svg viewBox="0 0 1040 580" xmlns="http://www.w3.org/2000/svg">
@@ -241,10 +444,10 @@
   <div class="foot"><b>怎么看：</b>三个卡片就是兑换的三个阶段，横向箭头是时间顺序。每张卡片最上面是阶段名，中间三行是这一步的账务变化，底部色块是该阶段的资产性质——注意它从「银行存款」变成了「央行负债」，这正是搬家。下面三行浅灰条是三笔账的汇总，左边减、右边加，加减完正好抵平，说明系统里没有凭空多出钱。黑条是全篇最关键的一句：银行不是发行方。</div>
 </div>
 
-<!-- 4 为什么必须是央行 -->
-<div class="card" id="e4">
+<!-- 7 为什么必须是央行 -->
+<div class="card" id="e7">
   <div class="card-head">
-    <h2><span class="num">4</span>为什么非要挂在央行名下 <span class="tag">后果</span></h2>
+    <h2><span class="num">7</span>为什么非要挂在央行名下 <span class="tag">后果</span></h2>
     <p>四条好处，都只在「发行人是央行」这个前提下成立。</p>
   </div>
   <svg viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg">
@@ -292,10 +495,10 @@
   <div class="foot"><b>怎么看：</b>四宫格读法一致：上面是能力，中间两行是原因，底部色块是结论。先横着看第一行两张——左边讲「别人不能拒收」，右边讲「出事不用赔」，这是央行负债最直接的两个好处；再横着看第二行两张——左边讲「不计息的原因」，右边讲「能离线的原因」，这两条解释了数币为什么摸起来像现金。最后看黑条：四条好处都挂在同一个前提上，前提一换，全部作废。</div>
 </div>
 
-<!-- 5 1.0 与 2.0 -->
-<div class="card" id="e5">
+<!-- 8 1.0 与 2.0 -->
+<div class="card" id="e8">
   <div class="card-head">
-    <h2><span class="num">5</span>2.0 改了什么：欠条的开具人换了 <span class="tag">对照</span></h2>
+    <h2><span class="num">8</span>2.0 改了什么：欠条的开具人换了 <span class="tag">对照</span></h2>
     <p>从「央行欠你」变成「银行欠你」，计息和监管全跟着变。</p>
   </div>
   <svg viewBox="0 0 1040 600" xmlns="http://www.w3.org/2000/svg">
@@ -316,7 +519,7 @@
       <text x="80" y="346" font-size="11" font-weight="700" fill="#0f6e56">零信用风险，但也一分利息都没有</text>
       <text x="80" y="366" font-size="10.5" fill="#6e6e73">像口袋里的现金，只是换了个数字载体</text>
 
-      <path d="M472,246 L560,246" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e5a)"/>
+      <path d="M472,246 L560,246" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e8a)"/>
       <text x="516" y="226" font-size="10.5" fill="#48484a" text-anchor="middle">换发行人</text>
       <text x="516" y="270" font-size="10.5" fill="#6e6e73" text-anchor="middle">央行 → 银行</text>
 
@@ -341,7 +544,7 @@
       <text x="64" y="544" font-size="13" font-weight="700" fill="#7dd3fc">世上没有既计息又零风险的活期，这条线没有例外</text>
       <text x="64" y="566" font-size="10.5" fill="#d1d5db">1.0 用「不生息」换「绝对安全」，2.0 用「一点风险」换「有利息」</text>
 
-      <defs><marker id="e5a" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+      <defs><marker id="e8a" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
     </g>
   </svg>
   <div class="foot"><b>怎么看：</b>左右两张卡逐行对齐读，共五行，每一行都是一次「同一件事、两种性质」的对照。第一行最关键——钱包余额是谁的负债，这一行变了，下面四行才跟着变。中间箭头写着「换发行人：央行 → 银行」，这是全文的因果关系所在。两张卡底部色块是各自的取舍：左边用利息换安全，右边用一点风险换利息。黑条把这条经济学常识压成一句，用来解释为什么 2.0 一定要计息。</div>
