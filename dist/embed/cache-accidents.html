@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>缓存穿透、击穿、雪崩 · 六张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#ff9500,#ff3b30 48%,#5856d6);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(180,60,40,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>缓存三兄弟：查不到、刚好过期、一起过期</h1>
+  <p>三种事故都是"缓存没挡住，流量砸到数据库"，但触发原因完全不同。六张图从正常流程讲到生产防线，先看图再看正文，一眼就能对上号。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#c1">正常流程</a><a href="#c2">三兄弟总览</a><a href="#c3">穿透</a><a href="#c4">击穿</a><a href="#c5">雪崩</a><a href="#c6">落地清单</a>
+</div>
+
+<!-- 1 正常流程 -->
+<div class="card" id="c1">
+  <div class="card-head">
+    <h2><span class="num">1</span>先看正常情况：缓存是怎么替数据库挡枪的 <span class="tag">基准线</span></h2>
+    <p>记住这一张图就够了：命中就直接返回；未命中才回源查数据库，查完顺手回写缓存，让下一次请求命中。</p>
+  </div>
+  <svg viewBox="0 0 1040 430" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ca1b" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+      <marker id="ca1g" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker>
+      <marker id="ca1p" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5856d6"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">正常缓存：绝大多数请求应该停在 Redis 这一层</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">缓存命中 = 省掉一次数据库查询；未命中 = 回源一次，再写回缓存</text>
+
+      <rect x="44" y="118" width="150" height="62" rx="11" fill="#ffffff" stroke="#d1d1d6"/>
+      <text x="119" y="143" font-size="13" font-weight="700" fill="#1d1d1f" text-anchor="middle">用户请求</text>
+      <text x="119" y="163" font-size="10.5" fill="#8e8e93" text-anchor="middle">查商品 id=1001</text>
+
+      <rect x="272" y="104" width="210" height="90" rx="13" fill="#eef4ff" stroke="#9cc3ff" stroke-width="1.5"/>
+      <text x="377" y="134" font-size="14" font-weight="700" fill="#0a58ca" text-anchor="middle">Redis 缓存</text>
+      <text x="377" y="156" font-size="11" fill="#3a4a63" text-anchor="middle">key: product:1001</text>
+      <text x="377" y="176" font-size="10.5" fill="#5a6b85" text-anchor="middle">TTL = 300s</text>
+
+      <g stroke="#007aff" stroke-width="1.6" marker-end="url(#ca1b)" fill="none">
+        <path d="M198,149 C222,149 240,149 266,149"/>
+      </g>
+
+      <rect x="592" y="88" width="190" height="58" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+      <text x="687" y="111" font-size="12.5" font-weight="700" fill="#1d7a45" text-anchor="middle">命中：直接返回</text>
+      <text x="687" y="131" font-size="10.5" fill="#5a7a68" text-anchor="middle">数据库完全不知道这次请求</text>
+      <g stroke="#34c759" stroke-width="1.6" marker-end="url(#ca1g)" fill="none">
+        <path d="M486,132 C528,116 548,117 586,117"/>
+      </g>
+      <text x="508" y="106" font-size="10.5" font-weight="700" fill="#1d7a45">命中</text>
+
+      <rect x="592" y="202" width="190" height="62" rx="11" fill="#fff4e5" stroke="#ffd8a8"/>
+      <text x="687" y="226" font-size="12.5" font-weight="700" fill="#b26a00" text-anchor="middle">未命中：回源查库</text>
+      <text x="687" y="246" font-size="10.5" fill="#8a6a3b" text-anchor="middle">SELECT * FROM product</text>
+      <g stroke="#ff9500" stroke-width="1.6" marker-end="url(#ca1g)" fill="none">
+        <path d="M377,198 C377,224 470,233 586,233"/>
+      </g>
+      <text x="418" y="215" font-size="10.5" font-weight="700" fill="#b26a00">未命中</text>
+
+      <rect x="592" y="298" width="190" height="58" rx="11" fill="#f3efff" stroke="#d4c8ff"/>
+      <text x="687" y="321" font-size="12.5" font-weight="700" fill="#5b3fc9" text-anchor="middle">回写缓存 + TTL</text>
+      <text x="687" y="341" font-size="10.5" fill="#6f6250" text-anchor="middle">下一次就能命中</text>
+      <g stroke="#5856d6" stroke-width="1.6" marker-end="url(#ca1p)" fill="none">
+        <path d="M687,266 L687,292"/>
+      </g>
+
+      <rect x="836" y="202" width="150" height="62" rx="11" fill="#ffffff" stroke="#d1d1d6"/>
+      <text x="911" y="226" font-size="12.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">返回结果</text>
+      <text x="911" y="246" font-size="10.5" fill="#8e8e93" text-anchor="middle">用户拿到数据</text>
+      <g stroke="#8e8e93" stroke-width="1.6" marker-end="url(#ca1g)" fill="none">
+        <path d="M786,233 C806,233 816,233 830,233"/>
+        <path d="M786,327 C812,327 816,280 830,254"/>
+      </g>
+
+      <rect x="44" y="330" width="440" height="54" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="60" y="351" font-size="11" font-weight="700" fill="#1d1d1f">关键前提</text>
+      <text x="60" y="370" font-size="10.5" fill="#6e6e73">缓存里"有"数据，并且用户请求的是"存在"的数据。三个事故，就是把这两个前提打破。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先看绿色路径，那是缓存该有的样子；再看橙色/紫色路径，一次未命中还没事，<b>大量未命中同时发生</b>才是事故。</div>
+</div>
+
+<!-- 2 总览 -->
+<div class="card" id="c2">
+  <div class="card-head">
+    <h2><span class="num">2</span>一图分清三兄弟：到底是谁没挡住 <span class="tag">总览</span></h2>
+    <p>穿透是"数据根本不存在"，击穿是"一个热点刚好过期"，雪崩是"一大片同时过期或缓存整体挂掉"。范围不同，药方也不同。</p>
+  </div>
+  <svg viewBox="0 0 1040 490" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ca2g" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">同一块数据库，三种打穿方式</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">横着看每一行：触发原因 → 缓存里发生了什么 → 数据库承受什么</text>
+
+      <text x="44" y="98" font-size="10.5" font-weight="700" fill="#9a9aa0">事故</text>
+      <text x="262" y="98" font-size="10.5" font-weight="700" fill="#9a9aa0">触发原因</text>
+      <text x="612" y="98" font-size="10.5" font-weight="700" fill="#9a9aa0">缓存侧表现</text>
+      <text x="852" y="98" font-size="10.5" font-weight="700" fill="#9a9aa0">数据库压力</text>
+
+      <!-- 穿透 -->
+      <rect x="44" y="112" width="180" height="88" rx="11" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="60" y="138" font-size="13" font-weight="700" fill="#c62828">穿透</text>
+      <text x="60" y="158" font-size="10.5" fill="#8e4b48">Penetration</text>
+      <text x="60" y="178" font-size="10" fill="#8e4b48">查无此人</text>
+
+      <rect x="258" y="112" width="330" height="88" rx="11" fill="#ffffff" stroke="#e5e5ea"/>
+      <text x="274" y="138" font-size="11.5" font-weight="700" fill="#1d1d1f">请求的数据根本不存在</text>
+      <text x="274" y="160" font-size="10.5" fill="#6e6e73">例如随机 id、被删掉的商品、恶意构造的 key</text>
+      <text x="274" y="181" font-size="10.5" fill="#6e6e73">缓存没东西可存，DB 也查不到，白白查一次</text>
+
+      <rect x="608" y="112" width="220" height="88" rx="11" fill="#ffffff" stroke="#e5e5ea"/>
+      <text x="624" y="138" font-size="11.5" font-weight="700" fill="#1d1d1f">永远是 miss</text>
+      <text x="624" y="160" font-size="10.5" fill="#6e6e73">因为"不存在"没被记下来</text>
+      <text x="624" y="181" font-size="10.5" fill="#6e6e73">每次都穿透到 DB</text>
+
+      <rect x="848" y="112" width="148" height="88" rx="11" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="866" y="140" font-size="11.5" font-weight="700" fill="#c62828">持续小刀割</text>
+      <text x="866" y="162" font-size="10.5" fill="#8e4b48">量未必很大</text>
+      <text x="866" y="182" font-size="10.5" fill="#8e4b48">但一直有无效查询</text>
+
+      <!-- 击穿 -->
+      <rect x="44" y="220" width="180" height="88" rx="11" fill="#fff8e6" stroke="#ffd8a8"/>
+      <text x="60" y="246" font-size="13" font-weight="700" fill="#b26a00">击穿</text>
+      <text x="60" y="266" font-size="10.5" fill="#8a6a3b">Breakdown / Stampede</text>
+      <text x="60" y="286" font-size="10" fill="#8a6a3b">一个人恰好下班</text>
+
+      <rect x="258" y="220" width="330" height="88" rx="11" fill="#ffffff" stroke="#e5e5ea"/>
+      <text x="274" y="246" font-size="11.5" font-weight="700" fill="#1d1d1f">某个热点 key 到期了</text>
+      <text x="274" y="268" font-size="10.5" fill="#6e6e73">它就在这秒过期，恰好几万人都来查它</text>
+      <text x="274" y="289" font-size="10.5" fill="#6e6e73">数据本身存在，只是缓存空窗</text>
+
+      <rect x="608" y="220" width="220" height="88" rx="11" fill="#ffffff" stroke="#e5e5ea"/>
+      <text x="624" y="246" font-size="11.5" font-weight="700" fill="#1d1d1f">一个 key 的 miss 风暴</text>
+      <text x="624" y="268" font-size="10.5" fill="#6e6e73">所有并发请求同时回源</text>
+      <text x="624" y="289" font-size="10.5" fill="#6e6e73">重复查同一行</text>
+
+      <rect x="848" y="220" width="148" height="88" rx="11" fill="#fff8e6" stroke="#ffd8a8"/>
+      <text x="866" y="248" font-size="11.5" font-weight="700" fill="#b26a00">瞬间尖刺</text>
+      <text x="866" y="270" font-size="10.5" fill="#8a6a3b">峰值极高</text>
+      <text x="866" y="290" font-size="10.5" fill="#8a6a3b">过去就恢复</text>
+
+      <!-- 雪崩 -->
+      <rect x="44" y="328" width="180" height="88" rx="11" fill="#f3efff" stroke="#d4c8ff"/>
+      <text x="60" y="354" font-size="13" font-weight="700" fill="#5b3fc9">雪崩</text>
+      <text x="60" y="374" font-size="10.5" fill="#6f6250">Avalanche</text>
+      <text x="60" y="394" font-size="10" fill="#6f6250">整条街同时停电</text>
+
+      <rect x="258" y="328" width="330" height="88" rx="11" fill="#ffffff" stroke="#e5e5ea"/>
+      <text x="274" y="354" font-size="11.5" font-weight="700" fill="#1d1d1f">大片 key 同时失效 / 缓存挂了</text>
+      <text x="274" y="376" font-size="10.5" fill="#6e6e73">TTL 设成一样、批量刷新、Redis 宕机</text>
+      <text x="274" y="397" font-size="10.5" fill="#6e6e73">影响面是整个缓存层，不是一个点</text>
+
+      <rect x="608" y="328" width="220" height="88" rx="11" fill="#ffffff" stroke="#e5e5ea"/>
+      <text x="624" y="354" font-size="11.5" font-weight="700" fill="#1d1d1f">全量 miss</text>
+      <text x="624" y="376" font-size="10.5" fill="#6e6e73">所有请求一起找 DB</text>
+      <text x="624" y="397" font-size="10.5" fill="#6e6e73">像雪块一起砸下来</text>
+
+      <rect x="848" y="328" width="148" height="88" rx="11" fill="#f3efff" stroke="#d4c8ff"/>
+      <text x="866" y="356" font-size="11.5" font-weight="700" fill="#5b3fc9">洪峰</text>
+      <text x="866" y="378" font-size="10.5" fill="#6f6250">可能压垮 DB</text>
+      <text x="866" y="398" font-size="10.5" fill="#6f6250">恢复慢</text>
+
+      <g stroke="#8e8e93" stroke-width="1.4" marker-end="url(#ca2g)" fill="none">
+        <path d="M228,156 L252,156"/><path d="M592,156 L602,156"/><path d="M832,156 L842,156"/>
+        <path d="M228,264 L252,264"/><path d="M592,264 L602,264"/><path d="M832,264 L842,264"/>
+        <path d="M228,372 L252,372"/><path d="M592,372 L602,372"/><path d="M832,372 L842,372"/>
+      </g>
+
+      <rect x="44" y="440" width="952" height="34" rx="9" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="58" y="462" font-size="10.5" fill="#4a4a4f">分辨口诀：<tspan font-weight="700" fill="#c62828">穿透看"有没有"</tspan>，<tspan font-weight="700" fill="#b26a00">击穿看"几个 key"</tspan>，<tspan font-weight="700" fill="#5b3fc9">雪崩看"是不是一片"</tspan>。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么记：</b>穿透是"查不到"，击穿是"单点爆"，雪崩是"全面爆"。三种情况的 DB 都会 QPS 突增，但来源完全不同，解法不能混用。</div>
+</div>
+
+<!-- 3 穿透 -->
+<div class="card" id="c3">
+  <div class="card-head">
+    <h2><span class="num">3</span>穿透：数据库反复被问"这个人存不存在" <span class="tag">查无此人</span></h2>
+    <p>缓存和数据库都没有这个数据。请求每次都穿过缓存打到数据库，数据库每次都回答"没有"，然后请求继续来。</p>
+  </div>
+  <svg viewBox="0 0 1040 530" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ca3r" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff3b30"/></marker>
+      <marker id="ca3g" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34c759"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">上半：事故路径　下半：两道防线</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">穿透最阴险的地方：DB 没报错、慢查询也不明显，只是无效查询一直有</text>
+
+      <rect x="44" y="92" width="952" height="178" rx="13" fill="#fff7f6" stroke="#ffd2cd"/>
+      <text x="60" y="116" font-size="11" font-weight="700" fill="#c62828">事故路径</text>
+
+      <rect x="62" y="136" width="150" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="137" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">随机 / 不存在 id</text>
+      <text x="137" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">id = -1, 99999999</text>
+
+      <rect x="268" y="136" width="150" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="343" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">缓存 miss</text>
+      <text x="343" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">key 本来就不存在</text>
+
+      <rect x="474" y="136" width="150" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="549" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">查数据库</text>
+      <text x="549" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">SELECT → 0 row</text>
+
+      <rect x="680" y="136" width="150" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="755" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">返回空</text>
+      <text x="755" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">缓存里还是没东西</text>
+
+      <rect x="862" y="128" width="112" height="72" rx="10" fill="#ff3b30"/>
+      <text x="918" y="157" font-size="11.5" font-weight="700" fill="#ffffff" text-anchor="middle">下一个请求</text>
+      <text x="918" y="177" font-size="10" fill="#ffe5e2" text-anchor="middle">再来一遍 ↺</text>
+
+      <g stroke="#ff3b30" stroke-width="1.6" marker-end="url(#ca3r)" fill="none">
+        <path d="M216,164 L262,164"/><path d="M422,164 L468,164"/><path d="M628,164 L674,164"/><path d="M834,164 L856,164"/>
+        <path d="M918,204 C918,228 137,228 137,190"/>
+      </g>
+
+      <rect x="62" y="216" width="816" height="34" rx="8" fill="#ffffff" stroke="#ffd2cd"/>
+      <text x="76" y="238" font-size="10.5" fill="#8e4b48">因为"查不到"这个结果没被缓存，所以下一个同样的请求还会重复走一遍；换个随机 id，又走一遍。</text>
+
+      <rect x="44" y="292" width="952" height="218" rx="13" fill="#f4fbf6" stroke="#bfe8cf"/>
+      <text x="60" y="316" font-size="11" font-weight="700" fill="#1d7a45">两道防线（推荐一起上）</text>
+
+      <rect x="62" y="336" width="450" height="152" rx="11" fill="#ffffff" stroke="#bfe8cf"/>
+      <text x="80" y="362" font-size="13" font-weight="700" fill="#1d7a45">防线 1：布隆过滤器 Bloom Filter</text>
+      <text x="80" y="386" font-size="10.5" fill="#3f6b52">先问它"这个 id 可能存在吗？"</text>
+      <text x="80" y="410" font-size="10.5" fill="#3f6b52">说"不存在" → 直接返回，连缓存都不查</text>
+      <text x="80" y="434" font-size="10.5" fill="#3f6b52">说"存在" → 继续走正常流程（可能误判）</text>
+      <rect x="80" y="450" width="414" height="24" rx="6" fill="#e9f8ef"/>
+      <text x="90" y="466" font-size="10" fill="#1d7a45">口诀：说没有一定没有，说有不一定有</text>
+
+      <rect x="528" y="336" width="450" height="152" rx="11" fill="#ffffff" stroke="#bfe8cf"/>
+      <text x="546" y="362" font-size="13" font-weight="700" fill="#1d7a45">防线 2：空值缓存（缓存"查无此人"）</text>
+      <text x="546" y="386" font-size="10.5" fill="#3f6b52">DB 返回 0 行，也往缓存写一条占位值</text>
+      <text x="546" y="410" font-size="10.5" fill="#3f6b52">例如 product:1001 = null，TTL 30~120 秒</text>
+      <text x="546" y="434" font-size="10.5" fill="#3f6b52">TTL 要短，否则新建的商品迟迟查不到</text>
+      <rect x="546" y="450" width="414" height="24" rx="6" fill="#e9f8ef"/>
+      <text x="556" y="466" font-size="10" fill="#1d7a45">适合兜底：布隆误判、或者没上布隆时先用</text>
+
+      <g stroke="#34c759" stroke-width="1.6" marker-end="url(#ca3g)" fill="none">
+        <path d="M286,264 L286,286"/><path d="M754,264 L754,286"/>
+      </g>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上半部分盯那条红色回环——它表示"白查一次，下次继续白查"。下半部分两道防线分别拦在不同位置：布隆在缓存前，空值在缓存里。</div>
+</div>
+
+<!-- 4 击穿 -->
+<div class="card" id="c4">
+  <div class="card-head">
+    <h2><span class="num">4</span>击穿：一个热点 key 过期，几万人同时扑向数据库 <span class="tag">单点爆</span></h2>
+    <p>数据本身存在，问题出在"过期的那一瞬间"。原本由缓存扛住的热门查询，突然全部改成查数据库。</p>
+  </div>
+  <svg viewBox="0 0 1040 530" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ca4r" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff3b30"/></marker>
+      <marker id="ca4g" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34c759"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">上半：过期瞬间的尖刺　下半：把并发收成一次</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">击穿通常来得快、去得也快，但峰值足够把数据库打挂</text>
+
+      <rect x="44" y="92" width="952" height="178" rx="13" fill="#fff7f6" stroke="#ffd2cd"/>
+      <text x="60" y="116" font-size="11" font-weight="700" fill="#c62828">事故路径</text>
+
+      <rect x="62" y="136" width="160" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="142" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">热点 key 到期</text>
+      <text x="142" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">product:1001 被删</text>
+
+      <rect x="278" y="136" width="160" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="358" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">1000 个请求同时来</text>
+      <text x="358" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">都在同一毫秒 miss</text>
+
+      <rect x="494" y="136" width="160" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="574" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">1000 次 DB 查询</text>
+      <text x="574" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">查的是同一行数据</text>
+
+      <rect x="710" y="136" width="160" height="56" rx="10" fill="#ff3b30"/>
+      <text x="790" y="158" font-size="11.5" font-weight="700" fill="#ffffff" text-anchor="middle">数据库尖刺</text>
+      <text x="790" y="177" font-size="10" fill="#ffe5e2" text-anchor="middle">连接池打满 / 超时</text>
+
+      <rect x="862" y="128" width="112" height="72" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="918" y="157" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">缓存还没回写</text>
+      <text x="918" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">请求已堆满</text>
+
+      <g stroke="#ff3b30" stroke-width="1.6" marker-end="url(#ca4r)" fill="none">
+        <path d="M226,164 L272,164"/><path d="M442,164 L488,164"/><path d="M658,164 L704,164"/><path d="M874,164 L856,164"/>
+      </g>
+
+      <rect x="62" y="216" width="816" height="34" rx="8" fill="#ffffff" stroke="#ffd2cd"/>
+      <text x="76" y="238" font-size="10.5" fill="#8e4b48">关键不是"查一次数据库"，而是"同一时刻查了一千次数据库"——这些请求本可以合并成一次。</text>
+
+      <rect x="44" y="292" width="952" height="218" rx="13" fill="#f4fbf6" stroke="#bfe8cf"/>
+      <text x="60" y="316" font-size="11" font-weight="700" fill="#1d7a45">两种常用药方</text>
+
+      <rect x="62" y="336" width="450" height="152" rx="11" fill="#ffffff" stroke="#bfe8cf"/>
+      <text x="80" y="362" font-size="13" font-weight="700" fill="#1d7a45">药方 1：互斥锁 / single-flight</text>
+      <text x="80" y="386" font-size="10.5" fill="#3f6b52">只让第一个 miss 的请求拿锁去查 DB</text>
+      <text x="80" y="410" font-size="10.5" fill="#3f6b52">其他请求等一会儿，读它写回的缓存</text>
+      <text x="80" y="434" font-size="10.5" fill="#3f6b52">Redis 里常用 SET key value NX PX 抢锁</text>
+      <rect x="80" y="450" width="414" height="24" rx="6" fill="#e9f8ef"/>
+      <text x="90" y="466" font-size="10" fill="#1d7a45">锁 TTL 要大于最慢一次 DB 查询，且只能由持锁人释放</text>
+
+      <rect x="528" y="336" width="450" height="152" rx="11" fill="#ffffff" stroke="#bfe8cf"/>
+      <text x="546" y="362" font-size="13" font-weight="700" fill="#1d7a45">药方 2：逻辑过期 + 后台刷新</text>
+      <text x="546" y="386" font-size="10.5" fill="#3f6b52">缓存里的值不真正删除，只标记"已过期"</text>
+      <text x="546" y="410" font-size="10.5" fill="#3f6b52">请求先拿旧值返回，同时触发一次异步刷新</text>
+      <text x="546" y="434" font-size="10.5" fill="#3f6b52">用户不等数据库，数据库也不会被挤爆</text>
+      <rect x="546" y="450" width="414" height="24" rx="6" fill="#e9f8ef"/>
+      <text x="556" y="466" font-size="10" fill="#1d7a45">代价：短时间内可能读到旧数据，要评估业务容忍度</text>
+
+      <g stroke="#34c759" stroke-width="1.6" marker-end="url(#ca4g)" fill="none">
+        <path d="M286,264 L286,286"/><path d="M754,264 L754,286"/>
+      </g>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>红色路径里"1000 个请求"和"1000 次查询"是同一个数量级，这就是击穿；绿色路径把 1000 次压成 1 次 + 999 次等待，尖刺就消失了。</div>
+</div>
+
+<!-- 5 雪崩 -->
+<div class="card" id="c5">
+  <div class="card-head">
+    <h2><span class="num">5</span>雪崩：一大片 key 同时失效，缓存层整体失守 <span class="tag">全面爆</span></h2>
+    <p>击穿是一个点，雪崩是一整片。可能是 TTL 设得太齐，也可能是缓存集群故障，结果都是请求成批涌向数据库。</p>
+  </div>
+  <svg viewBox="0 0 1040 545" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ca5r" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff3b30"/></marker>
+      <marker id="ca5g" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34c759"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">上半：雪崩怎么形成　下半：四层防线</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">雪崩恢复慢，因为缓存空了之后要重新预热，数据库要同时承受回源和线上流量</text>
+
+      <rect x="44" y="92" width="952" height="178" rx="13" fill="#fff7f6" stroke="#ffd2cd"/>
+      <text x="60" y="116" font-size="11" font-weight="700" fill="#c62828">事故路径</text>
+
+      <rect x="62" y="136" width="176" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="150" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">TTL 设成一样</text>
+      <text x="150" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">或缓存集群故障</text>
+
+      <rect x="294" y="136" width="176" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="382" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">大片 key 同时失效</text>
+      <text x="382" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">不是一两个，是一片</text>
+
+      <rect x="526" y="136" width="176" height="56" rx="10" fill="#ffffff" stroke="#ffc9c4"/>
+      <text x="614" y="158" font-size="11.5" font-weight="700" fill="#1d1d1f" text-anchor="middle">命中率骤降</text>
+      <text x="614" y="177" font-size="10" fill="#8e8e93" text-anchor="middle">所有请求都成 miss</text>
+
+      <rect x="758" y="136" width="216" height="56" rx="10" fill="#ff3b30"/>
+      <text x="866" y="158" font-size="11.5" font-weight="700" fill="#ffffff" text-anchor="middle">数据库洪峰</text>
+      <text x="866" y="177" font-size="10" fill="#ffe5e2" text-anchor="middle">慢查询 / 连接池耗尽 / 宕机</text>
+
+      <g stroke="#ff3b30" stroke-width="1.6" marker-end="url(#ca5r)" fill="none">
+        <path d="M242,164 L288,164"/><path d="M474,164 L520,164"/><path d="M706,164 L752,164"/>
+      </g>
+
+      <rect x="62" y="216" width="816" height="34" rx="8" fill="#ffffff" stroke="#ffd2cd"/>
+      <text x="76" y="238" font-size="10.5" fill="#8e4b48">雪崩比击穿难救：击穿只缺一个 key，雪崩是整个缓存层短期失效，预热和限流都得提前准备好。</text>
+
+      <rect x="44" y="292" width="952" height="233" rx="13" fill="#f4fbf6" stroke="#bfe8cf"/>
+      <text x="60" y="316" font-size="11" font-weight="700" fill="#1d7a45">四层防线（从便宜到兜底）</text>
+
+      <rect x="62" y="336" width="222" height="166" rx="11" fill="#ffffff" stroke="#bfe8cf"/>
+      <text x="76" y="360" font-size="11.5" font-weight="700" fill="#1d7a45">① TTL 抖动</text>
+      <text x="76" y="384" font-size="10.5" fill="#3f6b52">ttl = 基础值 + 随机数</text>
+      <text x="76" y="406" font-size="10.5" fill="#3f6b52">比如 300s + 0~60s</text>
+      <text x="76" y="430" font-size="10.5" fill="#3f6b52">让过期时间散开，</text>
+      <text x="76" y="450" font-size="10.5" fill="#3f6b52">不要整点集体阵亡。</text>
+      <text x="76" y="478" font-size="10" fill="#1d7a45">成本最低，先做这个</text>
+
+      <rect x="298" y="336" width="222" height="166" rx="11" fill="#ffffff" stroke="#bfe8cf"/>
+      <text x="312" y="360" font-size="11.5" font-weight="700" fill="#1d7a45">② 多级缓存</text>
+      <text x="312" y="384" font-size="10.5" fill="#3f6b52">进程内缓存 + Redis</text>
+      <text x="312" y="406" font-size="10.5" fill="#3f6b52">Redis 挂了，本地缓存</text>
+      <text x="312" y="430" font-size="10.5" fill="#3f6b52">还能挡一小会儿。</text>
+      <text x="312" y="450" font-size="10.5" fill="#3f6b52">注意本地缓存的失效</text>
+      <text x="312" y="478" font-size="10" fill="#1d7a45">要多实例广播或更短 TTL</text>
+
+      <rect x="534" y="336" width="222" height="166" rx="11" fill="#ffffff" stroke="#bfe8cf"/>
+      <text x="548" y="360" font-size="11.5" font-weight="700" fill="#1d7a45">③ 熔断 / 降级</text>
+      <text x="548" y="384" font-size="10.5" fill="#3f6b52">DB 压力超标就跳闸</text>
+      <text x="548" y="406" font-size="10.5" fill="#3f6b52">直接返回兜底数据，</text>
+      <text x="548" y="430" font-size="10.5" fill="#3f6b52">例如"服务繁忙，稍后再试"。</text>
+      <text x="548" y="450" font-size="10.5" fill="#3f6b52">宁可少卖几单，</text>
+      <text x="548" y="478" font-size="10" fill="#1d7a45">也别让数据库彻底挂掉</text>
+
+      <rect x="770" y="336" width="208" height="166" rx="11" fill="#ffffff" stroke="#bfe8cf"/>
+      <text x="784" y="360" font-size="11.5" font-weight="700" fill="#1d7a45">④ 缓存高可用</text>
+      <text x="784" y="384" font-size="10.5" fill="#3f6b52">Redis 主从 / 哨兵 / 集群</text>
+      <text x="784" y="406" font-size="10.5" fill="#3f6b52">避免单点故障</text>
+      <text x="784" y="430" font-size="10.5" fill="#3f6b52">提前预热热点数据，</text>
+      <text x="784" y="450" font-size="10.5" fill="#3f6b52">别等流量来了才装。</text>
+      <text x="784" y="478" font-size="10" fill="#1d7a45">兜住"缓存整体挂掉"这一类</text>
+
+      <g stroke="#34c759" stroke-width="1.6" marker-end="url(#ca5g)" fill="none">
+        <path d="M382,270 L382,286"/>
+      </g>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>四层防线不是四选一。TTL 抖动防"一起过期"，多级缓存和 Redis 高可用防"缓存整体不可用"，熔断是最后的保险丝。</div>
+</div>
+
+<!-- 6 落地 -->
+<div class="card" id="c6">
+  <div class="card-head">
+    <h2><span class="num">6</span>落到代码和监控：一张清单直接抄 <span class="tag">落地</span></h2>
+    <p>伪代码只是骨架，真正上线前还要看指标。没有监控，三种事故在 Dashboard 上长得几乎一样：DB QPS 突然升高。</p>
+  </div>
+  <svg viewBox="0 0 1040 450" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">把三张药方拼成一条读路径</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">这不是完整实现，只是为了看清每一步挡住的是哪一种事故</text>
+
+      <rect x="44" y="92" width="580" height="292" rx="13" fill="#1d1d20"/>
+      <text x="66" y="122" font-size="11" font-weight="700" fill="#9a9aa0">read-through（伪代码）</text>
+      <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12">
+        <text x="66" y="156" fill="#ff9f0a">ttl</text><text x="102" y="156" fill="#f2f2f7"> = base + random(0, jitter)</text>
+        <text x="66" y="182" fill="#7d8ca3">// ↑ 打散过期，防雪崩</text>
+        <text x="66" y="214" fill="#5ac8fa">if</text><text x="94" y="214" fill="#f2f2f7"> !bloom.mightExist(id):</text>
+        <text x="90" y="238" fill="#ff9f0a">return</text><text x="150" y="238" fill="#f2f2f7"> null  // 防穿透</text>
+        <text x="66" y="270" fill="#5ac8fa">if</text><text x="94" y="270" fill="#f2f2f7"> cache.hit(key):</text>
+        <text x="90" y="294" fill="#ff9f0a">return</text><text x="150" y="294" fill="#f2f2f7"> cache.value</text>
+        <text x="66" y="326" fill="#5ac8fa">if</text><text x="94" y="326" fill="#f2f2f7"> lock.tryAcquire(key):</text>
+        <text x="90" y="350" fill="#f2f2f7">v = db.query(id)</text>
+        <text x="90" y="374" fill="#f2f2f7">cache.set(key, v ?: NULL, ttl)</text>
+      </g>
+
+      <rect x="648" y="92" width="348" height="292" rx="13" fill="#ffffff" stroke="#d1d1d6"/>
+      <text x="668" y="122" font-size="12.5" font-weight="700" fill="#1d1d1f">必须盯的四个指标</text>
+      <text x="668" y="154" font-size="11" font-weight="700" fill="#007aff">① 缓存命中率</text>
+      <text x="668" y="173" font-size="10.5" fill="#6e6e73">突然掉，说明 miss 变多</text>
+      <text x="668" y="204" font-size="11" font-weight="700" fill="#ff3b30">② DB QPS 与连接池</text>
+      <text x="668" y="223" font-size="10.5" fill="#6e6e73">突增 + 等待数涨 = 正在被打穿</text>
+      <text x="668" y="254" font-size="11" font-weight="700" fill="#5856d6">③ 锁等待 / single-flight 计数</text>
+      <text x="668" y="273" font-size="10.5" fill="#6e6e73">等待多说明热点 key 在打架</text>
+      <text x="668" y="304" font-size="11" font-weight="700" fill="#34c759">④ 空值 key 比例</text>
+      <text x="668" y="323" font-size="10.5" fill="#6e6e73">突然高，多半在被穿透</text>
+      <rect x="668" y="344" width="308" height="26" rx="7" fill="#f2f2f7"/>
+      <text x="678" y="361" font-size="10" fill="#4a4a4f">先定位是哪一种，再上对应的药方。</text>
+
+      <rect x="44" y="400" width="952" height="34" rx="9" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="60" y="422" font-size="11" font-weight="700" fill="#0a58ca">决策树：</text>
+      <text x="128" y="422" font-size="10.5" fill="#3a4a63">查不到 → 空值 + 布隆　｜　一个热 key 过期 → 单飞锁 + 逻辑过期　｜　大片 key 或缓存挂 → TTL 抖动 + 多级缓存 + 熔断</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>代码里每一条防线都有注释标出它防谁。上线后先看命中率和 DB QPS，再决定要不要加锁、加布隆或加抖动——别三种药一起灌。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
