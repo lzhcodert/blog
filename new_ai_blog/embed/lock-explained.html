@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>锁的四问 · 六张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>锁的四问：背景、原理、单机与分布式、什么时候用</h1>
+  <p>用公司会议室和云上登记册讲清楚：为什么没有锁会算错、锁凭什么保证互斥、两类锁的分水岭在哪，以及栅栏令牌为什么才是底牌。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#k1">背景</a><a href="#k2">原理</a><a href="#k3">单机锁</a><a href="#k4">分布式锁</a><a href="#k5">翻车现场</a><a href="#k6">判断清单</a>
+</div>
+
+<!-- 1 背景 -->
+<div class="card" id="k1">
+  <div class="card-head">
+    <h2><span class="num">1</span>没有锁会出什么事：三步的加一，被插成了负数 <span class="tag">第一问</span></h2>
+    <p>Java 官方的经典例子：c++ 看着是一行，其实是读、加、写三步。两拨人同时做，结果就丢了。</p>
+  </div>
+  <svg viewBox="0 0 1040 554" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">同一块白板，两个人同时改</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">甲加一次、乙减一次，本该回到 0，最后却是 -1</text>
+
+      <rect x="44" y="86" width="952" height="248" rx="13" fill="#ffffff" stroke="#d1d1d6"/>
+      <rect x="44" y="86" width="952" height="34" rx="13" fill="#f2f2f7"/>
+      <text x="66" y="108" font-size="11" font-weight="700" fill="#6e6e73">时刻</text>
+      <text x="190" y="108" font-size="11" font-weight="700" fill="#007aff">线程甲（加一）</text>
+      <text x="520" y="108" font-size="11" font-weight="700" fill="#ff9500">线程乙（减一）</text>
+      <text x="850" y="108" font-size="11" font-weight="700" fill="#6e6e73">白板上的数</text>
+      <g font-size="11.5" fill="#3a3a3c">
+        <text x="66" y="142">1</text><text x="190" y="142">读出 0</text><text x="520" y="142">—</text><text x="850" y="142">0</text>
+        <text x="66" y="170">2</text><text x="190" y="170">—</text><text x="520" y="170">读出 0</text><text x="850" y="170">0</text>
+        <text x="66" y="198">3</text><text x="190" y="198">算出 1</text><text x="520" y="198">—</text><text x="850" y="198">0</text>
+        <text x="66" y="226">4</text><text x="190" y="226">—</text><text x="520" y="226">算出 -1</text><text x="850" y="226">0</text>
+        <text x="66" y="254">5</text><text x="190" y="254">写入 1</text><text x="520" y="254">—</text><text x="850" y="254">1</text>
+        <text x="66" y="282">6</text><text x="190" y="282">—</text><text x="520" y="282">写入 -1</text><text x="850" y="282">-1</text>
+      </g>
+      <line x1="44" y1="296" x2="996" y2="296" stroke="#e5e5ea"/>
+      <text x="66" y="320" font-size="12" font-weight="700" fill="#c62828">甲的结果被乙覆盖了。换个时序，可能乙的结果丢，也可能完全不出错——所以这类漏洞极难查。</text>
+
+      <rect x="44" y="352" width="306" height="118" rx="12" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="64" y="378" font-size="12.5" font-weight="700" fill="#c62828">麻烦一 · 交错</text>
+      <text x="64" y="402" font-size="10.5" fill="#b71c1c">一行代码其实好几步</text>
+      <text x="64" y="424" font-size="10.5" fill="#b71c1c">两个人的步骤互相穿插</text>
+      <text x="64" y="446" font-size="10.5" fill="#b71c1c">→ 结果丢失</text>
+
+      <rect x="367" y="352" width="306" height="118" rx="12" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="387" y="378" font-size="12.5" font-weight="700" fill="#a85c00">麻烦二 · 看不见</text>
+      <text x="387" y="402" font-size="10.5" fill="#a85c00">甲改完白板，乙拿的还是旧纸</text>
+      <text x="387" y="424" font-size="10.5" fill="#a85c00">多核各有缓存，各看各的</text>
+      <text x="387" y="446" font-size="10.5" fill="#a85c00">→ 看见旧值</text>
+
+      <rect x="690" y="352" width="306" height="118" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="710" y="378" font-size="12.5" font-weight="700" fill="#5b3a9e">麻烦三 · 跨机器</text>
+      <text x="710" y="402" font-size="10.5" fill="#5b3a9e">不同进程内存互相隔离</text>
+      <text x="710" y="424" font-size="10.5" fill="#5b3a9e">不同机器根本没有公共内存</text>
+      <text x="710" y="446" font-size="10.5" fill="#5b3a9e">→ 单机锁管不着</text>
+
+      <rect x="44" y="490" width="952" height="48" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="520" font-size="12.5" font-weight="700" fill="#1d1d1f">一句话：锁不是为了让程序变快，是为了让程序别乱。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先看时间线的第 5、6 行——甲写入 1，乙随后写入 -1，甲那一次加一凭空消失。再看下面三个框：交错是「同时改」，看不见是「改了对方不知道」，跨机器是「连同一块白板都没有」。锁就是为解决这三层麻烦而生的。</div>
+</div>
+
+<!-- 2 原理 -->
+<div class="card" id="k2">
+  <div class="card-head">
+    <h2><span class="num">2</span>锁的原理：四步动作、三条底线、两个附加服务 <span class="tag">第二问</span></h2>
+    <p>所有锁都是同一套动作。锁的不是代码，而是大家约定共同看一眼的那个「标记」。</p>
+  </div>
+  <svg viewBox="0 0 1040 552" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="k2a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">进会议室的四步：申请 → 占用 → 排斥 → 释放</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">门牌上写着谁的名字，只有拿牌子的人能进去，出来后交还</text>
+
+      <rect x="44" y="88" width="226" height="146" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="114" font-size="12.5" font-weight="700" fill="#0a58ca">① 申请</text>
+      <text x="62" y="140" font-size="10.5" fill="#0a58ca">想干活，先去抢标记</text>
+      <text x="62" y="164" font-size="10.5" fill="#0a58ca">抢不到就排队</text>
+      <text x="62" y="192" font-size="10.5" fill="#0a58ca">抢到才往下走</text>
+      <text x="62" y="218" font-size="10" fill="#6e6e73">关键词：acquire</text>
+
+      <rect x="284" y="88" width="226" height="146" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="302" y="114" font-size="12.5" font-weight="700" fill="#1d7a45">② 占用</text>
+      <text x="302" y="140" font-size="10.5" fill="#1d7a45">标记写上自己的名字</text>
+      <text x="302" y="164" font-size="10.5" fill="#1d7a45">进屋干活</text>
+      <text x="302" y="192" font-size="10.5" fill="#1d7a45">同一时间只有一人</text>
+      <text x="302" y="218" font-size="10" fill="#6e6e73">关键词：互斥</text>
+
+      <rect x="524" y="88" width="226" height="146" rx="12" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="542" y="114" font-size="12.5" font-weight="700" fill="#a85c00">③ 排斥</text>
+      <text x="542" y="140" font-size="10.5" fill="#a85c00">没抢到的人在门口等</text>
+      <text x="542" y="164" font-size="10.5" fill="#a85c00">不往里挤，也不抢着改</text>
+      <text x="542" y="192" font-size="10.5" fill="#a85c00">这叫「阻塞」</text>
+      <text x="542" y="218" font-size="10" fill="#6e6e73">关键词：block</text>
+
+      <rect x="764" y="88" width="226" height="146" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="782" y="114" font-size="12.5" font-weight="700" fill="#5b3a9e">④ 释放</text>
+      <text x="782" y="140" font-size="10.5" fill="#5b3a9e">干完把标记交还</text>
+      <text x="782" y="164" font-size="10.5" fill="#5b3a9e">异常也要还（finally）</text>
+      <text x="782" y="192" font-size="10.5" fill="#5b3a9e">门口的人才有机会进</text>
+      <text x="782" y="218" font-size="10" fill="#6e6e73">关键词：release</text>
+
+      <g stroke="#007aff" stroke-width="2" fill="none" marker-end="url(#k2a)">
+        <path d="M272,155 L281,155"/><path d="M512,155 L521,155"/><path d="M752,155 L761,155"/>
+      </g>
+
+      <text x="44" y="268" font-size="12.5" font-weight="700" fill="#1d1d1f">一把好锁的三条底线（Redis 官方给的最低保证）</text>
+      <rect x="44" y="282" width="306" height="94" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="308" font-size="12" font-weight="700" fill="#0a58ca">互斥</text>
+      <text x="62" y="332" font-size="10.5" fill="#0a58ca">任意时刻只有一个持有者</text>
+      <text x="62" y="356" font-size="10.5" fill="#0a58ca">屋子里不能同时两拨人</text>
+      <rect x="367" y="282" width="306" height="94" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="385" y="308" font-size="12" font-weight="700" fill="#1d7a45">不死等</text>
+      <text x="385" y="332" font-size="10.5" fill="#1d7a45">持有者崩溃，锁最终可拿</text>
+      <text x="385" y="356" font-size="10.5" fill="#1d7a45">钥匙不能跟着人锁进柜子</text>
+      <rect x="690" y="282" width="306" height="94" rx="11" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="708" y="308" font-size="12" font-weight="700" fill="#a85c00">容错</text>
+      <text x="708" y="332" font-size="10.5" fill="#a85c00">部分设施坏了还能发锁</text>
+      <text x="708" y="356" font-size="10.5" fill="#a85c00">前台不在，有备用登记方式</text>
+
+      <text x="44" y="408" font-size="12.5" font-weight="700" fill="#1d1d1f">顺手附赠的两个服务</text>
+      <rect x="44" y="422" width="470" height="74" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="448" font-size="12" font-weight="700" fill="#1d1d1f">可见性：接力时看见正确结果</text>
+      <text x="64" y="474" font-size="10.5" fill="#48484a">释放锁 → 另人拿到同一把锁 = 建立「先发生」关系</text>
+      <rect x="526" y="422" width="470" height="74" rx="11" fill="#f2f2f7"/>
+      <text x="546" y="448" font-size="12" font-weight="700" fill="#1d1d1f">可重入：自己不会再卡死自己</text>
+      <text x="546" y="474" font-size="10.5" fill="#48484a">已持锁的线程，用同一把锁进下一层照样放行</text>
+
+      <rect x="44" y="514" width="952" height="30" rx="9" fill="#1d1d1f"/>
+      <text x="64" y="534" font-size="11.5" font-weight="700" fill="#ffffff">记住：所有人必须认同一个标记。各拿各的锁，等于没锁。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上排四张卡片从左到右读，注意是「先抢牌子再进屋」，不是「进屋再找牌子」。中排三条底线里最容易被忽略的是「不死等」——所以分布式锁必须设过期时间。下排两个附加服务提醒你：锁不只防冲突，还负责让下一个人看见正确结果。</div>
+</div>
+
+<!-- 3 单机锁 -->
+<div class="card" id="k3">
+  <div class="card-head">
+    <h2><span class="num">3</span>单机锁：牌子挂在进程自己家里 <span class="tag">第三问 · 上</span></h2>
+    <p>同一个 JVM 里的线程共享一块内存，牌子就挂在内存里。换个对象、换台机器，牌子就不认了。</p>
+  </div>
+  <svg viewBox="0 0 1040 510" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="k3a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+      <marker id="k3b" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff3b30"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">牌子在同一个进程的内存里，大家看得见</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">一个 JVM = 一间办公室，门口只有一块白板</text>
+
+      <rect x="44" y="88" width="560" height="300" rx="13" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="116" font-size="13" font-weight="700" fill="#0a58ca">一个 JVM 进程（同一块堆内存）</text>
+      <rect x="196" y="150" width="256" height="58" rx="10" fill="#ffffff" stroke="#007aff" stroke-width="2"/>
+      <text x="324" y="176" font-size="12.5" font-weight="700" fill="#0a58ca" text-anchor="middle">那把锁（锁对象）</text>
+      <text x="324" y="196" font-size="10.5" fill="#0a58ca" text-anchor="middle">牌子上的名字：线程甲</text>
+
+      <rect x="72" y="246" width="146" height="44" rx="8" fill="#ffffff" stroke="#a9cdf5"/>
+      <text x="145" y="274" font-size="11" fill="#0a58ca" text-anchor="middle">线程甲 · 持有中</text>
+      <rect x="240" y="246" width="146" height="44" rx="8" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="313" y="274" font-size="11" fill="#6e6e73" text-anchor="middle">线程乙 · 门口等</text>
+      <rect x="408" y="246" width="146" height="44" rx="8" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="481" y="274" font-size="11" fill="#6e6e73" text-anchor="middle">线程丙 · 门口等</text>
+
+      <path d="M145,244 L280,210" stroke="#007aff" stroke-width="1.8" fill="none" marker-end="url(#k3a)"/>
+      <path d="M313,244 L340,210" stroke="#9ca3af" stroke-width="1.4" stroke-dasharray="4 4" fill="none"/>
+      <path d="M481,244 L370,210" stroke="#9ca3af" stroke-width="1.4" stroke-dasharray="4 4" fill="none"/>
+      <text x="64" y="324" font-size="11" fill="#0a58ca">绿色实线：抢到牌子，进去干活</text>
+      <text x="64" y="350" font-size="11" fill="#6e6e73">灰色虚线：抢不到，在门口阻塞等待</text>
+      <text x="64" y="374" font-size="11" fill="#0a58ca">线程异常退出也会释放锁（finally）</text>
+
+      <rect x="620" y="88" width="376" height="300" rx="13" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="640" y="116" font-size="13" font-weight="700" fill="#c62828">两个常见翻车</text>
+      <text x="640" y="148" font-size="11.5" font-weight="700" fill="#c62828">翻车一：牌子每次都是新的</text>
+      <rect x="640" y="160" width="336" height="50" rx="8" fill="#ffffff" stroke="#ffc9c9"/>
+      <text x="654" y="181" font-size="10" fill="#b71c1c">synchronized (new Object())</text>
+      <text x="654" y="201" font-size="10" fill="#b71c1c">每次进来都是新对象 → 三把锁互不相干</text>
+      <text x="640" y="238" font-size="11.5" font-weight="700" fill="#c62828">翻车二：三台机器各锁各的</text>
+      <rect x="640" y="250" width="100" height="46" rx="7" fill="#ffffff" stroke="#ffc9c9"/>
+      <text x="690" y="278" font-size="10" fill="#b71c1c" text-anchor="middle">机器 1 的锁</text>
+      <rect x="748" y="250" width="100" height="46" rx="7" fill="#ffffff" stroke="#ffc9c9"/>
+      <text x="798" y="278" font-size="10" fill="#b71c1c" text-anchor="middle">机器 2 的锁</text>
+      <rect x="856" y="250" width="100" height="46" rx="7" fill="#ffffff" stroke="#ffc9c9"/>
+      <text x="906" y="278" font-size="10" fill="#b71c1c" text-anchor="middle">机器 3 的锁</text>
+      <text x="640" y="322" font-size="10.5" fill="#b71c1c">凌晨两点，三台机器一起跑定时任务</text>
+      <text x="640" y="346" font-size="10.5" fill="#b71c1c">单机锁在集群里等于没锁</text>
+      <text x="640" y="374" font-size="10.5" fill="#b71c1c">→ 锁的作用域必须覆盖竞争者范围</text>
+
+      <rect x="44" y="406" width="952" height="88" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="434" font-size="12.5" font-weight="700" fill="#1d1d1f">判断线：竞争者是谁</text>
+      <text x="64" y="458" font-size="11" fill="#48484a">同一个进程里的线程 → 单机锁够用，纯内存操作，快</text>
+      <text x="64" y="480" font-size="11" fill="#0a58ca">跨进程、跨机器 → 单机锁失灵，必须换成所有人都能访问的外部标记</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左图重点是牌子只有一块：三条线里只有甲是实线拿到牌子，乙丙在门口等。右图两个反例都要记住——「每次 new 一个新锁对象」和「三台机器各锁各的」，本质上都是「大家看的不是同一块牌子」。最后一行就是单机锁和分布式锁的分水岭。</div>
+</div>
+
+<!-- 4 分布式锁 -->
+<div class="card" id="k4">
+  <div class="card-head">
+    <h2><span class="num">4</span>分布式锁：牌子换成所有人都能查的云上登记册 <span class="tag">第三问 · 下</span></h2>
+    <p>Redis 官方给的正确姿势：SET 时带唯一值和过期时间，释放时校验值匹配才删。</p>
+  </div>
+  <svg viewBox="0 0 1040 562" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="k4a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">三台机器上的进程，一起查同一本登记册</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">谁先把登记册上那一行写上自己的名字，谁干活</text>
+
+      <rect x="44" y="88" width="280" height="70" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="184" y="116" font-size="12" font-weight="700" fill="#0a58ca" text-anchor="middle">机器 1 · 订单服务</text>
+      <text x="184" y="140" font-size="10.5" fill="#0a58ca" text-anchor="middle">凌晨两点来抢锁</text>
+      <rect x="380" y="88" width="280" height="70" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="520" y="116" font-size="12" font-weight="700" fill="#0a58ca" text-anchor="middle">机器 2 · 订单服务</text>
+      <text x="520" y="140" font-size="10.5" fill="#0a58ca" text-anchor="middle">凌晨两点来抢锁</text>
+      <rect x="716" y="88" width="280" height="70" rx="10" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="856" y="116" font-size="12" font-weight="700" fill="#0a58ca" text-anchor="middle">机器 3 · 订单服务</text>
+      <text x="856" y="140" font-size="10.5" fill="#0a58ca" text-anchor="middle">凌晨两点来抢锁</text>
+
+      <g stroke="#007aff" stroke-width="1.6" fill="none" marker-end="url(#k4a)">
+        <path d="M184,160 L420,214"/><path d="M520,160 L520,214"/><path d="M856,160 L620,214"/>
+      </g>
+
+      <rect x="272" y="218" width="496" height="110" rx="13" fill="#f3f0ff" stroke="#cfc9f5" stroke-width="2"/>
+      <text x="520" y="246" font-size="13" font-weight="700" fill="#5b3a9e" text-anchor="middle">Redis 里的那一行（所有机器都能访问）</text>
+      <rect x="300" y="260" width="440" height="30" rx="7" fill="#ffffff" stroke="#cfc9f5"/>
+      <text x="520" y="281" font-size="11" fill="#5b3a9e" text-anchor="middle">SET order:lock &lt;随机值&gt; NX PX 30000</text>
+      <text x="520" y="314" font-size="10.5" fill="#5b3a9e" text-anchor="middle">NX = 不存在才写（抢）　·　PX 30000 = 30 秒后自动过期（租约）　·　随机值 = 防误删</text>
+
+      <rect x="44" y="358" width="452" height="132" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="64" y="384" font-size="12.5" font-weight="700" fill="#1d7a45">正确释放：值匹配才删</text>
+      <text x="64" y="408" font-size="10.5" fill="#1d7a45">如果登记册上的值还是我写的那个 → 删</text>
+      <text x="64" y="430" font-size="10.5" fill="#1d7a45">已经变成别人的值 → 不许动</text>
+      <rect x="64" y="442" width="412" height="34" rx="7" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="78" y="464" font-size="10" fill="#1d7a45">值不匹配就返回 0（新版可用 DELEX）</text>
+
+      <rect x="544" y="358" width="452" height="132" rx="12" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="564" y="384" font-size="12.5" font-weight="700" fill="#c62828">错误释放：直接删 key</text>
+      <text x="564" y="408" font-size="10.5" fill="#b71c1c">甲干活超过 30 秒 → 锁过期</text>
+      <text x="564" y="430" font-size="10.5" fill="#b71c1c">乙抢到锁 → 登记册写乙的值</text>
+      <text x="564" y="452" font-size="10.5" fill="#b71c1c">甲醒来一个 DEL → 把乙的锁删了</text>
+      <text x="564" y="476" font-size="10.5" font-weight="700" fill="#c62828">→ 丙也能进来，互斥彻底失效</text>
+
+      <rect x="44" y="510" width="952" height="40" rx="10" fill="#f2f2f7"/>
+      <text x="64" y="536" font-size="11.5" fill="#48484a">业务时间不可控时要续租（看门狗）；但进程被挂起时，续租线程也一起停了。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先看三条箭头都指向同一个 Redis 框——这就是「同一块牌子」在分布式里的样子。中间那条命令三个参数各管一件事：NX 管抢、PX 管崩溃后自动释放、随机值管别删错人。下面左右两栏对照，重点看右栏的四步翻车链：卡顿 → 过期 → 别人抢 → 误删。</div>
+</div>
+
+<!-- 5 翻车现场 -->
+<div class="card" id="k5">
+  <div class="card-head">
+    <h2><span class="num">5</span>再进一步：主从切换会丢锁，栅栏令牌才是底牌 <span class="tag">第三问 · 补充</span></h2>
+    <p>Redis 官方自己列了四步翻车；Kleppmann 指出就算锁完美，停顿和延迟也能破坏互斥。</p>
+  </div>
+  <svg viewBox="0 0 1040 632" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="k5a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff3b30"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">翻车现场一：主从切换那几毫秒</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">Redis 复制是异步的，锁还没同步过去，主节点就倒了</text>
+
+      <rect x="44" y="86" width="952" height="154" rx="12" fill="#fff5f5" stroke="#ffc9c9"/>
+      <g font-size="10.5" fill="#b71c1c">
+        <rect x="62" y="106" width="210" height="60" rx="8" fill="#ffffff" stroke="#ffc9c9"/>
+        <text x="72" y="128" font-weight="700" fill="#c62828">① 甲在主节点拿到锁</text>
+        <text x="72" y="150">登记册刚写上甲的名字</text>
+        <rect x="288" y="106" width="210" height="60" rx="8" fill="#ffffff" stroke="#ffc9c9"/>
+        <text x="298" y="128" font-weight="700" fill="#c62828">② 主节点宕机</text>
+        <text x="298" y="150">还没同步到从节点</text>
+        <rect x="514" y="106" width="210" height="60" rx="8" fill="#ffffff" stroke="#ffc9c9"/>
+        <text x="524" y="128" font-weight="700" fill="#c62828">③ 从节点升主</text>
+        <text x="524" y="150">甲写的那行消失了</text>
+        <rect x="740" y="106" width="238" height="60" rx="8" fill="#ffffff" stroke="#ff3b30" stroke-width="2"/>
+        <text x="750" y="128" font-weight="700" fill="#c62828">④ 乙也拿到锁</text>
+        <text x="750" y="150">两个人同时干活 → 互斥失效</text>
+      </g>
+      <g stroke="#ff3b30" stroke-width="1.8" fill="none" marker-end="url(#k5a)">
+        <path d="M274,136 L285,136"/><path d="M500,136 L511,136"/><path d="M726,136 L737,136"/>
+      </g>
+      <text x="62" y="202" font-size="11" font-weight="700" fill="#c62828">Redlock（多个独立主节点投票）就是想补这个洞，但它自己也有争议。</text>
+      <text x="62" y="224" font-size="10.5" fill="#b71c1c">Redis 官方原文把这一步叫 SAFETY VIOLATION（安全被打破）。</text>
+
+      <text x="44" y="276" font-size="13" font-weight="700" fill="#1d1d1f">翻车现场二：就算锁服务完美，这三件事照样能让两人同时持锁</text>
+      <rect x="44" y="290" width="306" height="92" rx="11" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="62" y="316" font-size="12" font-weight="700" fill="#a85c00">进程停顿</text>
+      <text x="62" y="340" font-size="10.5" fill="#a85c00">甲持锁时被挂起，租约到期</text>
+      <text x="62" y="362" font-size="10.5" fill="#a85c00">乙拿锁，甲醒来继续写</text>
+      <rect x="367" y="290" width="306" height="92" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="385" y="316" font-size="12" font-weight="700" fill="#5b3a9e">时钟跳变</text>
+      <text x="385" y="340" font-size="10.5" fill="#5b3a9e">某台机器的表往前跳</text>
+      <text x="385" y="362" font-size="10.5" fill="#5b3a9e">锁提前过期，别人进来</text>
+      <rect x="690" y="290" width="306" height="92" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="708" y="316" font-size="12" font-weight="700" fill="#0a58ca">网络延迟</text>
+      <text x="708" y="340" font-size="10.5" fill="#0a58ca">甲的写在路上堵了一分钟</text>
+      <text x="708" y="362" font-size="10.5" fill="#0a58ca">到达时租约早没了</text>
+
+      <text x="44" y="418" font-size="13" font-weight="700" fill="#1d1d1f">正解：让存储服务认令牌，而不是只信锁</text>
+      <rect x="44" y="432" width="952" height="140" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <rect x="64" y="450" width="200" height="52" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="164" y="472" font-size="11" font-weight="700" fill="#1d7a45" text-anchor="middle">甲拿锁 → 令牌 33</text>
+      <text x="164" y="492" font-size="10" fill="#1d7a45" text-anchor="middle">然后被挂起，租约过期</text>
+      <rect x="288" y="450" width="200" height="52" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="388" y="472" font-size="11" font-weight="700" fill="#1d7a45" text-anchor="middle">乙拿锁 → 令牌 34</text>
+      <text x="388" y="492" font-size="10" fill="#1d7a45" text-anchor="middle">写入成功，存储记住 34</text>
+      <rect x="512" y="450" width="200" height="52" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="612" y="472" font-size="11" font-weight="700" fill="#1d7a45" text-anchor="middle">甲醒来 → 拿 33 去写</text>
+      <text x="612" y="492" font-size="10" fill="#1d7a45" text-anchor="middle">令牌比 34 小</text>
+      <rect x="736" y="450" width="240" height="52" rx="8" fill="#ffffff" stroke="#ff3b30" stroke-width="2"/>
+      <text x="856" y="472" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">存储服务直接拒绝</text>
+      <text x="856" y="492" font-size="10" fill="#b71c1c" text-anchor="middle">旧持有者写不进去了</text>
+      <g stroke="#34c759" stroke-width="1.6" fill="none" marker-end="url(#k5a)">
+        <path d="M266,476 L285,476"/>
+      </g>
+      <g stroke="#ff3b30" stroke-width="1.8" fill="none" marker-end="url(#k5a)">
+        <path d="M490,476 L509,476"/><path d="M714,476 L733,476"/>
+      </g>
+      <text x="64" y="532" font-size="11" fill="#1d7a45">令牌必须单调递增，且由存储服务主动校验「比见过的小就拒绝」——这叫栅栏令牌。</text>
+      <text x="64" y="556" font-size="11" font-weight="700" fill="#1d7a45">Redis 的随机值不是栅栏令牌；它只能防误删，防不了过期持有者继续写。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上半部分按箭头读四步，重点在第②步「还没同步就宕机」——这是 Redis 官方承认的竞态。中间三框说明锁服务再完美也没用，因为问题出在客户端停顿和时间上。最下面 33 → 34 → 33 的序列是整张图的关键：最后那次写入被存储层拒绝，才是真正的安全底线。</div>
+</div>
+
+<!-- 6 判断清单 -->
+<div class="card" id="k6">
+  <div class="card-head">
+    <h2><span class="num">6</span>什么时候需要锁：先过三问，再看用哪种 <span class="tag">第四问</span></h2>
+    <p>三个问题全是「是」才需要考虑锁。能靠数据库唯一约束或版本号解决，就别再套一层锁。</p>
+  </div>
+  <svg viewBox="0 0 1040 548" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="k6a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">先过三问：全是「是」才往下走</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">只要有一个「否」，多半不需要锁</text>
+
+      <rect x="44" y="88" width="296" height="92" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="62" y="114" font-size="12" font-weight="700" fill="#0a58ca">① 有共享状态吗？</text>
+      <text x="62" y="138" font-size="10.5" fill="#0a58ca">同一份数据、文件、外部资源</text>
+      <text x="62" y="160" font-size="10.5" fill="#0a58ca">说不出具体是啥 → 不用锁</text>
+      <rect x="372" y="88" width="296" height="92" rx="11" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="390" y="114" font-size="12" font-weight="700" fill="#5b3a9e">② 有多个执行者吗？</text>
+      <text x="390" y="138" font-size="10.5" fill="#5b3a9e">多线程、多进程、多机器</text>
+      <text x="390" y="160" font-size="10.5" fill="#5b3a9e">只有一个人在改 → 不用锁</text>
+      <rect x="700" y="88" width="296" height="92" rx="11" fill="#fff8ec" stroke="#ffd9a0"/>
+      <text x="718" y="114" font-size="12" font-weight="700" fill="#a85c00">③ 读—改—写会出错吗？</text>
+      <text x="718" y="138" font-size="10.5" fill="#a85c00">结果必须正确、不能丢</text>
+      <text x="718" y="160" font-size="10.5" fill="#a85c00">只读或错了无所谓 → 不用锁</text>
+      <g stroke="#007aff" stroke-width="1.8" fill="none" marker-end="url(#k6a)">
+        <path d="M342,134 L369,134"/><path d="M670,134 L697,134"/>
+      </g>
+
+      <rect x="44" y="208" width="452" height="180" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="64" y="234" font-size="13" font-weight="700" fill="#1d7a45">该用锁的场景</text>
+      <text x="64" y="260" font-size="11" font-weight="700" fill="#1d7a45">单机锁就够了</text>
+      <text x="64" y="282" font-size="10.5" fill="#1d7a45">同一进程的多个线程改同一对象</text>
+      <text x="64" y="304" font-size="10.5" fill="#1d7a45">临界区很短，纯内存操作</text>
+      <text x="64" y="330" font-size="11" font-weight="700" fill="#1d7a45">分布式锁</text>
+      <text x="64" y="352" font-size="10.5" fill="#1d7a45">定时任务只跑一个 · 防重复提交/发券</text>
+      <text x="64" y="374" font-size="10.5" fill="#1d7a45">多节点争抢同一个外部资源</text>
+
+      <rect x="544" y="208" width="452" height="180" rx="12" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="564" y="234" font-size="13" font-weight="700" fill="#1d1d1f">不需要锁的场景</text>
+      <text x="564" y="260" font-size="10.5" fill="#48484a">无状态服务：每个请求只用自己的局部变量</text>
+      <text x="564" y="284" font-size="10.5" fill="#48484a">只读：大家看同一份不变的数据</text>
+      <text x="564" y="308" font-size="10.5" fill="#48484a">不可变对象 / 线程隔离：天生不用抢</text>
+      <text x="564" y="332" font-size="10.5" fill="#48484a">一个原子操作就够：单次读写本身是原子的</text>
+      <text x="564" y="356" font-size="10.5" fill="#48484a">数据库有唯一约束 / 版本号 / 事务兜底</text>
+      <text x="564" y="380" font-size="10.5" font-weight="700" fill="#0a58ca">注意：原子 ≠ 可见，c++ 是三步不是一步</text>
+
+      <text x="44" y="424" font-size="13" font-weight="700" fill="#1d1d1f">Kleppmann 的分类：你用锁，到底为了什么？</text>
+      <rect x="44" y="438" width="470" height="92" rx="11" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="464" font-size="12" font-weight="700" fill="#0a58ca">为了效率</text>
+      <text x="64" y="488" font-size="10.5" fill="#0a58ca">锁失效只是多算一次、多写一封邮件</text>
+      <text x="64" y="512" font-size="10.5" fill="#0a58ca">简单方案够用，不必上锁集群</text>
+      <rect x="526" y="438" width="470" height="92" rx="11" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="546" y="464" font-size="12" font-weight="700" fill="#c62828">为了正确性</text>
+      <text x="546" y="488" font-size="10.5" fill="#b71c1c">锁失效就是超卖、重复扣款、数据错乱</text>
+      <text x="546" y="512" font-size="10.5" font-weight="700" fill="#c62828">用共识系统 + 栅栏令牌 + 存储层兜底</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上排三个框从左到右过一遍，任何一个答「否」就别急着加锁。中间左右对照：左栏是锁的主场，右栏是「不需要锁」的清单——尤其最后一条，数据库约束往往比再加一层 Redis 锁更可靠。下排那两句决定了你的技术选型：只为效率，简单就好；为了正确性，锁只是第一道防线。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
