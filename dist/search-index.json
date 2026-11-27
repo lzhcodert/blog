@@ -1,5 +1,25 @@
 [
   {
+    "title": "把 CRM 从 SQL Server 迁到 GoldenDB：一次迁移真正要过的六道关",
+    "date": "2026-11-27",
+    "category": "数据库",
+    "summary": "以银行 CRM 的客户表、跟进记录、机构字典和商机表为例，讲清 SQL Server 到 GoldenDB 迁移的四件事：建表结构怎么改、分片键怎么选、T-SQL 怎么转、数据怎么用 Sloth 搬且不出错，附权威出处与回退方案。",
+    "tags": [
+      "[GoldenDB",
+      "SQLServer",
+      "数据库迁移",
+      "CRM",
+      "信创",
+      "分片]"
+    ],
+    "readingMinutes": 21,
+    "url": "posts/2026-11-27-sqlserver-goldendb-12.html",
+    "embeds": [
+      "embed/sqlserver-to-goldendb.html"
+    ],
+    "body": "数据库迁移最容易产生的误会，是把它当成\"导出再导入\"。\n\n真到项目里你会发现，搬数据往往是工作量最小的一环。真正费劲的是前面那些问题：\n\n- 这张表在 SQL Server 里好好的，到 GoldenDB 该怎么写 CREATE TABLE？\n- 单机库不需要分片键，分布式库却必须选——选错了，客户维度查询就变成全分片扫描。\n- 应用里几百条 SQL 全是 TOP、ISNULL、GETDATE()，难道要一条条改？\n- 数据搬过去了，怎么证明一模一样？割接当天出问题怎么退回来？\n\n这篇文章用一套银行 CRM 的表当例子，把这几件事串成一条线。目标是让你看完能判断：自己这个项目到底要改什么、工具能帮多少、哪些坑必须提前躲。\n\n 说明：GoldenDB 是金篆信科（中兴）的分布式数据库，在 MySQL 模式下兼容 MySQL 8.0.25 及以前版本的语法、数据类型、内置函数、视图和存储过程。它不兼容 SQL Server 的 T-SQL，所以\"改 SQL\"这一关躲不掉。\n\n 先把全局看清：四道关\n\n按顺序是这四步：\n\n| 关口 | 做什么 | 谁来做 |\n|---|---|---|\n| ① 结构 | 字段类型映射、主键索引重设、加分片规则 | 人，手工改 DDL |\n| ② 分片 | 每张表选分片键和分片策略 | 人，按业务查询模式定 |\n| ③ 语法 | T-SQL 改成 MySQL 写法 | 人，改应用 SQL |\n| ④ 数据 | 全量搬迁 + 一致性校验 + 差异修复 | Sloth 工具 |\n\n前三关都在停机窗口之前完成，窗口里只做第四关和切换。\n\n一个必须先接受的现实：Sloth 只负责搬数据，不负责把 T-SQL 翻译成 MySQL SQL，也不负责帮你建表。\n\n 第一关：建表结构怎么改\n\n拿 CRM 最常用的客户主表 crm_customer 举例。\n\nSQL Server 原版：\n\nsql\nCREATE TABLE dbo.crm_customer (\n  cust_id BIGINT IDENTITY(1,1) PRIMARY KEY,\n  cust_name NVARCHAR(100) NOT NULL,\n  id_no VARCHAR(30),\n  mobile VARCHAR(20),\n  level MONEY DEFAULT 0,\n  created_at DATETIME2 NOT NULL,\n  guid UNIQUEIDENTIFIER\n);\n\n\nGoldenDB（MySQL 模式）改造后：\n\nsql\nCREATE TABLE crm_customer (\n  cust_id BIGINT NOT NULL AUTO_INCREMENT,\n  cust_name VARCHAR(100) NOT NULL,\n  id_no VARCHAR(30) DEFAULT '',\n  mobile VARCHAR(20) DEFAULT '',\n  level DECIMAL(19,4) DEFAULT 0,\n  created_at DATETIME(6) NOT NULL,\n  guid CHAR(36),\n  PRIMARY KEY (cust_id)\n) DISTRIBUTED BY HASH(cust_id) (g1,g2,g3);\n\n\n差异集中在三处：\n\n1. 标识符：去掉 dbo. 和方括号。GoldenDB 的对象名不超过 30 个字符，只用字母、数字、下划线，避开 date、rank、order 这类关键字。\n2. 字段类型：IDENTITY → AUTO_INCREMENT，MONEY → DECIMAL(19,4)，DATETIME2 → DATETIME(6)，UNIQUEIDENTIFIER → CHAR(36)。\n3. 分片规则：末尾多了 DISTRIBUTED BY HASH(cust_id)——这是单机库没有的，官方建表语法里就带这个选项。\n\n 字段类型对照\n\nGoldenDB 官方文档给出了 MySQL → GoldenDB 的同类型映射（INTEGER、BIGINT、DECIMAL、VARCHAR、DATE、DATETIME 等都是同名对应）。SQL Server 特有类型要先折到 MySQL 类型，再落到这里：\n\n| SQL Server | GoldenDB（MySQL 模式） | 说明 |\n|---|---|---|\n| INT / BIGINT | INT / BIGINT | 直接对应 |\n| DECIMAL(p,s) | DECIMAL(p,s) | 直接对应 |\n| MONEY / SMALLMONEY | DECIMAL(19,4) / DECIMAL"
+  },
+  {
     "title": "Redis Key 怎么设计？六张图讲清命名、长度、大 key 和集群哈希标签",
     "date": "2026-11-27",
     "category": "数据库",
@@ -32,7 +52,7 @@
       "布隆过滤器]"
     ],
     "readingMinutes": 21,
-    "url": "posts/2026-11-27-12.html",
+    "url": "posts/2026-11-27-13.html",
     "embeds": [
       "embed/cache-accidents.html"
     ],
@@ -51,7 +71,7 @@
       "流量治理]"
     ],
     "readingMinutes": 31,
-    "url": "posts/2026-11-27-13.html",
+    "url": "posts/2026-11-27-14.html",
     "embeds": [
       "embed/gateway-explained.html"
     ],
@@ -71,7 +91,7 @@
       "TOGAF"
     ],
     "readingMinutes": 13,
-    "url": "posts/2026-11-27-14.html",
+    "url": "posts/2026-11-27-15.html",
     "embeds": [
       "embed/architecture-types.html"
     ],

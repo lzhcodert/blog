@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SQL Server 迁 GoldenDB · 六张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>SQL Server → GoldenDB：一次 CRM 迁移要过的六道关</h1>
+  <p>别把迁移想成"导出再导入"。真正的工作量在四件事上：表结构怎么改、分片键怎么选、SQL 语法怎么转、数据怎么搬且不出错。六张图按这个顺序讲。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#m1">总览</a><a href="#m2">CRM 表改造</a><a href="#m3">分片键</a><a href="#m4">语法转换</a><a href="#m5">Sloth 搬家</a><a href="#m6">割接回退</a>
+</div>
+
+<!-- 1 总览 -->
+<div class="card" id="m1">
+  <div class="card-head">
+    <h2><span class="num">1</span>先看清全局：迁移要过四道关 <span class="tag">总览</span></h2>
+    <p>GoldenDB 兼容 MySQL 语法，不兼容 SQL Server 的 T-SQL。所以这不是"换个连接串"，而是要做结构、分片、语法、数据四次改造。</p>
+  </div>
+  <svg viewBox="0 0 1040 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="mg1b" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">SQL Server 的 CRM → GoldenDB 的 CRM</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">四道关从前到后做，前一道没做完，后一道一定会返工</text>
+
+      <rect x="44" y="96" width="180" height="82" rx="12" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="134" y="128" font-size="13" font-weight="700" fill="#1d1d1f" text-anchor="middle">SQL Server</text>
+      <text x="134" y="150" font-size="10.5" fill="#6e6e73" text-anchor="middle">CRM 库 / T-SQL</text>
+      <text x="134" y="168" font-size="10.5" fill="#6e6e73" text-anchor="middle">单机一整套表</text>
+
+      <g stroke="#007aff" stroke-width="1.6" marker-end="url(#mg1b)" fill="none">
+        <path d="M228,137 C250,137 254,137 274,137"/>
+      </g>
+
+      <rect x="280" y="88" width="180" height="98" rx="12" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="370" y="116" font-size="12" font-weight="700" fill="#0a58ca" text-anchor="middle">第 1 关 · 结构</text>
+      <text x="370" y="140" font-size="10.5" fill="#3a4a63" text-anchor="middle">字段类型映射</text>
+      <text x="370" y="160" font-size="10.5" fill="#3a4a63" text-anchor="middle">主键 / 索引重设</text>
+      <text x="370" y="178" font-size="10.5" fill="#3a4a63" text-anchor="middle">加 DISTRIBUTED BY</text>
+
+      <rect x="480" y="88" width="180" height="98" rx="12" fill="#f3efff" stroke="#d4c8ff"/>
+      <text x="570" y="116" font-size="12" font-weight="700" fill="#5b3fc9" text-anchor="middle">第 2 关 · 分片</text>
+      <text x="570" y="140" font-size="10.5" fill="#6f6250" text-anchor="middle">每张表选分片键</text>
+      <text x="570" y="160" font-size="10.5" fill="#6f6250" text-anchor="middle">客户号 / 机构号</text>
+      <text x="570" y="178" font-size="10.5" fill="#6f6250" text-anchor="middle">小表做复制表</text>
+
+      <rect x="680" y="88" width="180" height="98" rx="12" fill="#fff8e6" stroke="#ffd8a8"/>
+      <text x="770" y="116" font-size="12" font-weight="700" fill="#b26a00" text-anchor="middle">第 3 关 · 语法</text>
+      <text x="770" y="140" font-size="10.5" fill="#8a6a3b" text-anchor="middle">TOP → LIMIT</text>
+      <text x="770" y="160" font-size="10.5" fill="#8a6a3b" text-anchor="middle">ISNULL → IFNULL</text>
+      <text x="770" y="178" font-size="10.5" fill="#8a6a3b" text-anchor="middle">GETDATE → NOW</text>
+
+      <rect x="880" y="88" width="116" height="98" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+      <text x="938" y="116" font-size="12" font-weight="700" fill="#1d7a45" text-anchor="middle">第 4 关</text>
+      <text x="938" y="140" font-size="10.5" fill="#5a7a68" text-anchor="middle">数据</text>
+      <text x="938" y="160" font-size="10.5" fill="#5a7a68" text-anchor="middle">Sloth</text>
+      <text x="938" y="178" font-size="10.5" fill="#5a7a68" text-anchor="middle">全量+校验</text>
+
+      <rect x="44" y="216" width="952" height="84" rx="13" fill="#ffffff" stroke="#e5e5ea"/>
+      <text x="64" y="244" font-size="12" font-weight="700" fill="#1d1d1f">一个必须先接受的事实</text>
+      <text x="64" y="270" font-size="11" fill="#6e6e73">GoldenDB 在 MySQL 模式下兼容 MySQL 8.0.25 及以前的语法、类型、函数和存储过程；SQL Server 的 T-SQL 写法不会被自动翻译。</text>
+      <text x="64" y="290" font-size="10.5" fill="#8e8e93">所以"改 SQL"这一关躲不掉，工具只负责搬数据，不负责把 T-SQL 变成 MySQL SQL。</text>
+
+      <rect x="44" y="324" width="464" height="150" rx="13" fill="#fff7f6" stroke="#ffc9c4"/>
+      <text x="64" y="352" font-size="12" font-weight="700" fill="#c62828">最容易踩的四个坑</text>
+      <text x="64" y="380" font-size="10.5" fill="#8e4b48">① 以为 Sloth 能自动迁表结构 → SQLServer→GoldenDB 不支持对象迁移</text>
+      <text x="64" y="406" font-size="10.5" fill="#8e4b48">② 分片键随手选 → 客户维度查询变成全分片扫描</text>
+      <text x="64" y="432" font-size="10.5" fill="#8e4b48">③ 只搬数据不比对 → 到了割接才发现字段截断、乱码</text>
+      <text x="64" y="458" font-size="10.5" fill="#8e4b48">④ 忘了方括号标识符 [dbo].[t] → 语法直接报错</text>
+
+      <rect x="528" y="324" width="468" height="150" rx="13" fill="#f4fbf6" stroke="#bfe8cf"/>
+      <text x="548" y="352" font-size="12" font-weight="700" fill="#1d7a45">正确的顺序</text>
+      <text x="548" y="380" font-size="10.5" fill="#5a7a68">① 先盘点：表清单、数据量、字段类型、SQL 清单</text>
+      <text x="548" y="406" font-size="10.5" fill="#5a7a68">② 在建表语句里把分片规则定好，再迁结构</text>
+      <text x="548" y="432" font-size="10.5" fill="#5a7a68">③ 改完 SQL 用测试库跑全量回归</text>
+      <text x="548" y="458" font-size="10.5" fill="#5a7a68">④ 最后才搬数据、比对、割接</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上排四关从左到右做。左下"四个坑"是真实项目里最常见的返工原因；右下是正确顺序。记住：<b>工具只搬数据，不改你的 SQL</b>。</div>
+</div>
+
+<!-- 2 CRM 表改造 -->
+<div class="card" id="m2">
+  <div class="card-head">
+    <h2><span class="num">2</span>以 CRM 客户表为例：一条建表语句怎么改 <span class="tag">结构</span></h2>
+    <p>取 CRM 里最典型的客户主表。改造集中在三处：类型换写法、去掉 SQL Server 专有语法、末尾补上分片规则。</p>
+  </div>
+  <svg viewBox="0 0 1040 546" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">同一张客户表，两边长什么样</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">左边是改造前，右边是改造后。下面三行差异是本图重点</text>
+
+      <rect x="44" y="92" width="452" height="290" rx="13" fill="#1d1d20"/>
+      <text x="64" y="120" font-size="11" font-weight="700" fill="#ff9f0a">SQL Server（改造前）</text>
+      <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11">
+        <text x="64" y="150" fill="#f2f2f7">CREATE TABLE [dbo].[crm_customer] (</text>
+        <text x="64" y="175" fill="#f2f2f7">  cust_id BIGINT IDENTITY(1,1) PRIMARY KEY,</text>
+        <text x="64" y="200" fill="#f2f2f7">  cust_name NVARCHAR(100) NOT NULL,</text>
+        <text x="64" y="225" fill="#f2f2f7">  id_no VARCHAR(30),</text>
+        <text x="64" y="250" fill="#f2f2f7">  mobile VARCHAR(20),</text>
+        <text x="64" y="275" fill="#f2f2f7">  level MONEY DEFAULT 0,</text>
+        <text x="64" y="300" fill="#f2f2f7">  created_at DATETIME2 NOT NULL,</text>
+        <text x="64" y="325" fill="#f2f2f7">  guid UNIQUEIDENTIFIER</text>
+        <text x="64" y="350" fill="#f2f2f7">);</text>
+      </g>
+
+      <rect x="516" y="92" width="480" height="290" rx="13" fill="#1d1d20"/>
+      <text x="536" y="120" font-size="11" font-weight="700" fill="#5ac8fa">GoldenDB（MySQL 模式，改造后）</text>
+      <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11">
+        <text x="536" y="150" fill="#f2f2f7">CREATE TABLE crm_customer (</text>
+        <text x="536" y="175" fill="#f2f2f7">  cust_id BIGINT NOT NULL AUTO_INCREMENT,</text>
+        <text x="536" y="200" fill="#f2f2f7">  cust_name VARCHAR(100) NOT NULL,</text>
+        <text x="536" y="225" fill="#f2f2f7">  id_no VARCHAR(30) DEFAULT '',</text>
+        <text x="536" y="250" fill="#f2f2f7">  mobile VARCHAR(20) DEFAULT '',</text>
+        <text x="536" y="275" fill="#f2f2f7">  level DECIMAL(19,4) DEFAULT 0,</text>
+        <text x="536" y="300" fill="#f2f2f7">  created_at DATETIME(6) NOT NULL,</text>
+        <text x="536" y="325" fill="#f2f2f7">  guid CHAR(36),</text>
+        <text x="536" y="350" fill="#f2f2f7">  PRIMARY KEY (cust_id)</text>
+        <text x="536" y="375" fill="#ff9f0a">) DISTRIBUTED BY HASH(cust_id) (g1,g2,g3);</text>
+      </g>
+
+      <rect x="44" y="398" width="952" height="132" rx="13" fill="#ffffff" stroke="#d1d1d6"/>
+      <text x="64" y="426" font-size="12" font-weight="700" fill="#1d1d1f">三处关键差异</text>
+      <text x="64" y="454" font-size="10.5" fill="#6e6e73">① <tspan font-family="monospace" fill="#c62828">[dbo].[crm_customer]</tspan> → 去掉方括号和架构名，数据库对象名不超过 30 字符、只用字母数字下划线。</text>
+      <text x="64" y="478" font-size="10.5" fill="#6e6e73">② <tspan font-family="monospace" fill="#c62828">IDENTITY</tspan> → <tspan font-family="monospace" fill="#1d7a45">AUTO_INCREMENT</tspan>；<tspan font-family="monospace" fill="#c62828">MONEY</tspan> → <tspan font-family="monospace" fill="#1d7a45">DECIMAL(19,4)</tspan>；<tspan font-family="monospace" fill="#c62828">UNIQUEIDENTIFIER</tspan> → <tspan font-family="monospace" fill="#1d7a45">CHAR(36)</tspan>。</text>
+      <text x="64" y="502" font-size="10.5" fill="#6e6e73">③ 末尾多一行 <tspan font-family="monospace" fill="#0a58ca">DISTRIBUTED BY HASH(cust_id)</tspan>：这是单机库没有的，决定数据落到哪些分片。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左右逐行对齐着读。最后那行 <b>DISTRIBUTED BY</b> 是 GoldenDB 特有的，官方建表语法里就带着它；分片键选谁，见下一张图。</div>
+</div>
+
+<!-- 3 分片键 -->
+<div class="card" id="m3">
+  <div class="card-head">
+    <h2><span class="num">3</span>分片键怎么选：CRM 四张表的实战答案 <span class="tag">分片</span></h2>
+    <p>分片键一旦定了就很难改（要重建表）。原则是：优先用查询字段、关联字段、主键或唯一索引；选很少改、值稳定的字段。</p>
+  </div>
+  <svg viewBox="0 0 1040 520" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">按表的"角色"决定分片策略</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">大表分散存、小表复制存、关联表用同一个键——这样客户维度查询不用跨分片</text>
+
+      <text x="44" y="100" font-size="10.5" font-weight="700" fill="#9a9aa0">CRM 表</text>
+      <text x="300" y="100" font-size="10.5" font-weight="700" fill="#9a9aa0">规模 / 角色</text>
+      <text x="540" y="100" font-size="10.5" font-weight="700" fill="#9a9aa0">分片策略</text>
+      <text x="790" y="100" font-size="10.5" font-weight="700" fill="#9a9aa0">为什么</text>
+
+      <rect x="44" y="112" width="952" height="80" rx="11" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="60" y="140" font-size="12" font-weight="700" fill="#0a58ca">crm_customer 客户主表</text>
+      <text x="60" y="163" font-size="10.5" fill="#3a4a63">百万级 · 主数据</text>
+      <text x="300" y="140" font-size="10.5" fill="#3a4a63">大表，按客户号查得多</text>
+      <text x="300" y="163" font-size="10.5" fill="#3a4a63">客户号稳定、很少改</text>
+      <text x="540" y="140" font-size="11.5" font-weight="700" fill="#0a58ca">HASH(cust_id)</text>
+      <text x="540" y="163" font-size="10.5" fill="#3a4a63">分到 g1/g2/g3</text>
+      <text x="790" y="140" font-size="10.5" fill="#3a4a63">高离散，数据均匀</text>
+      <text x="790" y="163" font-size="10.5" fill="#3a4a63">点查只命中一个分片</text>
+
+      <rect x="44" y="204" width="952" height="80" rx="11" fill="#f3efff" stroke="#d4c8ff"/>
+      <text x="60" y="232" font-size="12" font-weight="700" fill="#5b3fc9">crm_follow_up 跟进记录</text>
+      <text x="60" y="255" font-size="10.5" fill="#6f6250">千万级 · 明细流水</text>
+      <text x="300" y="232" font-size="10.5" fill="#6f6250">和客户表强关联</text>
+      <text x="300" y="255" font-size="10.5" fill="#6f6250">几乎总按客户查</text>
+      <text x="540" y="232" font-size="11.5" font-weight="700" fill="#5b3fc9">HASH(cust_id)</text>
+      <text x="540" y="255" font-size="10.5" fill="#6f6250">与客户表同规则</text>
+      <text x="790" y="232" font-size="10.5" fill="#6f6250">同键 → 关联在本分片</text>
+      <text x="790" y="255" font-size="10.5" fill="#6f6250">避免跨分片 Join</text>
+
+      <rect x="44" y="296" width="952" height="80" rx="11" fill="#fff8e6" stroke="#ffd8a8"/>
+      <text x="60" y="324" font-size="12" font-weight="700" fill="#b26a00">crm_org 机构字典</text>
+      <text x="60" y="347" font-size="10.5" fill="#8a6a3b">几百行 · 少改小表</text>
+      <text x="300" y="324" font-size="10.5" fill="#8a6a3b">每个查询都要关联</text>
+      <text x="300" y="347" font-size="10.5" fill="#8a6a3b">写频率低</text>
+      <text x="540" y="324" font-size="11.5" font-weight="700" fill="#b26a00">DUPLICATE 复制表</text>
+      <text x="540" y="347" font-size="10.5" fill="#8a6a3b">每个分片都放一份</text>
+      <text x="790" y="324" font-size="10.5" fill="#8a6a3b">官方建议：小表且</text>
+      <text x="790" y="347" font-size="10.5" fill="#8a6a3b">不常修改用复制表</text>
+
+      <rect x="44" y="388" width="952" height="80" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+      <text x="60" y="416" font-size="12" font-weight="700" fill="#1d7a45">crm_opportunity 商机表</text>
+      <text x="60" y="439" font-size="10.5" fill="#5a7a68">十万级 · 按机构管</text>
+      <text x="300" y="416" font-size="10.5" fill="#5a7a68">常按机构汇总业绩</text>
+      <text x="300" y="439" font-size="10.5" fill="#5a7a68">机构码是枚举值</text>
+      <text x="540" y="416" font-size="11.5" font-weight="700" fill="#1d7a45">LIST(org_id)</text>
+      <text x="540" y="439" font-size="10.5" fill="#5a7a68">按机构列表分组</text>
+      <text x="790" y="416" font-size="10.5" fill="#5a7a68">官方：LIST 适合</text>
+      <text x="790" y="439" font-size="10.5" fill="#5a7a68">机构码/地区这类值</text>
+
+      <rect x="44" y="490" width="952" height="26" rx="7" fill="#f2f2f7"/>
+      <text x="56" y="508" font-size="10.5" fill="#6e6e73">注意：分片键优先选查询/关联字段、主键、唯一索引，且很少修改；插入和修改时必须是确定值。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>横着读每一行。最关键的是前两行——<b>客户表和跟进记录用同一个 cust_id 分片</b>，这样"查某客户的详情 + 跟进记录"在本分片就能算完，不用把数据拉来拉去。</div>
+</div>
+
+<!-- 4 语法转换 -->
+<div class="card" id="m4">
+  <div class="card-head">
+    <h2><span class="num">4</span>SQL 语法转换：T-SQL 到 MySQL 模式的对照清单 <span class="tag">语法</span></h2>
+    <p>不需要全背，把应用里实际用到的 SQL 捞出来逐条改。下面八个是 CRM 系统里最高频的差异。</p>
+  </div>
+  <svg viewBox="0 0 1040 470" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">八条高频改写</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">左列 SQL Server 写法，右列 GoldenDB MySQL 模式写法</text>
+
+      <text x="44" y="98" font-size="10.5" font-weight="700" fill="#c62828">SQL Server (T-SQL)</text>
+      <text x="536" y="98" font-size="10.5" font-weight="700" fill="#1d7a45">GoldenDB (MySQL 模式)</text>
+
+      <g font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11">
+        <text x="44" y="126" fill="#1d1d1f">SELECT TOP 10 * FROM crm_customer</text>
+        <text x="536" y="126" fill="#1d1d1f">SELECT * FROM crm_customer LIMIT 10</text>
+        <text x="44" y="162" fill="#1d1d1f">ISNULL(mobile, 'N/A')</text>
+        <text x="536" y="162" fill="#1d1d1f">IFNULL(mobile, 'N/A')</text>
+        <text x="44" y="198" fill="#1d1d1f">GETDATE()</text>
+        <text x="536" y="198" fill="#1d1d1f">NOW()</text>
+        <text x="44" y="234" fill="#1d1d1f">NEWID()</text>
+        <text x="536" y="234" fill="#1d1d1f">UUID()</text>
+        <text x="44" y="270" fill="#1d1d1f">[dbo].[crm_customer]</text>
+        <text x="536" y="270" fill="#1d1d1f">crm_customer（去掉方括号）</text>
+        <text x="44" y="306" fill="#1d1d1f">N'中文客户'</text>
+        <text x="536" y="306" fill="#1d1d1f">'中文客户'（库用 utf8mb4）</text>
+        <text x="44" y="342" fill="#1d1d1f">OFFSET 20 ROWS FETCH NEXT 10</text>
+        <text x="536" y="342" fill="#1d1d1f">LIMIT 20, 10</text>
+        <text x="44" y="378" fill="#1d1d1f">MERGE INTO ... USING ...</text>
+        <text x="536" y="378" fill="#1d1d1f">INSERT ... ON DUPLICATE KEY UPDATE</text>
+      </g>
+      <g stroke="#e5e5ea" stroke-width="1">
+        <path d="M44,142 L996,142"/><path d="M44,178 L996,178"/><path d="M44,214 L996,214"/>
+        <path d="M44,250 L996,250"/><path d="M44,286 L996,286"/><path d="M44,322 L996,322"/><path d="M44,358 L996,358"/>
+      </g>
+      <g stroke="#34c759" stroke-width="1.4" stroke-dasharray="4 4" fill="none">
+        <path d="M500,122 L520,122"/><path d="M500,158 L520,158"/><path d="M500,194 L520,194"/>
+        <path d="M500,230 L520,230"/><path d="M500,266 L520,266"/><path d="M500,302 L520,302"/>
+        <path d="M500,338 L520,338"/><path d="M500,374 L520,374"/>
+      </g>
+
+      <rect x="44" y="400" width="952" height="52" rx="11" fill="#fff8e6" stroke="#ffd8a8"/>
+      <text x="64" y="424" font-size="11" font-weight="700" fill="#b26a00">提醒：</text>
+      <text x="64" y="444" font-size="10.5" fill="#8a6a3b">这些是常见对应关系，不是自动替换规则。存储过程、触发器、自定义函数要单独逐条测试；GoldenDB 在 MySQL 模式下支持这些对象，但语法要按 MySQL 写。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>逐行对照，绿色虚线就是"改写方向"。最后一行提醒很关键：<b>别用正则全局替换</b>，改完必须拿测试库跑回归。</div>
+</div>
+
+<!-- 5 Sloth 搬家 -->
+<div class="card" id="m5">
+  <div class="card-head">
+    <h2><span class="num">5</span>数据怎么搬：Sloth 能做什么、不能做什么 <span class="tag">迁移</span></h2>
+    <p>Sloth 是金篆信科的迁移工具，支持 SQLServer 等异构源向 GoldenDB 迁移。但 SQLServer 这条路有明确边界，先看清楚再排计划。</p>
+  </div>
+  <svg viewBox="0 0 1040 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="mg5b" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">SQLServer → GoldenDB（官方代号 X2G）的能力边界</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">取自 Sloth 官方功能矩阵：这一路是"停服全量迁移"，不是"全+增无缝切换"</text>
+
+      <rect x="44" y="92" width="464" height="196" rx="13" fill="#f4fbf6" stroke="#bfe8cf"/>
+      <text x="64" y="120" font-size="12.5" font-weight="700" fill="#1d7a45">✓ 支持</text>
+      <text x="64" y="150" font-size="11" fill="#1d7a45">全量迁移</text>
+      <text x="220" y="150" font-size="10.5" fill="#5a7a68">把存量数据搬到 GoldenDB</text>
+      <text x="64" y="182" font-size="11" fill="#1d7a45">数据校验</text>
+      <text x="220" y="182" font-size="10.5" fill="#5a7a68">快照比对 / 同步比对</text>
+      <text x="64" y="214" font-size="11" fill="#1d7a45">数据修复</text>
+      <text x="220" y="214" font-size="10.5" fill="#5a7a68">比对出差异后修复</text>
+      <text x="64" y="246" font-size="11" fill="#1d7a45">断点续传</text>
+      <text x="220" y="246" font-size="10.5" fill="#5a7a68">故障后从断点继续</text>
+
+      <rect x="528" y="92" width="468" height="196" rx="13" fill="#fff7f6" stroke="#ffc9c4"/>
+      <text x="548" y="120" font-size="12.5" font-weight="700" fill="#c62828">✕ 不支持（这条路）</text>
+      <text x="548" y="150" font-size="11" fill="#c62828">对象迁移</text>
+      <text x="716" y="150" font-size="10.5" fill="#8e4b48">表/存储过程要自己建</text>
+      <text x="548" y="182" font-size="11" fill="#c62828">增量 DDL</text>
+      <text x="716" y="182" font-size="10.5" fill="#8e4b48">迁移期间表结构变更</text>
+      <text x="548" y="214" font-size="11" fill="#c62828">增量 DML</text>
+      <text x="716" y="214" font-size="10.5" fill="#8e4b48">迁移期间的增删改</text>
+      <text x="548" y="246" font-size="11" fill="#c62828">不停服"全+增"</text>
+      <text x="716" y="246" font-size="10.5" fill="#8e4b48">矩阵里没有 X2G 这一项</text>
+
+      <rect x="44" y="312" width="952" height="82" rx="13" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="64" y="340" font-size="12" font-weight="700" fill="#0a58ca">这意味着什么</text>
+      <text x="64" y="366" font-size="11" fill="#3a4a63">迁移窗口内源库要停写（或者你自己做双写/停服导流），不能指望工具边搬边追增量。对比 MySQL / Oracle 到 GoldenDB 是支持"迁移+同步"的。</text>
+      <text x="64" y="384" font-size="10.5" fill="#6e6e73">排期建议：把结构迁移、SQL 改造、回归测试放在停机窗口之前，窗口里只做全量搬迁 + 校验 + 切换。</text>
+
+      <g stroke="#007aff" stroke-width="1.5" marker-end="url(#mg5b)" fill="none">
+        <path d="M140,420 L140,456"/>
+      </g>
+      <rect x="44" y="462" width="952" height="30" rx="8" fill="#f2f2f7"/>
+      <text x="60" y="482" font-size="10.5" fill="#6e6e73">标准动作：建好目标表 → 配数据源与权限 → 新建全量任务 → 开比对 → 校验差异 → 修复 → 停写切换</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左右两块对照着看。最核心的一句在中间蓝框：<b>SQLServer 这条路没有"全+增无缝"</b>，窗口内要停写。这是官方文档功能矩阵里写明的，别按宣传口径排期。</div>
+</div>
+
+<!-- 6 割接回退 -->
+<div class="card" id="m6">
+  <div class="card-head">
+    <h2><span class="num">6</span>割接当天：按顺序走，并且一定留回退路 <span class="tag">落地</span></h2>
+    <p>迁移成功不等于切换成功。割接窗口里最重要的是"可回退"——任何一步对不上，都要能原路退回去。</p>
+  </div>
+  <svg viewBox="0 0 1040 490" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">割接七步 + 回退开关</text>
+      <text x="44" y="63" font-size="11.5" fill="#6e6e73">每一步都有验收点，任何一步失败就走下面的回退路线</text>
+
+      <rect x="44" y="94" width="620" height="330" rx="13" fill="#ffffff" stroke="#d1d1d6"/>
+      <g font-size="11">
+        <text x="64" y="124" fill="#007aff">① 停写公告</text><text x="160" y="124" fill="#6e6e73">冻结 CRM 写入，确认无在途事务</text>
+        <text x="64" y="158" fill="#007aff">② 最终增量</text><text x="160" y="158" fill="#6e6e73">把停写前最后一批数据补搬</text>
+        <text x="64" y="192" fill="#007aff">③ 全量校验</text><text x="160" y="192" fill="#6e6e73">行数 / 主键 / 金额汇总比对</text>
+        <text x="64" y="226" fill="#007aff">④ 差异修复</text><text x="160" y="226" fill="#6e6e73">对不上的记录修完再比一次</text>
+        <text x="64" y="260" fill="#5856d6">⑤ 应用切库</text><text x="160" y="260" fill="#6e6e73">改连接串，灰度放几个客户经理试</text>
+        <text x="64" y="294" fill="#5856d6">⑥ 业务冒烟</text><text x="160" y="294" fill="#6e6e73">建档 / 查画像 / 写跟进 / 拉名单</text>
+        <text x="64" y="328" fill="#34c759">⑦ 全面放开</text><text x="160" y="328" fill="#6e6e73">观察 QPS、慢 SQL、报错率</text>
+      </g>
+      <rect x="64" y="354" width="580" height="50" rx="9" fill="#f2f2f7"/>
+      <text x="76" y="375" font-size="10.5" font-weight="700" fill="#1d1d1f">验收口径：</text>
+      <text x="76" y="393" font-size="10.5" fill="#6e6e73">数据零差异 + 核心交易跑通 + 性能指标达标，三者缺一不放量</text>
+
+      <rect x="684" y="94" width="312" height="330" rx="13" fill="#fff7f6" stroke="#ffc9c4"/>
+      <text x="704" y="124" font-size="12.5" font-weight="700" fill="#c62828">回退路线（必须提前备好）</text>
+      <text x="704" y="158" font-size="11" fill="#8e4b48">① 源库保持只读但不删</text>
+      <text x="704" y="184" font-size="10.5" fill="#8e4b48">直到观察期结束再下线</text>
+      <text x="704" y="216" font-size="11" fill="#8e4b48">② 连接串一键切回</text>
+      <text x="704" y="242" font-size="10.5" fill="#8e4b48">配置中心留开关，不改代码</text>
+      <text x="704" y="274" font-size="11" fill="#8e4b48">③ 回写增量补回来</text>
+      <text x="704" y="300" font-size="10.5" fill="#8e4b48">切回后新数据要同步回源库</text>
+      <text x="704" y="332" font-size="11" fill="#8e4b48">④ 演练过才算数</text>
+      <text x="704" y="358" font-size="10.5" fill="#8e4b48">没演练的回退方案等于没有</text>
+      <text x="704" y="394" font-size="10.5" fill="#a9342e">Sloth 支持 G2X 反向同步，可做回流通道。</text>
+
+      <rect x="44" y="446" width="952" height="30" rx="8" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="60" y="466" font-size="10.5" fill="#0a58ca">一句话：迁移看数据一致性，割接看可回退性。前者靠比对，后者靠演练。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左边七步按顺序做，右边回退路线是"保命符"。重点看第 ⑤ 步的灰度——先放几个用户试，别一把全切。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
