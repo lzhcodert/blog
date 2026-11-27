@@ -1,5 +1,24 @@
 [
   {
+    "title": "网关到底在管什么？从小区大门讲到线上入口",
+    "date": "2026-11-27",
+    "category": "架构",
+    "summary": "先按 RFC 9110、microservices.io、Kubernetes Gateway API、Istio、Envoy、NGINX 的原始定义把\"网关\"钉死，再翻译成生产现场的话：它站在哪、管哪八件事、四层和七层差在哪、五个工种怎么分、以及六个几乎每个团队都踩过的坑。",
+    "tags": [
+      "[网关",
+      "API Gateway",
+      "反向代理",
+      "微服务",
+      "流量治理]"
+    ],
+    "readingMinutes": 31,
+    "url": "posts/2026-11-27-11.html",
+    "embeds": [
+      "embed/gateway-explained.html"
+    ],
+    "body": "\"网关\"这个词最坑的地方在于：所有人都觉得自己懂。\n\n说\"就是个转发\"的，和说\"就是 Nginx\"的，和说\"就是微服务那个 API Gateway\"的，聊十分钟会发现各自脑子里是三样东西。有人以为它做鉴权，有人以为它做负载均衡，还有人把它当成限流器。\n\n所以这篇不先讲产品，先把概念按权威文档钉死，再说它在生产里到底干什么活、不干什么活。\n\n 一句话版本：网关是唯一入口，它对外冒充一台服务器，对内替所有服务做那些\"每个服务都要重复做一遍\"的事。\n\n 先按官方定义把概念钉死\n\n RFC 9110：网关就是\"反向代理\"，而且它冒充源站\n\nHTTP 协议的标准文档 RFC 9110 在第 3.7 节定义得很干脆：\n\n A \"gateway\" (a.k.a. \"reverse proxy\") is an intermediary that acts as an origin server for the outbound connection but translates received requests and forwards them inbound to another server or servers.\n\n翻译过来就三层意思：\n\n- 它对外是\"源站\"。客户端握手、看证书、收响应码，全程以为自己在跟那台服务器对话。\n- 它翻译并转发。\"translates received requests\" 这个词很关键——不是照抄，是可以改的（改路径、改头、换协议）。\n- 它向内转发。真正干活的是后面那些服务器，客户端一辈子看不到它们的地址。\n\nRFC 还顺手写了它最典型的三个用途：\n\n Gateways are often used to encapsulate legacy or untrusted information services, to improve server performance through \"accelerator\" caching, and to enable partitioning or load balancing of HTTP services across multiple machines.\n\n即：把老系统或不可信的服务包起来、做加速缓存、把 HTTP 服务分区并负载均衡到多台机器。注意这三条没有一条是\"写业务逻辑\"。\n\n大白话：小区门禁的保安，长得像\"物业的人\"，访客把他当成了要办事的那一方（冒充源站）；他核对证件、登记、指路，但他不开锁、不搬货、不签合同（不干业务）。货真价实在楼里干活的，是那些你见不到的部门。\n\n这里还有个容易被忽略的方向问题。同一份 RFC 里，\"proxy\"（正向代理）是客户端自己选的，帮你出门；\"gateway / reverse proxy\"是服务端自己装的，替服务器挡门。方向反了，责任也就反了：正向代理出问题是你自己的事，网关出问题是全站的事。\n\n microservices.io：它为什么在微服务里变成必需品\n\nChris Richardson 在 microservices.io 的 API Gateway 模式里写得更直接：\n\n Implement an API gateway that is the single entry point for all clients. The API gateway handles requests in one of two ways. Some requests are simply proxied/routed to the appropriate service. It handles other requests by fanning out to multiple services.\n\n两种处理方式，这句话把网关的能力边界划清了：\n\n1. proxy / route：一对一转发。/api/order/ 转给订单服务，就这么简单。\n2. fan out：一个请求扇出到多个服务，再把结果拼起来。这就是为什么网关常和 API 组合（API Composition）一起出现。\n\n它还列了网关真正的价值（原文措辞我保留，后面加白话）：\n\n- Insulates the clients from how the application is partitioned：服务怎么切、切几个，客户端不用知道。\n- Insulates the clients from the problem of determining the locations of service instances：实例 IP 怎么变、扩了几台，客户端不用改配置。\n- Provides the optimal API for each client："
+  },
+  {
     "title": "软件工程里的四种架构：业务、应用、数据、技术，各自到底在管什么",
     "date": "2026-11-27",
     "category": "架构",
@@ -13,7 +32,7 @@
       "TOGAF"
     ],
     "readingMinutes": 13,
-    "url": "posts/2026-11-27-11.html",
+    "url": "posts/2026-11-27-12.html",
     "embeds": [
       "embed/architecture-types.html"
     ],
