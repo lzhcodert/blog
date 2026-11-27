@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>软件工程里的四种架构图解 · 业务 / 应用 / 数据 / 技术</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#0a84ff,#5856d6 55%,#ff9500);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(20,120,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.94}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>四种架构，一次讲清</h1>
+  <p>业务架构、应用架构、数据架构、技术架构 —— 它们不是四份文档，而是同一门生意的四个视角。六张图，用一家咖啡店的线上生意，把四种架构分别画一遍。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#c1">总览</a><a href="#c2">业务架构</a><a href="#c3">应用架构</a><a href="#c4">数据架构</a><a href="#c5">技术架构</a><a href="#c6">常见错法</a>
+</div>
+
+<!-- 1 总览 -->
+<div class="card" id="c1">
+  <div class="card-head">
+    <h2><span class="num">1</span>四种架构是四层楼，不是四份 PPT <span class="tag">总览</span></h2>
+    <p>越靠上越接近「为什么做」，越靠下越接近「怎么实现」。四层之间是支撑关系：上层提要求，下层给能力。改任何一层，另外三层都得跟着看一遍。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 460" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <rect x="24" y="24" width="992" height="412" rx="18" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="44" y="52" font-size="14" font-weight="700" fill="#1d1d1f">同一门生意，四种视角</text>
+        <text x="44" y="72" font-size="11.5" fill="#6e6e73">上面决定「做不做、做什么」，下面决定「用什么做、怎么扛住」</text>
+
+        <!-- 业务 -->
+        <rect x="44" y="86" width="952" height="68" rx="12" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="62" y="112" font-size="13.5" font-weight="700" fill="#0a58ca">业务架构</text>
+        <text x="62" y="133" font-size="10.5" fill="#6e6e73">类比：想住成什么样</text>
+        <text x="250" y="110" font-size="11.5" fill="#1d1d1f">关心：做谁的生意、提供什么价值、按什么规则运转、谁负责</text>
+        <text x="250" y="133" font-size="11" fill="#6e6e73">产出：业务能力地图、价值链、流程分级、业务规则</text>
+
+        <!-- 应用 -->
+        <rect x="44" y="164" width="952" height="68" rx="12" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="62" y="190" font-size="13.5" font-weight="700" fill="#3a2a7a">应用架构</text>
+        <text x="62" y="211" font-size="10.5" fill="#6e6e73">类比：房间怎么隔</text>
+        <text x="250" y="188" font-size="11.5" fill="#1d1d1f">关心：功能放在哪个系统、系统边界在哪、谁调用谁</text>
+        <text x="250" y="211" font-size="11" fill="#6e6e73">产出：系统清单、服务划分、集成与调用关系</text>
+
+        <!-- 数据 -->
+        <rect x="44" y="242" width="952" height="68" rx="12" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="62" y="268" font-size="13.5" font-weight="700" fill="#1d7a45">数据架构</text>
+        <text x="62" y="289" font-size="10.5" fill="#6e6e73">类比：水电怎么走</text>
+        <text x="250" y="266" font-size="11.5" fill="#1d1d1f">关心：数据从哪来、存成什么样、口径一致吗、给谁用</text>
+        <text x="250" y="289" font-size="11" fill="#6e6e73">产出：数据模型、主数据、数据流、指标口径</text>
+
+        <!-- 技术 -->
+        <rect x="44" y="320" width="952" height="68" rx="12" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="62" y="346" font-size="13.5" font-weight="700" fill="#8a5a00">技术架构</text>
+        <text x="62" y="367" font-size="10.5" fill="#6e6e73">类比：地基和建材</text>
+        <text x="250" y="344" font-size="11.5" fill="#1d1d1f">关心：跑在什么机器上、用什么中间件、怎么扩容容灾</text>
+        <text x="250" y="367" font-size="11" fill="#6e6e73">产出：部署图、技术选型、容量与容灾方案</text>
+
+        <!-- 支撑箭头 -->
+        <g stroke="#8e8e93" stroke-width="1.4" stroke-dasharray="4,3" marker-end="url(#a1)" fill="none">
+          <path d="M998,382 L998,90"/>
+        </g>
+
+        <rect x="44" y="398" width="952" height="30" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="60" y="418" font-size="11.5" fill="#1d1d1f">四层是同一个系统的四种画法：业务说「要什么」，应用说「在哪做」，数据说「拿什么做」，技术说「用什么扛」。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>不要问「你有架构图吗」，要问「你有几张、分别回答哪个问题」。只有一张技术栈图，说明还缺三张；只有一堆业务流程图，说明落不了地。</div>
+</div>
+
+<!-- 2 业务架构 -->
+<div class="card" id="c2">
+  <div class="card-head">
+    <h2><span class="num">2</span>业务架构：先想清楚这门生意怎么转 <span class="tag">做什么</span></h2>
+    <p>它不谈服务器、不谈数据库，只回答：给谁提供什么价值、这些价值由哪些能力组成、能力之间按什么顺序串起来。画出来的东西通常是一张能力地图加一条价值链。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 430" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#007aff"/></marker>
+        <marker id="a2g" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 Z" fill="#c7c7cc"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <text x="44" y="46" font-size="14" font-weight="700" fill="#1d1d1f">一家咖啡店的业务架构：价值链在上，能力在下</text>
+        <text x="44" y="66" font-size="11.5" fill="#6e6e73">上面这条链回答「顾客经历什么」，下面这排回答「公司得具备什么本事」</text>
+
+        <!-- 价值链 -->
+        <rect x="44" y="84" width="176" height="58" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="62" y="107" font-size="13" font-weight="700" fill="#0a58ca">获客</text>
+        <text x="62" y="127" font-size="10.5" fill="#6e6e73">投放 · 拉新 · 渠道</text>
+
+        <rect x="236" y="84" width="176" height="58" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="254" y="107" font-size="13" font-weight="700" fill="#0a58ca">下单</text>
+        <text x="254" y="127" font-size="10.5" fill="#6e6e73">选品 · 加购 · 结算</text>
+
+        <rect x="428" y="84" width="176" height="58" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="446" y="107" font-size="13" font-weight="700" fill="#0a58ca">支付</text>
+        <text x="446" y="127" font-size="10.5" fill="#6e6e73">收款 · 优惠 · 开票</text>
+
+        <rect x="620" y="84" width="176" height="58" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="638" y="107" font-size="13" font-weight="700" fill="#0a58ca">履约</text>
+        <text x="638" y="127" font-size="10.5" fill="#6e6e73">排单 · 制作 · 配送</text>
+
+        <rect x="812" y="84" width="176" height="58" rx="11" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="830" y="107" font-size="13" font-weight="700" fill="#0a58ca">售后</text>
+        <text x="830" y="127" font-size="10.5" fill="#6e6e73">退款 · 评价 · 客服</text>
+
+        <g stroke="#007aff" stroke-width="1.5" marker-end="url(#a2)" fill="none">
+          <path d="M220,113 L234,113"/><path d="M412,113 L426,113"/><path d="M604,113 L618,113"/><path d="M796,113 L810,113"/>
+        </g>
+
+        <!-- 能力层 -->
+        <text x="44" y="176" font-size="12" font-weight="700" fill="#1d1d1f">业务能力地图（公司得有这些本事）</text>
+
+        <rect x="44" y="188" width="176" height="96" rx="11" fill="#fff" stroke="#d1d1d6"/>
+        <text x="60" y="210" font-size="12" font-weight="700" fill="#1d1d1f">渠道能力</text>
+        <text x="60" y="230" font-size="10.5" fill="#6e6e73">App / 小程序 / 门店</text>
+        <text x="60" y="248" font-size="10.5" fill="#6e6e73">POS / 外卖平台</text>
+        <text x="60" y="266" font-size="10.5" fill="#6e6e73">统一的会员识别</text>
+
+        <rect x="236" y="188" width="176" height="96" rx="11" fill="#fff" stroke="#d1d1d6"/>
+        <text x="252" y="210" font-size="12" font-weight="700" fill="#1d1d1f">商品能力</text>
+        <text x="252" y="230" font-size="10.5" fill="#6e6e73">菜单与配方</text>
+        <text x="252" y="248" font-size="10.5" fill="#6e6e73">定价与促销</text>
+        <text x="252" y="266" font-size="10.5" fill="#6e6e73">门店库存</text>
+
+        <rect x="428" y="188" width="176" height="96" rx="11" fill="#fff" stroke="#d1d1d6"/>
+        <text x="444" y="210" font-size="12" font-weight="700" fill="#1d1d1f">交易能力</text>
+        <text x="444" y="230" font-size="10.5" fill="#6e6e73">下单与改单</text>
+        <text x="444" y="248" font-size="10.5" fill="#6e6e73">优惠券与积分</text>
+        <text x="444" y="266" font-size="10.5" fill="#6e6e73">收款与对账</text>
+
+        <rect x="620" y="188" width="176" height="96" rx="11" fill="#fff" stroke="#d1d1d6"/>
+        <text x="636" y="210" font-size="12" font-weight="700" fill="#1d1d1f">履约能力</text>
+        <text x="636" y="230" font-size="10.5" fill="#6e6e73">排单与叫号</text>
+        <text x="636" y="248" font-size="10.5" fill="#6e6e73">制作与打包</text>
+        <text x="636" y="266" font-size="10.5" fill="#6e6e73">配送与自提</text>
+
+        <rect x="812" y="188" width="176" height="96" rx="11" fill="#fff" stroke="#d1d1d6"/>
+        <text x="828" y="210" font-size="12" font-weight="700" fill="#1d1d1f">服务能力</text>
+        <text x="828" y="230" font-size="10.5" fill="#6e6e73">退款与赔付</text>
+        <text x="828" y="248" font-size="10.5" fill="#6e6e73">评价与工单</text>
+        <text x="828" y="266" font-size="10.5" fill="#6e6e73">会员关怀</text>
+
+        <g stroke="#c7c7cc" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#a2g)" fill="none">
+          <path d="M132,142 L132,186"/><path d="M324,142 L324,186"/><path d="M516,142 L516,186"/><path d="M708,142 L708,186"/><path d="M900,142 L900,186"/>
+        </g>
+
+        <!-- 规则层 -->
+        <rect x="44" y="300" width="944" height="44" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="60" y="320" font-size="11.5" font-weight="700" fill="#1d1d1f">业务规则（最容易被漏掉、又最值钱的部分）</text>
+        <text x="60" y="337" font-size="11" fill="#6e6e73">会员等级怎么算 · 优惠能不能叠加 · 缺货时是替换还是退款 · 退款谁审批 · 超时多久算异常</text>
+
+        <rect x="44" y="356" width="944" height="52" rx="10" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="60" y="376" font-size="11.5" font-weight="700" fill="#1d7a45">业务架构不谈技术，只谈「值不值得做、由谁负责、按什么规则」。</text>
+        <text x="60" y="394" font-size="11" fill="#6e6e73">判断标准：把这张图给业务负责人看，他能指出哪里不对；给开发看，他能问出「这个能力的边界在哪」。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>业务架构就是把「顾客从看到广告到喝完咖啡」这条路画出来，再看公司为了走通这条路得有哪些本事。本事（能力）比部门稳定得多 —— 部门会重组，能力不会。</div>
+</div>
+
+<!-- 3 应用架构 -->
+<div class="card" id="c3">
+  <div class="card-head">
+    <h2><span class="num">3</span>应用架构：功能到底放在哪个系统里 <span class="tag">放哪里</span></h2>
+    <p>业务架构说清了要做哪些事，应用架构负责把这些事分配到具体的系统或服务上，并规定它们之间怎么调用。核心词只有一个：边界。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 490" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="a3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5856d6"/></marker>
+        <marker id="a3g" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <text x="44" y="46" font-size="14" font-weight="700" fill="#1d1d1f">业务能力落到系统上：一层入口、一个网关、五个服务</text>
+        <text x="44" y="66" font-size="11.5" fill="#6e6e73">每个服务对应上一张图里的一个能力，边界按能力划，不按部门划</text>
+
+        <!-- 入口 -->
+        <rect x="44" y="84" width="200" height="52" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="62" y="106" font-size="12" font-weight="700" fill="#1d1d1f">App / 小程序</text>
+        <text x="62" y="124" font-size="10.5" fill="#6e6e73">顾客端，展示与下单</text>
+
+        <rect x="264" y="84" width="200" height="52" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="282" y="106" font-size="12" font-weight="700" fill="#1d1d1f">门店 POS</text>
+        <text x="282" y="124" font-size="10.5" fill="#6e6e73">店员端，核销与改单</text>
+
+        <rect x="484" y="84" width="200" height="52" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="502" y="106" font-size="12" font-weight="700" fill="#1d1d1f">运营后台</text>
+        <text x="502" y="124" font-size="10.5" fill="#6e6e73">菜单、活动、对账</text>
+
+        <rect x="704" y="84" width="280" height="52" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="722" y="106" font-size="12" font-weight="700" fill="#1d1d1f">外部渠道（外卖平台 / 开放 API）</text>
+        <text x="722" y="124" font-size="10.5" fill="#6e6e73">用同一套接口，不另开一套后台</text>
+
+        <!-- 网关 -->
+        <g stroke="#8e8e93" stroke-width="1.4" marker-end="url(#a3g)" fill="none">
+          <path d="M144,136 L144,170"/><path d="M364,136 L364,170"/><path d="M584,136 L584,170"/><path d="M844,136 L844,170"/>
+        </g>
+        <rect x="44" y="174" width="940" height="46" rx="10" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="62" y="195" font-size="12.5" font-weight="700" fill="#0a58ca">API 网关</text>
+        <text x="150" y="195" font-size="11" fill="#6e6e73">统一鉴权 · 限流 · 路由 · 日志埋点 · 协议转换（一个入口，不再让每个服务自己管安全）</text>
+        <text x="62" y="212" font-size="10.5" fill="#8e8e93">这一层不属于业务，属于「公共能力」，改了不影响业务逻辑</text>
+
+        <!-- 服务 -->
+        <g stroke="#5856d6" stroke-width="1.5" marker-end="url(#a3)" fill="none">
+          <path d="M132,220 L132,252"/><path d="M316,220 L316,252"/><path d="M500,220 L500,252"/><path d="M684,220 L684,252"/><path d="M868,220 L868,252"/>
+        </g>
+
+        <rect x="44" y="256" width="176" height="92" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="60" y="278" font-size="12" font-weight="700" fill="#3a2a7a">订单服务</text>
+        <text x="60" y="298" font-size="10.5" fill="#6e6e73">下单、改单、取消</text>
+        <text x="60" y="316" font-size="10.5" fill="#6e6e73">订单状态机</text>
+        <text x="60" y="334" font-size="10.5" fill="#8e8e93">只管订单，不管钱</text>
+
+        <rect x="228" y="256" width="176" height="92" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="244" y="278" font-size="12" font-weight="700" fill="#3a2a7a">商品服务</text>
+        <text x="244" y="298" font-size="10.5" fill="#6e6e73">菜单、配方、定价</text>
+        <text x="244" y="316" font-size="10.5" fill="#6e6e73">门店可售范围</text>
+        <text x="244" y="334" font-size="10.5" fill="#8e8e93">价格只在这里改</text>
+
+        <rect x="412" y="256" width="176" height="92" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="428" y="278" font-size="12" font-weight="700" fill="#3a2a7a">支付服务</text>
+        <text x="428" y="298" font-size="10.5" fill="#6e6e73">收款、退款、对账</text>
+        <text x="428" y="316" font-size="10.5" fill="#6e6e73">对接微信/支付宝</text>
+        <text x="428" y="334" font-size="10.5" fill="#8e8e93">钱的事只在这里</text>
+
+        <rect x="596" y="256" width="176" height="92" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="612" y="278" font-size="12" font-weight="700" fill="#3a2a7a">履约服务</text>
+        <text x="612" y="298" font-size="10.5" fill="#6e6e73">排单、制作、配送</text>
+        <text x="612" y="316" font-size="10.5" fill="#6e6e73">门店产能与叫号</text>
+        <text x="612" y="334" font-size="10.5" fill="#8e8e93">只管送到手</text>
+
+        <rect x="780" y="256" width="176" height="92" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="796" y="278" font-size="12" font-weight="700" fill="#3a2a7a">会员服务</text>
+        <text x="796" y="298" font-size="10.5" fill="#6e6e73">账户、等级、积分</text>
+        <text x="796" y="316" font-size="10.5" fill="#6e6e73">优惠券发放</text>
+        <text x="796" y="334" font-size="10.5" fill="#8e8e93">一个人只有一份</text>
+
+        <!-- 服务之间怎么说话 -->
+        <rect x="44" y="354" width="940" height="28" rx="9" fill="#f7f7fb" stroke="#e2e2ea"/>
+        <text x="60" y="372" font-size="11" fill="#6e6e73">服务之间只通过接口或消息事件通信，不直接读对方的库；上面每张卡片写清了「只管什么」，这既是边界，也是故障隔离的范围。</text>
+
+        <!-- 底部说明 -->
+        <rect x="44" y="394" width="940" height="40" rx="10" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="60" y="413" font-size="11.5" font-weight="700" fill="#8a5a00">好边界的三条检验</text>
+        <text x="60" y="429" font-size="11" fill="#6e6e73">① 一个数据只有一个服务能改 ② 单个服务挂了，别家还能读旧数据 ③ 换掉一个服务的实现，不用改别家的代码</text>
+
+        <rect x="44" y="440" width="940" height="34" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="60" y="462" font-size="11.5" fill="#1d1d1f">单体也能是好架构：只有三五个人、业务还在试错时，一个进程、一个数据库、边界清楚，比强行拆十个服务更健康。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>应用架构解决的是「谁管哪摊事」。判断标准很土：出了问题，能不能一眼找到该找谁；要改一个功能，会不会牵动五个系统。会，就是边界没划好。</div>
+</div>
+
+<!-- 4 数据架构 -->
+<div class="card" id="c4">
+  <div class="card-head">
+    <h2><span class="num">4</span>数据架构：数据从哪来、到哪去、算谁的 <span class="tag">拿什么做</span></h2>
+    <p>它不只是 ER 图。真正的数据架构要回答四件事：数据在哪产生、怎么存、怎么加工、口径谁说了算。前两件是交易系统的事，后两件是分析和治理的事。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 490" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="a4" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34c759"/></marker>
+        <marker id="a4g" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <text x="44" y="46" font-size="14" font-weight="700" fill="#1d1d1f">一条数据的旅程：产生 → 贴源 → 加工 → 消费</text>
+        <text x="44" y="66" font-size="11.5" fill="#6e6e73">上面那条横线是全公司统一口径的主数据，下面四段是流水线</text>
+
+        <!-- 主数据 -->
+        <rect x="44" y="80" width="940" height="44" rx="10" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="60" y="100" font-size="12" font-weight="700" fill="#1d7a45">主数据（商品 · 门店 · 会员 · 组织）</text>
+        <text x="300" y="100" font-size="11" fill="#6e6e73">全公司只有一份，谁用都取这里；口径打架的根因，八成是主数据有多份</text>
+        <text x="60" y="117" font-size="10.5" fill="#8e8e93">由业务指定唯一责任方维护，其他系统只能引用，不能各建一套</text>
+
+        <!-- 源系统 -->
+        <text x="44" y="152" font-size="12" font-weight="700" fill="#1d1d1f">① 源系统（交易现场）</text>
+        <rect x="44" y="162" width="212" height="66" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="60" y="184" font-size="11.5" font-weight="700" fill="#1d1d1f">订单库</text>
+        <text x="60" y="202" font-size="10.5" fill="#6e6e73">订单、状态、金额</text>
+        <text x="60" y="219" font-size="10.5" fill="#8e8e93">写多读少 · 行存 · 强事务</text>
+
+        <rect x="272" y="162" width="212" height="66" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="288" y="184" font-size="11.5" font-weight="700" fill="#1d1d1f">商品库</text>
+        <text x="288" y="202" font-size="10.5" fill="#6e6e73">菜单、价格、库存</text>
+        <text x="288" y="219" font-size="10.5" fill="#8e8e93">读多写少 · 需要缓存</text>
+
+        <rect x="500" y="162" width="212" height="66" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="516" y="184" font-size="11.5" font-weight="700" fill="#1d1d1f">支付流水</text>
+        <text x="516" y="202" font-size="10.5" fill="#6e6e73">收款、退款、渠道单号</text>
+        <text x="516" y="219" font-size="10.5" fill="#8e8e93">不可改 · 只追加 · 要留痕</text>
+
+        <rect x="728" y="162" width="212" height="66" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="744" y="184" font-size="11.5" font-weight="700" fill="#1d1d1f">埋点日志</text>
+        <text x="744" y="202" font-size="10.5" fill="#6e6e73">浏览、点击、下单漏斗</text>
+        <text x="744" y="219" font-size="10.5" fill="#8e8e93">量大 · 半结构化 · 可采样</text>
+
+        <!-- 加工链路 -->
+        <text x="44" y="264" font-size="12" font-weight="700" fill="#1d1d1f">② 加工链路（分析现场）</text>
+        <rect x="44" y="274" width="284" height="76" rx="10" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="60" y="296" font-size="12" font-weight="700" fill="#0a58ca">ODS 贴源层</text>
+        <text x="60" y="315" font-size="10.5" fill="#6e6e73">原样同步进来，不做加工</text>
+        <text x="60" y="333" font-size="10.5" fill="#8e8e93">作用：出问题能回溯到原始数据</text>
+
+        <rect x="356" y="274" width="284" height="76" rx="10" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="372" y="296" font-size="12" font-weight="700" fill="#0a58ca">DWD 明细层</text>
+        <text x="372" y="315" font-size="10.5" fill="#6e6e73">清洗、去重、统一字段与口径</text>
+        <text x="372" y="333" font-size="10.5" fill="#8e8e93">作用：全公司认同一套「一单」是什么</text>
+
+        <rect x="668" y="274" width="272" height="76" rx="10" fill="#eef4ff" stroke="#c9dcff"/>
+        <text x="684" y="296" font-size="12" font-weight="700" fill="#0a58ca">集市 / 宽表</text>
+        <text x="684" y="315" font-size="10.5" fill="#6e6e73">按主题组装，面向具体问题</text>
+        <text x="684" y="333" font-size="10.5" fill="#8e8e93">作用：让报表和模型跑得快</text>
+
+        <g stroke="#34c759" stroke-width="1.6" marker-end="url(#a4)" fill="none">
+          <path d="M328,312 L354,312"/><path d="M640,312 L666,312"/>
+        </g>
+
+        <!-- 消费 -->
+        <text x="44" y="382" font-size="12" font-weight="700" fill="#1d1d1f">③ 消费方（拿数据做决定）</text>
+        <rect x="44" y="392" width="222" height="52" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="60" y="414" font-size="11.5" fill="#1d1d1f">经营报表 · BI</text>
+        <text x="60" y="431" font-size="10.5" fill="#8e8e93">日销、毛利、门店排名</text>
+
+        <rect x="282" y="392" width="222" height="52" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="298" y="414" font-size="11.5" fill="#1d1d1f">推荐与选品</text>
+        <text x="298" y="431" font-size="10.5" fill="#8e8e93">用行为数据算偏好</text>
+
+        <rect x="520" y="392" width="222" height="52" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="536" y="414" font-size="11.5" fill="#1d1d1f">风控与反刷单</text>
+        <text x="536" y="431" font-size="10.5" fill="#8e8e93">规则 + 实时特征</text>
+
+        <rect x="758" y="392" width="182" height="52" rx="10" fill="#fff" stroke="#d1d1d6"/>
+        <text x="774" y="414" font-size="11.5" fill="#1d1d1f">对账与结算</text>
+        <text x="774" y="431" font-size="10.5" fill="#8e8e93">平台、渠道、财务三方</text>
+
+        <g stroke="#8e8e93" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#a4g)" fill="none">
+          <path d="M186,238 L186,272"/><path d="M378,238 L378,272"/><path d="M606,238 L606,272"/><path d="M834,238 L834,272"/>
+          <path d="M186,350 L186,390"/><path d="M378,350 L378,390"/><path d="M606,350 L606,390"/><path d="M834,350 L834,390"/>
+        </g>
+
+        <text x="44" y="468" font-size="10.5" fill="#8e8e93">左边三块是 OLTP（交易，一行一条，要快、要准）；右边三段是 OLAP（分析，一批一堆，要全、要能算）。混着用，系统早晚互相拖死。</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>数据架构最容易出事的地方不是存储，是口径。同一个「活跃用户」在三个报表里三个数，本质是没人对「一单」「一个用户」下过唯一定义。先定主数据和指标口径，再谈数据湖还是数据仓库。</div>
+</div>
+
+<!-- 5 技术架构 -->
+<div class="card" id="c5">
+  <div class="card-head">
+    <h2><span class="num">5</span>技术架构：到底跑在什么上面 <span class="tag">用什么扛</span></h2>
+    <p>前三种架构都在说「做什么」，技术架构说的是「用什么产品、部署在哪、怎么扩容、坏了怎么办」。它最容易被当成全部架构，其实只是最底下那层。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 470" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="a5" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff9500"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <text x="44" y="46" font-size="14" font-weight="700" fill="#1d1d1f">五层技术栈，两侧是贯穿所有层的公共能力</text>
+        <text x="44" y="66" font-size="11.5" fill="#6e6e73">从顾客到机房，一层托一层；越往下越少变，越往上越常换</text>
+
+        <!-- 五层 -->
+        <rect x="44" y="84" width="800" height="58" rx="11" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="62" y="107" font-size="12.5" font-weight="700" fill="#8a5a00">接入层</text>
+        <text x="62" y="126" font-size="10.5" fill="#8e8e93">顾客第一跳</text>
+        <text x="196" y="107" font-size="11.5" fill="#1d1d1f">DNS · CDN（静态资源就近） · WAF（挡攻击） · 负载均衡</text>
+        <text x="196" y="126" font-size="10.5" fill="#6e6e73">关心的指标：首屏时间、证书有效期、入口带宽</text>
+
+        <rect x="44" y="150" width="800" height="58" rx="11" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="62" y="173" font-size="12.5" font-weight="700" fill="#8a5a00">应用运行层</text>
+        <text x="62" y="192" font-size="10.5" fill="#8e8e93">代码跑的地方</text>
+        <text x="196" y="173" font-size="11.5" fill="#1d1d1f">容器 + K8s（滚动发布、自动扩缩） · 虚机 · Serverless</text>
+        <text x="196" y="192" font-size="10.5" fill="#6e6e73">关心的指标：副本数、CPU/内存水位、发布回滚耗时</text>
+
+        <rect x="44" y="216" width="800" height="58" rx="11" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="62" y="239" font-size="12.5" font-weight="700" fill="#8a5a00">中间件层</text>
+        <text x="62" y="258" font-size="10.5" fill="#8e8e93">系统之间的胶水</text>
+        <text x="196" y="239" font-size="11.5" fill="#1d1d1f">消息队列 · 缓存 · 注册配置中心 · 分布式任务 · 网关</text>
+        <text x="196" y="258" font-size="10.5" fill="#6e6e73">关心的指标：堆积量、命中率、超时与重试策略</text>
+
+        <rect x="44" y="282" width="800" height="58" rx="11" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="62" y="305" font-size="12.5" font-weight="700" fill="#8a5a00">数据存储层</text>
+        <text x="62" y="324" font-size="10.5" fill="#8e8e93">数据躺着的地方</text>
+        <text x="196" y="305" font-size="11.5" fill="#1d1d1f">关系库（MySQL / 分布式库） · Redis · 对象存储 · 搜索引擎 · 数仓</text>
+        <text x="196" y="324" font-size="10.5" fill="#6e6e73">关心的指标：容量增长、慢查询、备份可恢复性</text>
+
+        <rect x="44" y="348" width="800" height="58" rx="11" fill="#fff5e8" stroke="#f7ddb6"/>
+        <text x="62" y="371" font-size="12.5" font-weight="700" fill="#8a5a00">基础设施层</text>
+        <text x="62" y="390" font-size="10.5" fill="#8e8e93">地基</text>
+        <text x="196" y="371" font-size="11.5" fill="#1d1d1f">机房或公有云 · 网络与专线 · 计算与存储资源 · 同城双活 / 异地备份</text>
+        <text x="196" y="390" font-size="10.5" fill="#6e6e73">关心的指标：可用区分布、RTO / RPO、成本</text>
+
+        <!-- 右侧公共能力 -->
+        <rect x="860" y="84" width="124" height="152" rx="11" fill="#f0edff" stroke="#d2c8ff"/>
+        <text x="876" y="108" font-size="12" font-weight="700" fill="#3a2a7a">可观测</text>
+        <text x="876" y="130" font-size="10.5" fill="#6e6e73">日志</text>
+        <text x="876" y="148" font-size="10.5" fill="#6e6e73">指标</text>
+        <text x="876" y="166" font-size="10.5" fill="#6e6e73">链路追踪</text>
+        <text x="876" y="184" font-size="10.5" fill="#6e6e73">告警值班</text>
+        <text x="876" y="210" font-size="10" fill="#8e8e93">没有它，前五层</text>
+        <text x="876" y="224" font-size="10" fill="#8e8e93">全是黑盒</text>
+
+        <rect x="860" y="248" width="124" height="158" rx="11" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="876" y="272" font-size="12" font-weight="700" fill="#1d7a45">安全</text>
+        <text x="876" y="294" font-size="10.5" fill="#6e6e73">认证授权</text>
+        <text x="876" y="312" font-size="10.5" fill="#6e6e73">传输加密</text>
+        <text x="876" y="330" font-size="10.5" fill="#6e6e73">密钥管理</text>
+        <text x="876" y="348" font-size="10.5" fill="#6e6e73">审计留痕</text>
+        <text x="876" y="374" font-size="10" fill="#8e8e93">不是一层，是</text>
+        <text x="876" y="388" font-size="10" fill="#8e8e93">每层都要有</text>
+
+        <rect x="44" y="416" width="940" height="42" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="60" y="436" font-size="11.5" font-weight="700" fill="#1d1d1f">技术架构的每个选择都要能回答三个问题：</text>
+        <text x="60" y="452" font-size="11" fill="#6e6e73">为什么是它（对比过什么）· 出问题怎么恢复（RTO / RPO）· 涨到十倍怎么办（扩容路径与成本）</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>技术架构最像装修里的水电工程：看不见，但漏一次水全屋遭殃。选型不是选「最新最热」，而是选「团队能维护、出事能兜住」。</div>
+</div>
+
+<!-- 6 常见错法 -->
+<div class="card" id="c6">
+  <div class="card-head">
+    <h2><span class="num">6</span>四种最常见的画错方式 <span class="tag">自检</span></h2>
+    <p>架构图不好看不是问题，画错层次才是。下面四行，左边是常见写法，右边是该有的样子。</p>
+  </div>
+  <div class="pz-host">
+    <svg viewBox="0 0 1040 450" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="a6" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8e8e93"/></marker></defs>
+      <g font-family="-apple-system,PingFang SC,sans-serif">
+        <text x="44" y="46" font-size="14" font-weight="700" fill="#1d1d1f">同一张图，换个画法就从「看不懂」变「能拍板」</text>
+
+        <text x="62" y="76" font-size="11.5" font-weight="700" fill="#c62828">常见错法</text>
+        <text x="556" y="76" font-size="11.5" font-weight="700" fill="#1d7a45">该有的样子</text>
+
+        <!-- 1 -->
+        <rect x="44" y="86" width="460" height="66" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="60" y="108" font-size="11.5" font-weight="700" fill="#c62828">只有一张技术栈图，管它叫「整体架构」</text>
+        <text x="60" y="127" font-size="10.5" fill="#6e6e73">结果：老板看不出赚不赚钱，业务看不出流程，</text>
+        <text x="60" y="143" font-size="10.5" fill="#6e6e73">数据口径没人对，只剩运维看得懂。</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#a6)" fill="none"><path d="M508,119 L542,119"/></g>
+
+        <rect x="548" y="86" width="448" height="66" rx="10" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="564" y="108" font-size="11.5" font-weight="700" fill="#1d7a45">四张图各就各位，技术图放最后一页</text>
+        <text x="564" y="127" font-size="10.5" fill="#6e6e73">业务图讲价值与能力，应用图讲边界，数据图讲流向，</text>
+        <text x="564" y="143" font-size="10.5" fill="#6e6e73">技术图讲选型。每张都能对应到不同的听众。</text>
+
+        <!-- 2 -->
+        <rect x="44" y="162" width="460" height="66" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="60" y="184" font-size="11.5" font-weight="700" fill="#c62828">业务架构画成部门组织架构图</text>
+        <text x="60" y="203" font-size="10.5" fill="#6e6e73">结果：换个领导就要重画一遍，而且看不出</text>
+        <text x="60" y="219" font-size="10.5" fill="#6e6e73">顾客到底经历了什么。</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#a6)" fill="none"><path d="M508,195 L542,195"/></g>
+
+        <rect x="548" y="162" width="448" height="66" rx="10" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="564" y="184" font-size="11.5" font-weight="700" fill="#1d7a45">画能力地图和价值链，部门只标责任人</text>
+        <text x="564" y="203" font-size="10.5" fill="#6e6e73">能力比组织稳定：部门会重组，能力不会。</text>
+        <text x="564" y="219" font-size="10.5" fill="#6e6e73">顾客视角的流程，才是判断值不值得做的依据。</text>
+
+        <!-- 3 -->
+        <rect x="44" y="238" width="460" height="66" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="60" y="260" font-size="11.5" font-weight="700" fill="#c62828">数据架构只画 ER 图，交付时才发现对不上</text>
+        <text x="60" y="279" font-size="10.5" fill="#6e6e73">结果：三个报表三个数，财务结算和业务后台</text>
+        <text x="60" y="295" font-size="10.5" fill="#6e6e73">各算各的，谁也不认谁的账。</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#a6)" fill="none"><path d="M508,271 L542,271"/></g>
+
+        <rect x="548" y="238" width="448" height="66" rx="10" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="564" y="260" font-size="11.5" font-weight="700" fill="#1d7a45">ER 图之上补数据流、主数据和指标口径</text>
+        <text x="564" y="279" font-size="10.5" fill="#6e6e73">先定「一单」「一个活跃用户」的唯一定义，</text>
+        <text x="564" y="295" font-size="10.5" fill="#6e6e73">再谈用数据湖还是数据仓库。</text>
+
+        <!-- 4 -->
+        <rect x="44" y="314" width="460" height="66" rx="10" fill="#fff1f0" stroke="#ffc9c4"/>
+        <text x="60" y="336" font-size="11.5" font-weight="700" fill="#c62828">应用架构画成服务器部署图</text>
+        <text x="60" y="355" font-size="10.5" fill="#6e6e73">结果：几十个方框和箭头，看不出谁负责什么，</text>
+        <text x="60" y="371" font-size="10.5" fill="#6e6e73">一改动就全图改。</text>
+
+        <g stroke="#8e8e93" stroke-width="1.5" marker-end="url(#a6)" fill="none"><path d="M508,347 L542,347"/></g>
+
+        <rect x="548" y="314" width="448" height="66" rx="10" fill="#e9f8ef" stroke="#bfe8cf"/>
+        <text x="564" y="336" font-size="11.5" font-weight="700" fill="#1d7a45">应用图讲边界与调用，部署图归技术架构</text>
+        <text x="564" y="355" font-size="10.5" fill="#6e6e73">一个服务一张卡片：负责什么、数据归谁、</text>
+        <text x="564" y="371" font-size="10.5" fill="#6e6e73">被谁调用。部署细节另画一张，各管一段。</text>
+
+        <!-- 底部 -->
+        <rect x="44" y="392" width="952" height="46" rx="10" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="60" y="411" font-size="11.5" font-weight="700" fill="#1d1d1f">交图前问三句：</text>
+        <text x="60" y="430" font-size="11" fill="#6e6e73">① 这张图回答的是「做什么 / 放哪 / 数据怎么流 / 跑在哪」里的哪一个？② 看完能指出责任人吗？③ 改一处，图上有几处要跟着改？</text>
+      </g>
+    </svg>
+  </div>
+  <div class="foot"><b>大白话：</b>四种架构各管一个问题。一张图想全包，结果谁都不满意；四张图各说一件事，反而能一起拍板。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
