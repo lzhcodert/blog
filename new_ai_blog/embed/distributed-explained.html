@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>分布式四问 · 六张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#34c759);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>分布式四问：反义词、背景、原理、场景</h1>
+  <p>用快递网点讲清楚：集中式与分布式的分界线、为什么非拆不可、多台机器怎么协作，以及什么时候该上、什么时候别上。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#d1">反义词</a><a href="#d2">背景</a><a href="#d3">定义</a><a href="#d4">原理</a><a href="#d5">CAP</a><a href="#d6">场景</a>
+</div>
+
+<!-- 1 反义词 -->
+<div class="card" id="d1">
+  <div class="card-head">
+    <h2><span class="num">1</span>反义词是集中式，不是「单体」也不是「去中心化」 <span class="tag">第一问</span></h2>
+    <p>IBM 原文：分布式系统在功能上与集中式系统正好相反。判断标准是决定权和资源在不在同一个中心节点。</p>
+  </div>
+  <svg viewBox="0 0 1040 470" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="d1a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff3b30"/></marker>
+      <marker id="d1b" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34c759"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">同样送快递，两种组织方式</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">左：全城一个总店　右：每片区一个网点，互相转发</text>
+
+      <rect x="44" y="88" width="464" height="264" rx="13" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="68" y="118" font-size="13" font-weight="700" fill="#c62828">集中式（反义词）</text>
+      <text x="68" y="138" font-size="10.5" fill="#b71c1c">一个中心节点统筹大部分操作</text>
+      <rect x="196" y="154" width="160" height="44" rx="9" fill="#ffffff" stroke="#ff3b30" stroke-width="2"/>
+      <text x="276" y="182" font-size="12" font-weight="700" fill="#c62828" text-anchor="middle">总店（中心）</text>
+      <g>
+        <rect x="68" y="238" width="96" height="34" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="116" y="260" font-size="10.5" fill="#c62828" text-anchor="middle">客户 A</text>
+        <rect x="180" y="238" width="96" height="34" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="228" y="260" font-size="10.5" fill="#c62828" text-anchor="middle">客户 B</text>
+        <rect x="292" y="238" width="96" height="34" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="340" y="260" font-size="10.5" fill="#c62828" text-anchor="middle">客户 C</text>
+        <rect x="404" y="238" width="84" height="34" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="446" y="260" font-size="10.5" fill="#c62828" text-anchor="middle">客户 D</text>
+      </g>
+      <g stroke="#ff3b30" stroke-width="1.3" fill="none" marker-end="url(#d1a)">
+        <path d="M116,236 L250,200"/><path d="M228,236 L270,200"/><path d="M340,236 L290,200"/><path d="M446,236 L310,200"/>
+      </g>
+      <text x="68" y="298" font-size="11" fill="#b71c1c">扩容：给总店加人加车（垂直扩展）</text>
+      <text x="68" y="324" font-size="11" fill="#b71c1c">风险：总店一停，全城瘫痪（单点故障）</text>
+
+      <rect x="532" y="88" width="464" height="264" rx="13" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="556" y="118" font-size="13" font-weight="700" fill="#1d7a45">分布式</text>
+      <text x="556" y="138" font-size="10.5" fill="#1d7a45">没有哪台机器握有全部控制权</text>
+      <g>
+        <rect x="556" y="156" width="94" height="40" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="603" y="181" font-size="11" fill="#1d7a45" text-anchor="middle">东城网点</text>
+        <rect x="666" y="156" width="94" height="40" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="713" y="181" font-size="11" fill="#1d7a45" text-anchor="middle">西城网点</text>
+        <rect x="776" y="156" width="94" height="40" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="823" y="181" font-size="11" fill="#1d7a45" text-anchor="middle">南城网点</text>
+        <rect x="886" y="156" width="94" height="40" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="933" y="181" font-size="11" fill="#1d7a45" text-anchor="middle">北城网点</text>
+      </g>
+      <g stroke="#34c759" stroke-width="1.4" fill="none" marker-end="url(#d1b)">
+        <path d="M652,176 L664,176"/><path d="M764,176 L774,176"/><path d="M874,176 L884,176"/>
+        <path d="M664,190 L652,190"/><path d="M774,190 L764,190"/>
+      </g>
+      <text x="764" y="230" font-size="10.5" fill="#1d7a45" text-anchor="middle">网点之间互相转发包裹</text>
+      <text x="556" y="268" font-size="11" fill="#1d7a45">扩容：新开一个网点（水平扩展）</text>
+      <text x="556" y="294" font-size="11" fill="#1d7a45">风险：一个网点关门，别的顶上</text>
+      <text x="556" y="324" font-size="11" fill="#1d7a45">用户只看到「一家快递公司」</text>
+
+      <rect x="44" y="372" width="952" height="82" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="398" font-size="12" font-weight="700" fill="#1d1d1f">三个容易混的词，别搞乱</text>
+      <text x="64" y="422" font-size="11" fill="#3a3a3c">集中式 vs 分布式：决策和资源在不在一处　·　单体 vs 微服务：一个应用是一个部署单元还是多个</text>
+      <text x="64" y="444" font-size="11" fill="#0a58ca">去中心化说的是权力分散，和「机器分散」不是一个维度。客户端-服务器整体是分布式，但通信是集中式的。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>看两组箭头方向。左栏所有箭头都指向「总店」，右栏箭头在网点之间互相指。判断分布式还是集中式，就看有没有一个中心节点掌握全部决定权——而不是看机器有多少台。</div>
+</div>
+
+<!-- 2 背景 -->
+<div class="card" id="d2">
+  <div class="card-head">
+    <h2><span class="num">2</span>背景：三股力量把系统推向分布式 <span class="tag">第二问</span></h2>
+    <p>单机扛不住、大型机太贵、网络便宜了。需求、成本、技术三条线同时到位，分布式才从论文走进机房。</p>
+  </div>
+  <svg viewBox="0 0 1040 450" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="d2a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5856d6"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">不是谁拍脑袋发明的，是被逼出来的</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">三条推力缺一不可：需求上要扛得住，成本上买得起，技术上连得上</text>
+
+      <rect x="44" y="96" width="296" height="200" rx="13" fill="#fff6e8" stroke="#f5cf8f"/>
+      <circle cx="70" cy="124" r="13" fill="#ff9500"/>
+      <text x="70" y="128" font-size="11" fill="#ffffff" text-anchor="middle">1</text>
+      <text x="94" y="129" font-size="13" font-weight="700" fill="#a05a00">需求：单机扛不住</text>
+      <text x="68" y="160" font-size="11" fill="#8a5200">双十一订单、春晚红包、</text>
+      <text x="68" y="182" font-size="11" fill="#8a5200">全球几百万人同时看球</text>
+      <text x="68" y="212" font-size="11" fill="#8a5200">CPU / 内存 / 网卡都有</text>
+      <text x="68" y="234" font-size="11" fill="#8a5200">物理上限</text>
+      <text x="68" y="266" font-size="10.5" fill="#a05a00">加配置能顶一阵，但有天花板</text>
+
+      <rect x="372" y="96" width="296" height="200" rx="13" fill="#eef4ff" stroke="#9cc3ff"/>
+      <circle cx="398" cy="124" r="13" fill="#007aff"/>
+      <text x="398" y="128" font-size="11" fill="#ffffff" text-anchor="middle">2</text>
+      <text x="422" y="129" font-size="13" font-weight="700" fill="#0a58ca">成本：超算太贵</text>
+      <text x="396" y="160" font-size="11" fill="#3a4a63">Britannica：不用昂贵超算</text>
+      <text x="396" y="182" font-size="11" fill="#3a4a63">也能解复杂问题</text>
+      <text x="396" y="212" font-size="11" fill="#3a4a63">SETI@home 借全球志愿者</text>
+      <text x="396" y="234" font-size="11" fill="#3a4a63">的闲置算力（多在夜里跑）</text>
+      <text x="396" y="266" font-size="10.5" fill="#0a58ca">平价标准硬件搭集群更划算</text>
+
+      <rect x="700" y="96" width="296" height="200" rx="13" fill="#f7f0ff" stroke="#d3b8f5"/>
+      <circle cx="726" cy="124" r="13" fill="#5856d6"/>
+      <text x="726" y="128" font-size="11" fill="#ffffff" text-anchor="middle">3</text>
+      <text x="750" y="129" font-size="13" font-weight="700" fill="#5b3a9e">技术：网络便宜了</text>
+      <text x="724" y="160" font-size="11" fill="#5b3a9e">几十年来「计算机公用事业」</text>
+      <text x="724" y="182" font-size="11" fill="#5b3a9e">受制于通信容量</text>
+      <text x="724" y="212" font-size="11" fill="#5b3a9e">1990 年代高容量光纤铺开，</text>
+      <text x="724" y="234" font-size="11" fill="#5b3a9e">限制才被解除</text>
+      <text x="724" y="266" font-size="10.5" fill="#5b3a9e">机器分散不难，便宜通信才难</text>
+
+      <g stroke="#5856d6" stroke-width="1.6" fill="none" marker-end="url(#d2a)">
+        <path d="M342,196 L368,196"/><path d="M670,196 L696,196"/>
+      </g>
+
+      <rect x="44" y="320" width="952" height="52" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="64" y="342" font-size="12" font-weight="700" fill="#1d7a45">还有一条可靠性推力：任务关键业务不能停</text>
+      <text x="64" y="362" font-size="11" fill="#1d7a45">IBM 举例：银行系统长时间停机后果严重，所以要靠副本消除单点故障。</text>
+
+      <rect x="44" y="388" width="952" height="46" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="417" font-size="11.5" fill="#1d1d1f">一句话：需求侧超过单机上限 + 供给侧廉价硬件与光纤 + 可靠性要求高可用 = 分布式登场。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>三个框从左到右读，箭头表示「缺一不可」的推进关系。注意第 3 框常被忽略——机器分散不是难事，难的是让它们便宜、快速地互相说话，这一点在 1990 年代光纤普及后才成立。</div>
+</div>
+
+<!-- 3 定义 -->
+<div class="card" id="d3">
+  <div class="card-head">
+    <h2><span class="num">3</span>定义拆解：一句话里藏着四个门槛 <span class="tag">第三问</span></h2>
+    <p>一群各自有脑子的机器，靠网络传消息协作，在外人看来像一台机器。拆开看，每一句都是一个硬要求。</p>
+  </div>
+  <svg viewBox="0 0 1040 440" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">「分布式」四个字，拆开是四道题</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">IBM 定义 + 维基百科定义原文，逐条对照</text>
+
+      <rect x="44" y="90" width="952" height="46" rx="10" fill="#efefff" stroke="#c7c7f5"/>
+      <text x="64" y="119" font-size="12.5" font-weight="700" fill="#4b49b5">分布式系统由多台独立计算机组成，依托网络协同运转，对外呈现为一套完整统一的系统。</text>
+
+      <rect x="44" y="154" width="220" height="178" rx="12" fill="#eef4ff" stroke="#9cc3ff"/>
+      <circle cx="68" cy="180" r="12" fill="#007aff"/>
+      <text x="68" y="184" font-size="11" fill="#ffffff" text-anchor="middle">1</text>
+      <text x="90" y="185" font-size="12.5" font-weight="700" fill="#0a58ca">多台独立机器</text>
+      <text x="64" y="214" font-size="10.5" fill="#3a4a63">各有独立 CPU、内存、存储</text>
+      <text x="64" y="236" font-size="10.5" fill="#3a4a63">节点 = 一台机器或一个进程</text>
+      <text x="64" y="270" font-size="11" fill="#0a58ca">门槛：任务和数据能拆开</text>
+      <text x="64" y="294" font-size="10.5" fill="#3a4a63">按数据分片 / 按任务分服务</text>
+      <text x="64" y="316" font-size="10.5" fill="#3a4a63">拆不开，堆机器也没用</text>
+
+      <rect x="284" y="154" width="220" height="178" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <circle cx="308" cy="180" r="12" fill="#34c759"/>
+      <text x="308" y="184" font-size="11" fill="#ffffff" text-anchor="middle">2</text>
+      <text x="330" y="185" font-size="12.5" font-weight="700" fill="#1d7a45">靠消息传递</text>
+      <text x="304" y="214" font-size="10.5" fill="#1d7a45">没有共享内存</text>
+      <text x="304" y="236" font-size="10.5" fill="#1d7a45">HTTP / RPC / 消息队列</text>
+      <text x="304" y="270" font-size="11" fill="#1d7a45">门槛：消息会丢、会延迟</text>
+      <text x="304" y="294" font-size="10.5" fill="#1d7a45">也会重复送达</text>
+      <text x="304" y="316" font-size="10.5" fill="#6e6e73">单机线程能共享内存</text>
+
+      <rect x="524" y="154" width="220" height="178" rx="12" fill="#fff6e8" stroke="#f5cf8f"/>
+      <circle cx="548" cy="180" r="12" fill="#ff9500"/>
+      <text x="548" y="184" font-size="11" fill="#ffffff" text-anchor="middle">3</text>
+      <text x="570" y="185" font-size="12.5" font-weight="700" fill="#a05a00">各自会坏</text>
+      <text x="544" y="214" font-size="10.5" fill="#8a5200">独立故障是常态</text>
+      <text x="544" y="236" font-size="10.5" fill="#8a5200">一台挂了整体不能挂</text>
+      <text x="544" y="270" font-size="11" fill="#a05a00">门槛：要有副本和接管</text>
+      <text x="544" y="294" font-size="10.5" fill="#8a5200">同一份数据存多份</text>
+      <text x="544" y="316" font-size="10.5" fill="#6e6e73">副本又带来一致性问题</text>
+
+      <rect x="764" y="154" width="232" height="178" rx="12" fill="#f7f0ff" stroke="#d3b8f5"/>
+      <circle cx="788" cy="180" r="12" fill="#5856d6"/>
+      <text x="788" y="184" font-size="11" fill="#ffffff" text-anchor="middle">4</text>
+      <text x="810" y="185" font-size="12.5" font-weight="700" fill="#5b3a9e">对外像一台</text>
+      <text x="784" y="214" font-size="10.5" fill="#5b3a9e">用户不知道是哪台响应的</text>
+      <text x="784" y="236" font-size="10.5" fill="#5b3a9e">也不用管数据存在哪</text>
+      <text x="784" y="270" font-size="11" fill="#5b3a9e">门槛：屏蔽内部复杂度</text>
+      <text x="784" y="294" font-size="10.5" fill="#5b3a9e">统一入口、统一体验</text>
+      <text x="784" y="316" font-size="10.5" fill="#6e6e73">网关 / 负载均衡常做这事</text>
+
+      <rect x="44" y="352" width="952" height="70" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="377" font-size="12" font-weight="700" fill="#1d1d1f">维基百科点出的三大挑战，正是这四道门槛的代价</text>
+      <text x="64" y="400" font-size="11" fill="#3a3a3c">并发（同时干活，顺序难定）　·　无全局时钟（没有统一时间排队）　·　独立故障（局部失败不能拖垮整体）</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>把顶上那句定义读一遍，再按 1→4 对号入座。最容易漏的是第 2 条「没有共享内存」——它是分布式和并行计算的分界线，也是后面所有麻烦的源头。</div>
+</div>
+
+<!-- 4 原理 -->
+<div class="card" id="d4">
+  <div class="card-head">
+    <h2><span class="num">4</span>原理：五个动作让机器群像一台机器 <span class="tag">第三问</span></h2>
+    <p>拆任务 → 传消息 → 存副本 → 定顺序 → 做取舍。前四个是手段，最后一个是不得不付的代价。</p>
+  </div>
+  <svg viewBox="0 0 1040 490" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="d4a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5856d6"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">从左到右看一遍：一个请求是怎么被一群机器接住的</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">以「下单」为例，串起五个动作</text>
+
+      <rect x="44" y="92" width="180" height="230" rx="12" fill="#eef4ff" stroke="#9cc3ff"/>
+      <circle cx="66" cy="118" r="12" fill="#007aff"/>
+      <text x="66" y="122" font-size="11" fill="#ffffff" text-anchor="middle">1</text>
+      <text x="62" y="152" font-size="12" font-weight="700" fill="#0a58ca">拆任务</text>
+      <text x="62" y="176" font-size="10.5" fill="#3a4a63">下单切成：</text>
+      <text x="62" y="196" font-size="10.5" fill="#3a4a63">建单 / 扣库存</text>
+      <text x="62" y="216" font-size="10.5" fill="#3a4a63">支付 / 通知</text>
+      <text x="62" y="250" font-size="10.5" fill="#0a58ca">按数据拆：分片</text>
+      <text x="62" y="270" font-size="10.5" fill="#3a4a63">按 ID 区间分机器</text>
+      <text x="62" y="298" font-size="10.5" fill="#6e6e73">拆不开就别拆</text>
+
+      <rect x="236" y="92" width="180" height="230" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <circle cx="258" cy="118" r="12" fill="#34c759"/>
+      <text x="258" y="122" font-size="11" fill="#ffffff" text-anchor="middle">2</text>
+      <text x="254" y="152" font-size="12" font-weight="700" fill="#1d7a45">传消息</text>
+      <text x="254" y="176" font-size="10.5" fill="#1d7a45">机器间没有共享内存</text>
+      <text x="254" y="196" font-size="10.5" fill="#1d7a45">只能发消息协作</text>
+      <text x="254" y="216" font-size="10.5" fill="#1d7a45">HTTP / RPC / MQ</text>
+      <text x="254" y="250" font-size="10.5" fill="#1d7a45">消息会丢、会延迟</text>
+      <text x="254" y="270" font-size="10.5" fill="#1d7a45">也可能重复送达</text>
+      <text x="254" y="298" font-size="10.5" fill="#6e6e73">接口要能扛住重试</text>
+
+      <rect x="428" y="92" width="180" height="230" rx="12" fill="#fff6e8" stroke="#f5cf8f"/>
+      <circle cx="450" cy="118" r="12" fill="#ff9500"/>
+      <text x="450" y="122" font-size="11" fill="#ffffff" text-anchor="middle">3</text>
+      <text x="446" y="152" font-size="12" font-weight="700" fill="#a05a00">存副本</text>
+      <text x="446" y="176" font-size="10.5" fill="#8a5200">同一份数据存三份</text>
+      <text x="446" y="196" font-size="10.5" fill="#8a5200">坏一台，另外两台顶</text>
+      <text x="446" y="216" font-size="10.5" fill="#8a5200">消除单点故障</text>
+      <text x="446" y="250" font-size="10.5" fill="#a05a00">新问题：三份怎么一致？</text>
+      <text x="446" y="270" font-size="10.5" fill="#8a5200">改了 A，B 和 C 还没收到</text>
+      <text x="446" y="298" font-size="10.5" fill="#6e6e73">这时来读，读哪个？</text>
+
+      <rect x="620" y="92" width="180" height="230" rx="12" fill="#f7f0ff" stroke="#d3b8f5"/>
+      <circle cx="642" cy="118" r="12" fill="#5856d6"/>
+      <text x="642" y="122" font-size="11" fill="#ffffff" text-anchor="middle">4</text>
+      <text x="638" y="152" font-size="12" font-weight="700" fill="#5b3a9e">定顺序</text>
+      <text x="638" y="176" font-size="10.5" fill="#5b3a9e">没有全局时钟</text>
+      <text x="638" y="196" font-size="10.5" fill="#5b3a9e">谁先谁后得约定</text>
+      <text x="638" y="216" font-size="10.5" fill="#5b3a9e">靠序号 / 逻辑时钟</text>
+      <text x="638" y="250" font-size="10.5" fill="#5b3a9e">靠共识协议投票</text>
+      <text x="638" y="270" font-size="10.5" fill="#5b3a9e">（Raft / Paxos）</text>
+      <text x="638" y="298" font-size="10.5" fill="#6e6e73">代价：慢且复杂</text>
+
+      <rect x="812" y="92" width="184" height="230" rx="12" fill="#fff5f5" stroke="#ffc9c9"/>
+      <circle cx="834" cy="118" r="12" fill="#ff3b30"/>
+      <text x="834" y="122" font-size="11" fill="#ffffff" text-anchor="middle">5</text>
+      <text x="830" y="152" font-size="12" font-weight="700" fill="#c62828">做取舍</text>
+      <text x="830" y="176" font-size="10.5" fill="#b71c1c">网线会断，分区难免</text>
+      <text x="830" y="196" font-size="10.5" fill="#b71c1c">断的那一刻必须选：</text>
+      <text x="830" y="220" font-size="11" font-weight="700" fill="#c62828">要一致，还是要可用？</text>
+      <text x="830" y="252" font-size="10.5" fill="#c62828">CP：拒绝服务，保答案对</text>
+      <text x="830" y="274" font-size="10.5" fill="#c62828">AP：先答应，数据回头对齐</text>
+      <text x="830" y="300" font-size="10.5" fill="#6e6e73">这就是 CAP</text>
+
+      <g stroke="#5856d6" stroke-width="1.5" fill="none" marker-end="url(#d4a)">
+        <path d="M226,206 L232,206"/><path d="M418,206 L424,206"/><path d="M610,206 L616,206"/><path d="M802,206 L808,206"/>
+      </g>
+
+      <rect x="44" y="344" width="952" height="66" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="369" font-size="12" font-weight="700" fill="#1d1d1f">IBM 归纳的六个特征，就是这五个动作做到位后的样子</text>
+      <text x="64" y="392" font-size="11" fill="#3a3a3c">资源共享　·　并发　·　可扩展性　·　可用性与容错　·　异构性　·　统一（对用户屏蔽内部复杂）</text>
+
+      <rect x="44" y="424" width="952" height="48" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="64" y="454" font-size="11.5" fill="#1d7a45">一句话：拆得开、能对话、有副本、定得了顺序、知道该牺牲什么，这五件事齐了才叫分布式。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>五张卡从左到右是一条请求的处理链。注意第 3 卡和第 5 卡的因果：存副本解决了「坏了怎么办」，却制造了「三份怎么一致」；这个问题在网络断开时无解，只能取舍——这就是 CAP 出现的位置。</div>
+</div>
+
+<!-- 5 CAP -->
+<div class="card" id="d5">
+  <div class="card-head">
+    <h2><span class="num">5</span>CAP：分区躲不掉，真正的选择只有两个 <span class="tag">第三问</span></h2>
+    <p>Brewer 2000 年提出，Gilbert 与 Lynch 2002 年证明。Brewer 2012 年澄清：「三选二」容易误导，只有发生分区时才需要在 C 和 A 之间取舍。</p>
+  </div>
+  <svg viewBox="0 0 1040 480" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="d5a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff3b30"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">三个字母分别承诺什么</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">C 和 A 的准确定义来自 Gilbert / Lynch 的形式化表述</text>
+
+      <rect x="44" y="88" width="296" height="96" rx="11" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="64" y="114" font-size="13" font-weight="700" fill="#0a58ca">C · 一致性</text>
+      <text x="64" y="138" font-size="10.5" fill="#3a4a63">每个读都拿到最近一次写入</text>
+      <text x="64" y="160" font-size="10.5" fill="#3a4a63">或报错。问谁，答案一样</text>
+      <rect x="372" y="88" width="296" height="96" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="392" y="114" font-size="13" font-weight="700" fill="#1d7a45">A · 可用性</text>
+      <text x="392" y="138" font-size="10.5" fill="#1d7a45">每个请求都收到非错误响应</text>
+      <text x="392" y="160" font-size="10.5" fill="#1d7a45">问了就有人答，不保证最新</text>
+      <rect x="700" y="88" width="296" height="96" rx="11" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="720" y="114" font-size="13" font-weight="700" fill="#c62828">P · 分区容忍</text>
+      <text x="720" y="138" font-size="10.5" fill="#b71c1c">消息被丢、被延迟，系统还在</text>
+      <text x="720" y="160" font-size="10.5" fill="#b71c1c">网线断了，系统还活着</text>
+
+      <text x="44" y="214" font-size="13" font-weight="700" fill="#1d1d1f">网线被挖断的那一刻：左边写「余额改成 500」，右边同时收到「改成 700」</text>
+
+      <rect x="44" y="230" width="452" height="150" rx="12" fill="#fff6e8" stroke="#f5cf8f"/>
+      <text x="64" y="258" font-size="13" font-weight="700" fill="#a05a00">选 CP：宁可拒绝，也不给错答案</text>
+      <rect x="120" y="278" width="100" height="34" rx="7" fill="#ffffff" stroke="#f5cf8f"/>
+      <text x="170" y="300" font-size="10.5" fill="#a05a00" text-anchor="middle">节点 A</text>
+      <rect x="320" y="278" width="100" height="34" rx="7" fill="#ffffff" stroke="#f5cf8f"/>
+      <text x="370" y="300" font-size="10.5" fill="#a05a00" text-anchor="middle">节点 B</text>
+      <path d="M224,295 L232,295 M232,295 L224,286" stroke="#ff3b30" stroke-width="1.8" fill="none"/>
+      <text x="248" y="299" font-size="12" font-weight="700" fill="#c62828">✕ 断联</text>
+      <text x="64" y="336" font-size="10.5" fill="#8a5200">A 不敢单独改，返回「暂不可用」</text>
+      <text x="64" y="358" font-size="10.5" fill="#8a5200">B 也不答。牺牲 A（可用性）保 C</text>
+      <text x="64" y="376" font-size="10.5" fill="#a05a00">典型：银行转账、etcd、HBase</text>
+
+      <rect x="544" y="230" width="452" height="150" rx="12" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="564" y="258" font-size="13" font-weight="700" fill="#0a58ca">选 AP：先答应，数据回头对齐</text>
+      <rect x="620" y="278" width="100" height="34" rx="7" fill="#ffffff" stroke="#9cc3ff"/>
+      <text x="670" y="300" font-size="10.5" fill="#0a58ca" text-anchor="middle">节点 A=500</text>
+      <rect x="820" y="278" width="100" height="34" rx="7" fill="#ffffff" stroke="#9cc3ff"/>
+      <text x="870" y="300" font-size="10.5" fill="#0a58ca" text-anchor="middle">节点 B=700</text>
+      <path d="M724,295 L732,295 M732,295 L724,286" stroke="#ff3b30" stroke-width="1.8" fill="none"/>
+      <text x="748" y="299" font-size="12" font-weight="700" fill="#c62828">✕ 断联</text>
+      <text x="564" y="336" font-size="10.5" fill="#0a58ca">两边都接受写入，用户不卡住</text>
+      <text x="564" y="358" font-size="10.5" fill="#0a58ca">恢复后靠 LWW / 合并解决冲突</text>
+      <text x="564" y="376" font-size="10.5" fill="#0a58ca">典型：DNS、Cassandra、购物车</text>
+
+      <rect x="44" y="398" width="952" height="64" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="422" font-size="12" font-weight="700" fill="#1d1d1f">Brewer 2012 年的澄清，别把 CAP 记成「永远只能要两个」</text>
+      <text x="64" y="446" font-size="11" fill="#3a3a3c">只有发生分区时才必须二选一；没分区时，一致性和可用性可以同时满足。CAP 的 C 也不是 ACID 里的 C。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先看上排三个定义，再看下排两条路。断联那一刻没有完美答案：左路拒绝服务但保证答案对，右路继续服务但可能读到旧值。记住 P 不可选——分布式系统里网线迟早会断。</div>
+</div>
+
+<!-- 6 场景 -->
+<div class="card" id="d6">
+  <div class="card-head">
+    <h2><span class="num">6</span>场景：什么时候该上，什么时候别上 <span class="tag">第四问</span></h2>
+    <p>分布式不是勋章，是成本。判断标准就三条：单机扛不扛得住、要不要高可用、需不需要多地部署。</p>
+  </div>
+  <svg viewBox="0 0 1040 490" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">该上的场景：每一条都对应前面的一股推力</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">IBM 列出的典型用例，按「为什么需要」归类</text>
+
+      <rect x="44" y="90" width="308" height="150" rx="12" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="64" y="116" font-size="12.5" font-weight="700" fill="#0a58ca">扛不住量</text>
+      <text x="64" y="142" font-size="10.5" fill="#3a4a63">流媒体：多地数据中心 + CDN</text>
+      <text x="64" y="162" font-size="10.5" fill="#3a4a63">同时服务全球数百万观众</text>
+      <text x="64" y="186" font-size="10.5" fill="#3a4a63">AI 训练：数据量和算力</text>
+      <text x="64" y="206" font-size="10.5" fill="#3a4a63">超出单机，靠集群顶上</text>
+      <text x="64" y="228" font-size="10.5" fill="#0a58ca">→ 水平扩展</text>
+
+      <rect x="366" y="90" width="308" height="150" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="386" y="116" font-size="12.5" font-weight="700" fill="#1d7a45">不能停</text>
+      <text x="386" y="142" font-size="10.5" fill="#1d7a45">网上银行：客服、安全、交易</text>
+      <text x="386" y="162" font-size="10.5" fill="#1d7a45">分在不同服务器，用户无感</text>
+      <text x="386" y="186" font-size="10.5" fill="#1d7a45">靠副本消除单点故障</text>
+      <text x="386" y="206" font-size="10.5" fill="#1d7a45">局部坏了整体还在</text>
+      <text x="386" y="228" font-size="10.5" fill="#1d7a45">→ 可用性与容错</text>
+
+      <rect x="688" y="90" width="308" height="150" rx="12" fill="#f7f0ff" stroke="#d3b8f5"/>
+      <text x="708" y="116" font-size="12.5" font-weight="700" fill="#5b3a9e">离用户近 / 多方协作</text>
+      <text x="708" y="142" font-size="10.5" fill="#5b3a9e">蜂窝网络：基站遍布，切换无感</text>
+      <text x="708" y="162" font-size="10.5" fill="#5b3a9e">CDN：内容缓存到边缘节点</text>
+      <text x="708" y="186" font-size="10.5" fill="#5b3a9e">区块链：各节点存账本副本</text>
+      <text x="708" y="206" font-size="10.5" fill="#5b3a9e">靠共识对新交易达成一致</text>
+      <text x="708" y="228" font-size="10.5" fill="#5b3a9e">→ 地理分布 / 去中心</text>
+
+      <text x="44" y="272" font-size="13" font-weight="700" fill="#1d1d1f">别上的场景：复杂度会吃掉收益</text>
+
+      <rect x="44" y="286" width="452" height="112" rx="12" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="64" y="312" font-size="12" font-weight="700" fill="#c62828">这些情况先别拆</text>
+      <text x="64" y="336" font-size="10.5" fill="#b71c1c">内部小系统，几十个人用 → 单机足够</text>
+      <text x="64" y="358" font-size="10.5" fill="#b71c1c">强一致事务为主（账务核心）→ 慎上，分区时可能不可用</text>
+      <text x="64" y="380" font-size="10.5" fill="#b71c1c">团队没有运维分布式的能力 → 先补能力</text>
+
+      <rect x="544" y="286" width="452" height="112" rx="12" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="564" y="312" font-size="12" font-weight="700" fill="#48484a">Fowler 的提醒</text>
+      <text x="564" y="336" font-size="10.5" fill="#48484a">服务失败要额外处理，比单体复杂</text>
+      <text x="564" y="358" font-size="10.5" fill="#48484a">一串同步调用带来停机的乘法效应</text>
+      <text x="564" y="380" font-size="10.5" fill="#6e6e73">系统可用性 = 各组件可用性相乘</text>
+
+      <rect x="44" y="416" width="952" height="56" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="440" font-size="12.5" font-weight="700" fill="#1d1d1f">一句话：用「网络 + 一致性 + 运维」的复杂度，换「容量 + 可用性 + 全球覆盖」的能力。</text>
+      <text x="64" y="462" font-size="11" fill="#6e6e73">换得来就上，换不来就老老实实单机。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>上排三个框对应背景篇的三股推力：扛不住量、不能停、离用户近。下排右框特别值得记住——分布式不是免费的，Fowler 说的「停机乘法效应」提醒你：串联的服务越多，整体可用性越低。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
