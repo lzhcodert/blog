@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>微服务怎么拆 · 六张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#007aff,#5856d6 52%,#34c759);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(60,80,180,.22)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--blue);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>微服务怎么拆：四刀下去，别把复杂度挪到会议桌</h1>
+  <p>用一家网上超市走一遍：切什么、切多大、边界在哪、数据怎么分。六种常见切法与落地顺序都在下面六张图里。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#m1">切法对比</a><a href="#m2">业务能力</a><a href="#m3">切多大</a><a href="#m4">限界上下文</a><a href="#m5">数据私有</a><a href="#m6">绞杀者模式</a>
+</div>
+
+<!-- 1 切法对比 -->
+<div class="card" id="m1">
+  <div class="card-head">
+    <h2><span class="num">1</span>第一刀：按技术层切，还是按业务能力切 <span class="tag">总览</span></h2>
+    <p>服务数量不是重点。重点是「加一个需求，要惊动几个组」。按技术层切，一个需求横穿三层；按业务能力切，一个组从头做到尾。</p>
+  </div>
+  <svg viewBox="0 0 1040 430" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="m1red" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff3b30"/></marker>
+      <marker id="m1green" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34c759"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">同样四个业务，两种刀法，两种命运</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">左边是「按技术层」，右边是「按业务能力」（Fowler 2014 的对照）</text>
+
+      <rect x="44" y="90" width="464" height="268" rx="14" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="68" y="122" font-size="14" font-weight="700" fill="#c62828">按技术层切（错）</text>
+      <text x="68" y="142" font-size="11" fill="#b71c1c">团队按技能分组，一个需求要穿过三层</text>
+      <rect x="68" y="158" width="416" height="30" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+      <text x="82" y="178" font-size="11.5" fill="#c62828">UI 团队　　负责所有页面</text>
+      <rect x="68" y="196" width="416" height="30" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+      <text x="82" y="216" font-size="11.5" fill="#c62828">服务端团队　负责所有接口</text>
+      <rect x="68" y="234" width="416" height="30" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+      <text x="82" y="254" font-size="11.5" fill="#c62828">数据库团队　负责所有表</text>
+      <path d="M78,286 L482,286" stroke="#ff3b30" stroke-width="1.8" fill="none" marker-end="url(#m1red)"/>
+      <text x="78" y="306" font-size="11.5" fill="#b71c1c">「到货通知」：页面 → 接口 → 表，三方排期</text>
+      <text x="78" y="334" font-size="11" fill="#b71c1c">结果：分布式单体，会议比代码多</text>
+
+      <rect x="532" y="90" width="464" height="268" rx="14" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="556" y="122" font-size="14" font-weight="700" fill="#1d7a45">按业务能力切（对）</text>
+      <text x="556" y="142" font-size="11" fill="#1d7a45">每个组从页面到库表，完整负责一块</text>
+      <rect x="556" y="158" width="204" height="40" rx="7" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="570" y="183" font-size="11.5" fill="#1d7a45">商品目录组</text>
+      <rect x="792" y="158" width="204" height="40" rx="7" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="806" y="183" font-size="11.5" fill="#1d7a45">订单组</text>
+      <rect x="556" y="206" width="204" height="40" rx="7" fill="#ffffff" stroke="#2f9e57" stroke-width="2"/>
+      <text x="570" y="231" font-size="11.5" font-weight="700" fill="#1d7a45">库存组（第一刀）</text>
+      <rect x="792" y="206" width="204" height="40" rx="7" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="806" y="231" font-size="11.5" fill="#1d7a45">配送组</text>
+      <path d="M566,286 L962,286" stroke="#34c759" stroke-width="1.8" fill="none" marker-end="url(#m1green)"/>
+      <text x="566" y="306" font-size="11.5" fill="#1d7a45">「到货通知」：库存组自己做完，别人不动</text>
+      <text x="566" y="334" font-size="11" fill="#1d7a45">结果：各发各的，一次需求只惊动一个组</text>
+
+      <rect x="44" y="376" width="952" height="40" rx="10" fill="#f2f2f7"/>
+      <text x="64" y="402" font-size="11.5" fill="#1d1d1f">康威定律：按技术层分团队，就别指望长出按业务能力划分的服务。组织不变，图怎么画都白搭。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先看左右两栏第三条横排文字的位置差。左栏「到货通知」要横穿 UI、服务端、DBA 三层；右栏同一个需求落在库存组一个格子里。判据不是服务数量，是一次需求要协调几个组。</div>
+</div>
+
+<!-- 2 业务能力 -->
+<div class="card" id="m2">
+  <div class="card-head">
+    <h2><span class="num">2</span>从价值链找业务能力，再分出三六九等 <span class="tag">方法</span></h2>
+    <p>业务能力是「企业为创造价值而做的事」，不是「系统有哪些页面」。价值链每个环节都要有能力托住，能力再按 core / supporting / generic 区分投入。</p>
+  </div>
+  <svg viewBox="0 0 1040 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="m2a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8e8e93"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">网上超市：从顾客流程，推到该有哪些服务</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">上排是价值链（顾客视角），下排是能力与服务（公司视角）</text>
+
+      <text x="44" y="94" font-size="11" font-weight="700" fill="#5856d6">价值链 · 顾客视角</text>
+      <g>
+        <rect x="44" y="104" width="146" height="52" rx="9" fill="#efefff" stroke="#c7c7f5"/>
+        <text x="117" y="135" font-size="11.5" fill="#4b49b5" text-anchor="middle">选品上架</text>
+        <rect x="204" y="104" width="146" height="52" rx="9" fill="#efefff" stroke="#c7c7f5"/>
+        <text x="277" y="135" font-size="11.5" fill="#4b49b5" text-anchor="middle">逛店搜索</text>
+        <rect x="364" y="104" width="146" height="52" rx="9" fill="#efefff" stroke="#c7c7f5"/>
+        <text x="437" y="135" font-size="11.5" fill="#4b49b5" text-anchor="middle">加购下单</text>
+        <rect x="524" y="104" width="146" height="52" rx="9" fill="#efefff" stroke="#c7c7f5"/>
+        <text x="597" y="135" font-size="11.5" fill="#4b49b5" text-anchor="middle">支付</text>
+        <rect x="684" y="104" width="146" height="52" rx="9" fill="#efefff" stroke="#c7c7f5"/>
+        <text x="757" y="135" font-size="11.5" fill="#4b49b5" text-anchor="middle">拣货配送</text>
+        <rect x="844" y="104" width="146" height="52" rx="9" fill="#efefff" stroke="#c7c7f5"/>
+        <text x="917" y="135" font-size="11.5" fill="#4b49b5" text-anchor="middle">售后</text>
+      </g>
+      <g stroke="#8e8e93" stroke-width="1.5" fill="none" marker-end="url(#m2a)">
+        <path d="M192,130 L200,130"/><path d="M352,130 L360,130"/><path d="M512,130 L520,130"/><path d="M672,130 L680,130"/><path d="M832,130 L840,130"/>
+      </g>
+
+      <g stroke="#c7c7f5" stroke-width="1.2" stroke-dasharray="3 3">
+        <path d="M117,158 L117,196"/><path d="M277,158 L277,196"/><path d="M437,158 L437,196"/>
+        <path d="M597,158 L597,196"/><path d="M757,158 L757,196"/><path d="M917,158 L917,196"/>
+      </g>
+
+      <text x="44" y="190" font-size="11" font-weight="700" fill="#007aff">业务能力 · 公司视角 → 服务</text>
+      <g>
+        <rect x="44" y="200" width="146" height="82" rx="9" fill="#eef4ff" stroke="#9cc3ff"/>
+        <text x="117" y="224" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">商品目录</text>
+        <text x="117" y="245" font-size="10.5" fill="#3a4a63" text-anchor="middle">名称/图片/规格</text>
+        <text x="117" y="266" font-size="10.5" fill="#3a4a63" text-anchor="middle">上下架状态</text>
+        <rect x="204" y="200" width="146" height="82" rx="9" fill="#eef4ff" stroke="#9cc3ff"/>
+        <text x="277" y="224" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">搜索推荐</text>
+        <text x="277" y="245" font-size="10.5" fill="#3a4a63" text-anchor="middle">索引/排序</text>
+        <text x="277" y="266" font-size="10.5" fill="#3a4a63" text-anchor="middle">个性化推荐</text>
+        <rect x="364" y="200" width="146" height="82" rx="9" fill="#eef4ff" stroke="#9cc3ff"/>
+        <text x="437" y="224" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">订单管理</text>
+        <text x="437" y="245" font-size="10.5" fill="#3a4a63" text-anchor="middle">下单/改单</text>
+        <text x="437" y="266" font-size="10.5" fill="#3a4a63" text-anchor="middle">订单快照</text>
+        <rect x="524" y="200" width="146" height="82" rx="9" fill="#eef4ff" stroke="#9cc3ff"/>
+        <text x="597" y="224" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">支付</text>
+        <text x="597" y="245" font-size="10.5" fill="#3a4a63" text-anchor="middle">收单/对账</text>
+        <text x="597" y="266" font-size="10.5" fill="#3a4a63" text-anchor="middle">退款</text>
+        <rect x="684" y="200" width="146" height="82" rx="9" fill="#eef4ff" stroke="#9cc3ff"/>
+        <text x="757" y="224" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">履约配送</text>
+        <text x="757" y="245" font-size="10.5" fill="#3a4a63" text-anchor="middle">拣货/库位</text>
+        <text x="757" y="266" font-size="10.5" fill="#3a4a63" text-anchor="middle">运单/签收</text>
+        <rect x="844" y="200" width="146" height="82" rx="9" fill="#eef4ff" stroke="#9cc3ff"/>
+        <text x="917" y="224" font-size="11.5" font-weight="700" fill="#0a58ca" text-anchor="middle">售后服务</text>
+        <text x="917" y="245" font-size="10.5" fill="#3a4a63" text-anchor="middle">退换货</text>
+        <text x="917" y="266" font-size="10.5" fill="#3a4a63" text-anchor="middle">工单</text>
+      </g>
+
+      <text x="44" y="318" font-size="11" font-weight="700" fill="#5856d6">DDD 子域分类：别把每个服务都当成同等重要</text>
+      <rect x="44" y="330" width="308" height="96" rx="11" fill="#fff6e8" stroke="#f5cf8f"/>
+      <text x="64" y="356" font-size="12.5" font-weight="700" fill="#a05a00">Core 核心域</text>
+      <text x="64" y="379" font-size="11" fill="#8a5200">关键差异化，业务最值钱</text>
+      <text x="64" y="402" font-size="11" fill="#8a5200">例：智能推荐、定价策略</text>
+      <text x="64" y="420" font-size="10.5" fill="#a05a00">→ 最好的人放这儿</text>
+      <rect x="366" y="330" width="308" height="96" rx="11" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="386" y="356" font-size="12.5" font-weight="700" fill="#48484a">Supporting 支撑域</text>
+      <text x="386" y="379" font-size="11" fill="#48484a">相关，但不构成差异化</text>
+      <text x="386" y="402" font-size="11" fill="#48484a">例：会员积分、优惠券</text>
+      <text x="386" y="420" font-size="10.5" fill="#6e6e73">→ 自研或外包都行</text>
+      <rect x="688" y="330" width="308" height="96" rx="11" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="708" y="356" font-size="12.5" font-weight="700" fill="#0a58ca">Generic 通用域</text>
+      <text x="708" y="379" font-size="11" fill="#0a58ca">不专属于这门生意</text>
+      <text x="708" y="402" font-size="11" fill="#0a58ca">例：短信通知、文件存储</text>
+      <text x="708" y="420" font-size="10.5" fill="#0a58ca">→ 买现成的，别自己造</text>
+
+      <rect x="44" y="446" width="952" height="38" rx="10" fill="#f2f2f7"/>
+      <text x="64" y="471" font-size="11.5" fill="#1d1d1f">找能力的两个起点：①公司里已有的部门（它们的词汇往往不同）；②高层领域模型里的核心名词。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>先从上往下对一遍：价值链上的每个环节，下面是否真有一个能力托住。「售后」找不到对应能力，说明业务设计有缺口，跟技术无关。再看最下面三档分类：给短信通知配三人小队，是常见的浪费。</div>
+</div>
+
+<!-- 3 切多大 -->
+<div class="card" id="m3">
+  <div class="card-head">
+    <h2><span class="num">3</span>第二刀：切多大——不是越小越好 <span class="tag">尺度</span></h2>
+    <p>microservices.io 给的尺度是「两个披萨团队」6~10 人，能独立开发、测试、部署。Fowler 补了一条更好用的合并判据：总是一起改的两个服务，就该合并。</p>
+  </div>
+  <svg viewBox="0 0 1040 450" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">同一个订单域，三种切法，三种日子</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">服务的大小由「谁负责、一次需求动几个」决定，不由代码行数决定</text>
+
+      <rect x="44" y="88" width="308" height="280" rx="13" fill="#fff8f0" stroke="#f5cf8f"/>
+      <text x="64" y="118" font-size="13" font-weight="700" fill="#a05a00">太粗</text>
+      <text x="64" y="140" font-size="10.5" fill="#8a5200">订单 + 商品 + 库存塞一个服务</text>
+      <rect x="64" y="156" width="268" height="44" rx="8" fill="#ffffff" stroke="#f5cf8f"/>
+      <text x="198" y="184" font-size="11" fill="#a05a00" text-anchor="middle">一个巨型服务</text>
+      <text x="64" y="228" font-size="11" fill="#8a5200">团队：一个大队，内部互相等</text>
+      <text x="64" y="254" font-size="11" fill="#8a5200">需求：改一处，全系统回归</text>
+      <text x="64" y="280" font-size="11" fill="#8a5200">症状：加个字段要全量发版</text>
+      <text x="64" y="316" font-size="10.5" fill="#a05a00">本质：单体换了个部署方式</text>
+      <text x="64" y="340" font-size="10.5" fill="#a05a00">没拿到自治，也没拿到隔离</text>
+
+      <rect x="366" y="88" width="308" height="280" rx="13" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="386" y="118" font-size="13" font-weight="700" fill="#1d7a45">刚好 ✓</text>
+      <text x="386" y="140" font-size="10.5" fill="#1d7a45">一个业务能力一个服务</text>
+      <rect x="386" y="156" width="82" height="44" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="427" y="184" font-size="11" fill="#1d7a45" text-anchor="middle">商品</text>
+      <rect x="479" y="156" width="82" height="44" rx="8" fill="#ffffff" stroke="#2f9e57" stroke-width="2"/>
+      <text x="520" y="184" font-size="11" font-weight="700" fill="#1d7a45" text-anchor="middle">订单</text>
+      <rect x="572" y="156" width="82" height="44" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+      <text x="613" y="184" font-size="11" fill="#1d7a45" text-anchor="middle">库存</text>
+      <text x="386" y="228" font-size="11" fill="#1d7a45">团队：6~10 人端到端负责</text>
+      <text x="386" y="254" font-size="11" fill="#1d7a45">需求：大多只动一个服务</text>
+      <text x="386" y="280" font-size="11" fill="#1d7a45">症状：各发各的，互不等待</text>
+      <text x="386" y="316" font-size="10.5" fill="#1d7a45">本质：用分布式复杂度换自治</text>
+      <text x="386" y="340" font-size="10.5" fill="#1d7a45">账算得过，这笔交易就值</text>
+
+      <rect x="688" y="88" width="308" height="280" rx="13" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="708" y="118" font-size="13" font-weight="700" fill="#c62828">太细</text>
+      <text x="708" y="140" font-size="10.5" fill="#b71c1c">订单查询 / 创建 / 关闭各一个</text>
+      <g>
+        <rect x="708" y="156" width="74" height="44" rx="8" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="745" y="183" font-size="10.5" fill="#c62828" text-anchor="middle">查</text>
+        <rect x="793" y="156" width="74" height="44" rx="8" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="830" y="183" font-size="10.5" fill="#c62828" text-anchor="middle">建</text>
+        <rect x="878" y="156" width="74" height="44" rx="8" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="915" y="183" font-size="10.5" fill="#c62828" text-anchor="middle">关</text>
+      </g>
+      <g stroke="#ff3b30" stroke-width="1.5" fill="none">
+        <path d="M784,178 L790,178"/><path d="M869,178 L875,178"/>
+      </g>
+      <text x="708" y="228" font-size="11" fill="#b71c1c">团队：一个小功能一个组</text>
+      <text x="708" y="254" font-size="11" fill="#b71c1c">需求：动三四个服务，联调排期</text>
+      <text x="708" y="280" font-size="11" fill="#b71c1c">症状：A→B→C→D，链路一长就超时</text>
+      <text x="708" y="316" font-size="10.5" fill="#c62828">本质：停机的乘法效应</text>
+      <text x="708" y="340" font-size="10.5" fill="#c62828">可用性 = 各服务可用性相乘</text>
+
+      <rect x="44" y="384" width="952" height="50" rx="10" fill="#f2f2f7"/>
+      <text x="64" y="405" font-size="11.5" fill="#1d1d1f">Fowler 的合并判据：如果你发现自己总是一起改两个服务，那就是该把它们合并的信号。</text>
+      <text x="64" y="425" font-size="11" fill="#0a58ca">SRP：一个服务只有一个改变的理由　·　CCP：因为同一原因改的东西放一起</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>重点看中栏和右栏的第三行：中栏「大多只动一个服务」，右栏「动三四个服务」。判断服务大小别数代码行数，翻一下最近半年的提交记录——两个服务是否总在同一批需求里一起改。</div>
+</div>
+
+<!-- 4 限界上下文 -->
+<div class="card" id="m4">
+  <div class="card-head">
+    <h2><span class="num">4</span>第三刀：边界画在哪——同一个「商品」不是一个意思 <span class="tag">DDD</span></h2>
+    <p>大系统做领域模型的完全统一，既不可行也不划算。DDD 的做法是划成一个个限界上下文：每个范围内术语自洽，跨出去做映射，而不是硬共用一张表。</p>
+  </div>
+  <svg viewBox="0 0 1040 470" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">四个部门都叫「商品」，但没有一个说的是全部</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">硬合成一张「全字段商品表」，结果就是每个组都加字段，谁都不敢改</text>
+
+      <rect x="44" y="90" width="464" height="150" rx="12" fill="#eef4ff" stroke="#9cc3ff"/>
+      <circle cx="70" cy="118" r="12" fill="#007aff"/>
+      <text x="70" y="122" font-size="11" fill="#ffffff" text-anchor="middle">A</text>
+      <text x="92" y="123" font-size="13" font-weight="700" fill="#0a58ca">商品中心 · 商品 = 上架档案</text>
+      <text x="68" y="152" font-size="11" fill="#3a4a63">关心：名称、图片、规格、上下架状态</text>
+      <text x="68" y="176" font-size="11" fill="#3a4a63">问题：改名之后，历史订单显示什么？</text>
+      <text x="68" y="208" font-size="10.5" fill="#0a58ca">答：订单里存的是下单那一刻的快照</text>
+      <text x="68" y="228" font-size="10.5" fill="#6e6e73">这里的「商品」只管档案，不管成交</text>
+
+      <rect x="532" y="90" width="464" height="150" rx="12" fill="#fff6e8" stroke="#f5cf8f"/>
+      <circle cx="558" cy="118" r="12" fill="#ff9500"/>
+      <text x="558" y="122" font-size="11" fill="#ffffff" text-anchor="middle">B</text>
+      <text x="580" y="123" font-size="13" font-weight="700" fill="#a05a00">订单 · 商品 = 当时的成交快照</text>
+      <text x="556" y="152" font-size="11" fill="#8a5200">关心：当时的价格、当时的名称、数量</text>
+      <text x="556" y="176" font-size="11" fill="#8a5200">要求：商品后来改价，不许改历史订单</text>
+      <text x="556" y="208" font-size="10.5" fill="#a05a00">答：快照是「当时的事实」，不是冗余</text>
+      <text x="556" y="228" font-size="10.5" fill="#6e6e73">这里的「商品」只管成交，不管仓库</text>
+
+      <rect x="44" y="258" width="464" height="150" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <circle cx="70" cy="286" r="12" fill="#34c759"/>
+      <text x="70" y="290" font-size="11" fill="#ffffff" text-anchor="middle">C</text>
+      <text x="92" y="291" font-size="13" font-weight="700" fill="#1d7a45">库存 · 商品 = 仓库里可卖的东西</text>
+      <text x="68" y="320" font-size="11" fill="#1d7a45">关心：SKU、批次、库位、可售数量</text>
+      <text x="68" y="344" font-size="11" fill="#1d7a45">问题：货架上那件和档案里那件，是同一个吗？</text>
+      <text x="68" y="376" font-size="10.5" fill="#1d7a45">答：关联 SKU，但库存自己管批次与库位</text>
+      <text x="68" y="396" font-size="10.5" fill="#6e6e73">这里的「商品」只管有多少、在哪</text>
+
+      <rect x="532" y="258" width="464" height="150" rx="12" fill="#f7f0ff" stroke="#d3b8f5"/>
+      <circle cx="558" cy="286" r="12" fill="#5856d6"/>
+      <text x="558" y="290" font-size="11" fill="#ffffff" text-anchor="middle">D</text>
+      <text x="580" y="291" font-size="13" font-weight="700" fill="#5b3a9e">配送 · 商品 = 包裹里的实物</text>
+      <text x="556" y="320" font-size="11" fill="#5b3a9e">关心：重量、易碎标记、拣货位置</text>
+      <text x="556" y="344" font-size="11" fill="#5b3a9e">问题：客户买的「商品名」对配送没用</text>
+      <text x="556" y="376" font-size="10.5" fill="#5b3a9e">答：按 SKU 找到货，按库位拣出来</text>
+      <text x="556" y="396" font-size="10.5" fill="#6e6e73">这里的「商品」只管搬哪一个</text>
+
+      <rect x="44" y="424" width="952" height="36" rx="10" fill="#f2f2f7"/>
+      <text x="64" y="448" font-size="11.5" fill="#1d1d1f">判断信号：当一个词在不同部门嘴里意思不一样，那儿大概率就是一条缝。Fowler 的经典例子是电力公司的「meter」。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>逐框读第三行的问题，四个问题各自只属于一个部门。特别注意 B 框：订单里的商品是下单那一刻的快照，商品改价不能改历史订单——这不是冗余，是「当时的事实」。这是限界上下文最直观的价值。</div>
+</div>
+
+<!-- 5 数据私有 -->
+<div class="card" id="m5">
+  <div class="card-head">
+    <h2><span class="num">5</span>第四刀：数据必须跟服务走 <span class="tag">验证</span></h2>
+    <p>每个服务的数据私有，只能通过它自己的 API 访问。这是判断真假微服务最容易验证的一条。代价是跨服务事务和跨库查询都要另想办法。</p>
+  </div>
+  <svg viewBox="0 0 1040 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="m5red" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#ff3b30"/></marker>
+      <marker id="m5green" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#34c759"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">服务可以共用一台数据库服务器，但不能共用一张表</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">同一台 MySQL 上给每个服务独立 schema，也是合格做法</text>
+
+      <rect x="44" y="90" width="464" height="252" rx="13" fill="#fff5f5" stroke="#ffc9c9"/>
+      <text x="68" y="120" font-size="13" font-weight="700" fill="#c62828">共享数据库（反模式）</text>
+      <text x="68" y="142" font-size="10.5" fill="#b71c1c">四个服务直连同一张表</text>
+      <g>
+        <rect x="68" y="158" width="94" height="28" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="115" y="177" font-size="10.5" fill="#c62828" text-anchor="middle">商品服务</text>
+        <rect x="178" y="158" width="94" height="28" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="225" y="177" font-size="10.5" fill="#c62828" text-anchor="middle">订单服务</text>
+        <rect x="288" y="158" width="94" height="28" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="335" y="177" font-size="10.5" fill="#c62828" text-anchor="middle">库存服务</text>
+        <rect x="398" y="158" width="94" height="28" rx="7" fill="#ffffff" stroke="#f7c1c1"/>
+        <text x="445" y="177" font-size="10.5" fill="#c62828" text-anchor="middle">配送服务</text>
+      </g>
+      <g stroke="#ff3b30" stroke-width="1.4" fill="none" marker-end="url(#m5red)">
+        <path d="M115,188 L250,234"/><path d="M225,188 L262,234"/><path d="M335,188 L272,234"/><path d="M445,188 L284,234"/>
+      </g>
+      <rect x="148" y="236" width="256" height="34" rx="8" fill="#ffffff" stroke="#ff3b30" stroke-width="2"/>
+      <text x="276" y="258" font-size="11.5" font-weight="700" fill="#c62828" text-anchor="middle">共用的大表 t_product</text>
+      <text x="68" y="296" font-size="11" fill="#b71c1c">改一个字段，四个服务全受影响</text>
+      <text x="68" y="322" font-size="11" fill="#b71c1c">服务名是微服务，耦合还是单体</text>
+
+      <rect x="532" y="90" width="464" height="252" rx="13" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="556" y="120" font-size="13" font-weight="700" fill="#1d7a45">Database per service（正解）</text>
+      <text x="556" y="142" font-size="10.5" fill="#1d7a45">每个服务的数据私有，只走自己的 API</text>
+      <g>
+        <rect x="556" y="158" width="94" height="28" rx="7" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="603" y="177" font-size="10.5" fill="#1d7a45" text-anchor="middle">商品服务</text>
+        <rect x="666" y="158" width="94" height="28" rx="7" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="713" y="177" font-size="10.5" fill="#1d7a45" text-anchor="middle">订单服务</text>
+        <rect x="776" y="158" width="94" height="28" rx="7" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="823" y="177" font-size="10.5" fill="#1d7a45" text-anchor="middle">库存服务</text>
+        <rect x="886" y="158" width="94" height="28" rx="7" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="933" y="177" font-size="10.5" fill="#1d7a45" text-anchor="middle">配送服务</text>
+      </g>
+      <g stroke="#34c759" stroke-width="1.4" fill="none" marker-end="url(#m5green)">
+        <path d="M603,188 L603,232"/><path d="M713,188 L713,232"/><path d="M823,188 L823,232"/><path d="M933,188 L933,232"/>
+      </g>
+      <g>
+        <rect x="556" y="236" width="94" height="34" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="603" y="258" font-size="10.5" fill="#1d7a45" text-anchor="middle">商品 schema</text>
+        <rect x="666" y="236" width="94" height="34" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="713" y="258" font-size="10.5" fill="#1d7a45" text-anchor="middle">订单 schema</text>
+        <rect x="776" y="236" width="94" height="34" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="823" y="258" font-size="10.5" fill="#1d7a45" text-anchor="middle">库存 schema</text>
+        <rect x="886" y="236" width="94" height="34" rx="8" fill="#ffffff" stroke="#a9e5bb"/>
+        <text x="933" y="258" font-size="10.5" fill="#1d7a45" text-anchor="middle">配送 schema</text>
+      </g>
+      <text x="556" y="296" font-size="11" fill="#1d7a45">改一张表，只影响一个服务</text>
+      <text x="556" y="322" font-size="11" fill="#1d7a45">别的服务想拿数据，只能调 API</text>
+
+      <text x="44" y="374" font-size="12" font-weight="700" fill="#5856d6">这一刀要付的代价，拆之前先认</text>
+      <rect x="44" y="388" width="308" height="88" rx="11" fill="#fff6e8" stroke="#f5cf8f"/>
+      <text x="64" y="413" font-size="12" font-weight="700" fill="#a05a00">跨服务事务</text>
+      <text x="64" y="436" font-size="10.5" fill="#8a5200">下单同时扣库存，一个事务搞不定</text>
+      <text x="64" y="458" font-size="10.5" fill="#a05a00">→ 用 Saga + 补偿，接受最终一致</text>
+      <rect x="366" y="388" width="308" height="88" rx="11" fill="#eef4ff" stroke="#9cc3ff"/>
+      <text x="386" y="413" font-size="12" font-weight="700" fill="#0a58ca">跨库查询</text>
+      <text x="386" y="436" font-size="10.5" fill="#0a58ca">客户 + 订单 JOIN 不了一起</text>
+      <text x="386" y="458" font-size="10.5" fill="#0a58ca">→ API 组合，或 CQRS 查询视图</text>
+      <rect x="688" y="388" width="308" height="88" rx="11" fill="#f2f2f7" stroke="#d1d1d6"/>
+      <text x="708" y="413" font-size="12" font-weight="700" fill="#48484a">多库运维</text>
+      <text x="708" y="436" font-size="10.5" fill="#48484a">SQL 与 NoSQL 各管各的</text>
+      <text x="708" y="458" font-size="10.5" fill="#6e6e73">→ 备份、监控、权限都要跟上</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左边四根红线都指向同一张大表，右边四根绿线分别指向四个 schema。注意「共用服务器」不等于「共用数据库」——同一台 MySQL 上做 schema 隔离是合格做法。真正要防的是绕过 API 直连别人的表。</div>
+</div>
+
+<!-- 6 绞杀者模式 -->
+<div class="card" id="m6">
+  <div class="card-head">
+    <h2><span class="num">6</span>落地：别停机重写，用绞杀者模式逐步换 <span class="tag">演进</span></h2>
+    <p>「照原样重写一次切过去」大多数时候会烧得一塌糊涂：用户等不了、旧行为搞不清。绞杀者做法是让新功能长在旧系统外面，一块块搬，最后旧系统只剩空壳。</p>
+  </div>
+  <svg viewBox="0 0 1040 520" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="m6a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5856d6"/></marker>
+    </defs>
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="42" font-size="14" font-weight="700" fill="#1d1d1f">五步走：旧单体慢慢变小，新服务慢慢长大</text>
+      <text x="44" y="64" font-size="11.5" fill="#6e6e73">榕树在宿主树杈上发芽，扎根见光后自给自足，最后宿主退场</text>
+
+      <g>
+        <rect x="44" y="92" width="180" height="196" rx="11" fill="#eef4ff" stroke="#9cc3ff"/>
+        <circle cx="66" cy="118" r="12" fill="#007aff"/>
+        <text x="66" y="122" font-size="11" fill="#ffffff" text-anchor="middle">1</text>
+        <text x="62" y="150" font-size="12" font-weight="700" fill="#0a58ca">加统一入口</text>
+        <text x="62" y="174" font-size="10.5" fill="#3a4a63">API 网关挡在前面</text>
+        <text x="62" y="194" font-size="10.5" fill="#3a4a63">后面还是旧单体</text>
+        <text x="62" y="214" font-size="10.5" fill="#3a4a63">用户完全无感</text>
+        <rect x="62" y="234" width="70" height="34" rx="7" fill="#ffffff" stroke="#9cc3ff"/>
+        <text x="97" y="256" font-size="10.5" fill="#0a58ca" text-anchor="middle">网关</text>
+        <rect x="140" y="234" width="64" height="34" rx="7" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="172" y="256" font-size="10.5" fill="#6e6e73" text-anchor="middle">旧单体</text>
+
+        <rect x="236" y="92" width="180" height="196" rx="11" fill="#eef4ff" stroke="#9cc3ff"/>
+        <circle cx="258" cy="118" r="12" fill="#007aff"/>
+        <text x="258" y="122" font-size="11" fill="#ffffff" text-anchor="middle">2</text>
+        <text x="254" y="150" font-size="12" font-weight="700" fill="#0a58ca">新功能长外面</text>
+        <text x="254" y="174" font-size="10.5" fill="#3a4a63">「到货通知」不写进</text>
+        <text x="254" y="194" font-size="10.5" fill="#3a4a63">老单体，直接建新服务</text>
+        <text x="254" y="214" font-size="10.5" fill="#3a4a63">代码分离，逻辑独立</text>
+        <rect x="254" y="234" width="64" height="34" rx="7" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="286" y="256" font-size="10.5" fill="#6e6e73" text-anchor="middle">旧单体</text>
+        <rect x="326" y="234" width="70" height="34" rx="7" fill="#e8fbe9" stroke="#a9e5bb"/>
+        <text x="361" y="256" font-size="10.5" fill="#1d7a45" text-anchor="middle">新服务</text>
+
+        <rect x="428" y="92" width="180" height="196" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+        <circle cx="450" cy="118" r="12" fill="#34c759"/>
+        <text x="450" y="122" font-size="11" fill="#ffffff" text-anchor="middle">3</text>
+        <text x="446" y="150" font-size="12" font-weight="700" fill="#1d7a45">先搬边缘业务</text>
+        <text x="446" y="174" font-size="10.5" fill="#1d7a45">选变更频繁、读多写少</text>
+        <text x="446" y="194" font-size="10.5" fill="#1d7a45">边界本来清楚的那块</text>
+        <text x="446" y="214" font-size="10.5" fill="#1d7a45">例：库存查询先出来</text>
+        <rect x="446" y="234" width="64" height="34" rx="7" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="478" y="256" font-size="10.5" fill="#6e6e73" text-anchor="middle">旧单体</text>
+        <rect x="518" y="234" width="70" height="34" rx="7" fill="#e8fbe9" stroke="#2f9e57"/>
+        <text x="553" y="256" font-size="10.5" fill="#1d7a45" text-anchor="middle">库存服务</text>
+
+        <rect x="620" y="92" width="180" height="196" rx="11" fill="#f2fff5" stroke="#a9e5bb"/>
+        <circle cx="642" cy="118" r="12" fill="#34c759"/>
+        <text x="642" y="122" font-size="11" fill="#ffffff" text-anchor="middle">4</text>
+        <text x="638" y="150" font-size="12" font-weight="700" fill="#1d7a45">搬一块，切一块</text>
+        <text x="638" y="174" font-size="10.5" fill="#1d7a45">逐步切流验证</text>
+        <text x="638" y="194" font-size="10.5" fill="#1d7a45">新旧共存需要过渡层</text>
+        <text x="638" y="214" font-size="10.5" fill="#1d7a45">用完就删，别嫌浪费</text>
+        <rect x="638" y="234" width="64" height="34" rx="7" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="670" y="256" font-size="10.5" fill="#6e6e73" text-anchor="middle">旧单体</text>
+        <rect x="710" y="234" width="70" height="34" rx="7" fill="#e8fbe9" stroke="#2f9e57"/>
+        <text x="745" y="256" font-size="10.5" fill="#1d7a45" text-anchor="middle">多个服务</text>
+
+        <rect x="812" y="92" width="184" height="196" rx="11" fill="#f7f0ff" stroke="#d3b8f5"/>
+        <circle cx="834" cy="118" r="12" fill="#5856d6"/>
+        <text x="834" y="122" font-size="11" fill="#ffffff" text-anchor="middle">5</text>
+        <text x="830" y="150" font-size="12" font-weight="700" fill="#5b3a9e">旧壳下线</text>
+        <text x="830" y="174" font-size="10.5" fill="#5b3a9e">搬到最后，旧单体</text>
+        <text x="830" y="194" font-size="10.5" fill="#5b3a9e">只剩一个空壳</text>
+        <text x="830" y="214" font-size="10.5" fill="#5b3a9e">这时才敢停掉它</text>
+        <rect x="830" y="234" width="60" height="34" rx="7" fill="#f2f2f7" stroke="#d1d1d6"/>
+        <text x="860" y="256" font-size="10.5" fill="#8e8e93" text-anchor="middle">空壳</text>
+        <rect x="898" y="234" width="78" height="34" rx="7" fill="#e8fbe9" stroke="#d3b8f5"/>
+        <text x="937" y="256" font-size="10.5" fill="#5b3a9e" text-anchor="middle">全部新服务</text>
+      </g>
+      <g stroke="#5856d6" stroke-width="1.5" fill="none" marker-end="url(#m6a)">
+        <path d="M226,190 L232,190"/><path d="M418,190 L424,190"/><path d="M610,190 L616,190"/><path d="M802,190 L808,190"/>
+      </g>
+
+      <rect x="44" y="308" width="952" height="86" rx="11" fill="#f2f2f7"/>
+      <text x="64" y="334" font-size="12" font-weight="700" fill="#1d1d1f">Fowler 引 Ian Cartwright 等：渐进式现代化要同时推进四件事</text>
+      <text x="64" y="358" font-size="11" fill="#3a3a3c">① 想清楚要的结果　② 决定怎么拆成小块　③ 把小块交付出去　④ 调整组织让这件事持续</text>
+      <text x="64" y="382" font-size="10.5" fill="#6e6e73">顺序不表示先后。组织和文化不变，新系统最后也会长成老系统那副样子。</text>
+
+      <rect x="44" y="412" width="952" height="88" rx="11" fill="#fff6e8" stroke="#f5cf8f"/>
+      <text x="64" y="438" font-size="12" font-weight="700" fill="#a05a00">什么时候别拆：微服务是用分布式复杂度换组织自治</text>
+      <text x="64" y="462" font-size="11" fill="#8a5200">团队三五人、业务边界没稳、没有 CI/CD 与链路追踪、强事务为主、说不清拆完省了什么 → 先把单体模块化</text>
+      <text x="64" y="484" font-size="10.5" fill="#a05a00">Fowler：可以先从单体开始，保持模块化，等单体真成了问题再拆。</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>看每张卡片最下面那一组小方块：旧单体（灰）从满格变成空壳，新服务（绿）从无到有。第 4 步的「过渡层」常被嫌浪费，但它换来的低风险和更早收益，通常比成本高。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>

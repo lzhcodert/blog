@@ -1,5 +1,25 @@
 [
   {
+    "title": "微服务到底怎么拆？别按功能切，按「谁改它」切",
+    "date": "2026-11-27",
+    "category": "架构",
+    "summary": "拆微服务最难的不是写代码，是下刀。按技术层切会拆出分布式单体，按业务能力切才可能真正自治。用一家网上超市讲清楚四刀怎么下：切什么、切多大、边界在哪、数据怎么分，再补上落地顺序和七个常见坑。",
+    "tags": [
+      "架构",
+      "微服务",
+      "服务拆分",
+      "限界上下文",
+      "DDD",
+      "绞杀者模式"
+    ],
+    "readingMinutes": 29,
+    "url": "posts/2026-11-27-14.html",
+    "embeds": [
+      "embed/microservice-decomposition.html"
+    ],
+    "body": "「我们系统拆成微服务了吗？」\n\n拆了，拆了二十多个。结果改一条「满减规则」，要动商品、订单、促销、结算四个服务，拉四个组开会，上线还得一起排期。\n\n这不是微服务，这是把单体切碎了，然后把复杂度从代码里挪到了会议桌上。Martin Fowler 对这种结果有个很准的说法：\n\n If the components do not compose cleanly, then all you are doing is shifting complexity from inside a component to the connections between components.\n 如果组件之间不能干净地组合，那你做的只是把复杂度从组件内部搬到了组件之间的连接上。\n\n所以拆分的核心问题不是「切成几个」，而是「沿什么缝切」。缝找对了，各管一摊、各自发布；缝找错了，天天跨团队协调，比不拆还累。\n\n这篇文章用一家网上超市贯穿到底，讲清楚四件事：切什么、切多大、边界画在哪、数据怎么分。最后给落地顺序和一张检查表。图在文末，六张，可放大看。\n\n 先记住一句话：按业务能力切，别按技术层切\n\n大部分拆错，都错在第一刀。\n\n管理者拿到一个大系统，最直觉的切法是按技术层：前端组、后端组、数据库组。Fowler 在 2014 年那篇经典文章里专门点了这个坑：\n\n When looking to split a large application into parts, often management focuses on the technology layer, leading to UI teams, server-side logic teams, and database teams.\n The microservice approach to division is different, splitting up into services organized around business capability.\n\n微服务做法是按业务能力（business capability）切。一个服务覆盖这个业务领域的全栈：界面、存储、外部协作都归它，团队也得是跨职能的——有懂业务的、懂数据库的、懂用户体验的。\n\n拿网上超市对照：\n\n| 加一个「到货通知」需求 | 按技术层切（错） | 按业务能力切（对） |\n|---|---|---|\n| 要改什么 | 前端组改展示、后端组改接口、DBA 改表 | 库存组从页面到库表自己做完 |\n| 要协调谁 | 三个组排期，谁先谁后 | 库存组一个组 |\n| 出问题找谁 | 先定位是哪一层 | 直接找库存组 |\n\n差别不在服务数量，而在一次需求通常只惊动一个组。microservices.io 把这个写成硬指标：\n\n The application also be decomposed in a way so that most new and changed requirements only affect a single service. That is because changes that affect multiple services requires coordination across multiple teams, which slows down development.\n\n这也解释了为什么康威定律（Conway's Law）在微服务里被反复提起：\n\n Any organization that designs a system will produce a design whose structure is a copy of the organization's communication structure.\n 设计系统的组织，最终会造出和组织沟通结构同构的系统。\n\n你按技术层分团队，就别指望长出按业务能力划分的服务。组织不变，图怎么画都白搭。图 1 把两种切法放在了一起。\n\n 第一刀：找「业务能力」，不是找「功能」\n\n那业务能力到底是什么？microservices.io 的定义很朴素：\n\n A business capability is a concept from business architecture modeling. It is something that a business does in order to generate value.\n 业务能力是企业为了创造价值而做的事。\n\n注意是「企业做的事」，不是「系统有的功能」。它常常对应一个业务对象：订单管理负责订单，客户管理负责客户。在线商店的例子里，业务能力是商品目录管理、库存管理、订单管理、配送管理。\n\n怎"
+  },
+  {
     "title": "数据库三范式：一张订单表讲透 1NF/2NF/3NF，以及什么时候该故意冗余",
     "date": "2026-11-27",
     "category": "数据库",
@@ -74,7 +94,7 @@
       "布隆过滤器]"
     ],
     "readingMinutes": 21,
-    "url": "posts/2026-11-27-14.html",
+    "url": "posts/2026-11-27-15.html",
     "embeds": [
       "embed/cache-accidents.html"
     ],
@@ -93,7 +113,7 @@
       "流量治理]"
     ],
     "readingMinutes": 31,
-    "url": "posts/2026-11-27-15.html",
+    "url": "posts/2026-11-27-16.html",
     "embeds": [
       "embed/gateway-explained.html"
     ],
@@ -113,7 +133,7 @@
       "TOGAF"
     ],
     "readingMinutes": 13,
-    "url": "posts/2026-11-27-16.html",
+    "url": "posts/2026-11-27-17.html",
     "embeds": [
       "embed/architecture-types.html"
     ],
