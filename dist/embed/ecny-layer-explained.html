@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>数字人民币系统算哪一层 · 五张图讲明白</title>
+<style>
+  :root{--blue:#007aff;--purple:#5856d6;--green:#34c759;--orange:#ff9500;--red:#ff3b30;--ink:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--bg:#f5f5f7}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;padding:22px 18px 44px}
+  .hero{background:linear-gradient(135deg,#1d3f8f,#4a6cf7 55%,#5856d6);color:#fff;border-radius:18px;padding:24px 26px;box-shadow:0 10px 30px rgba(40,60,160,.24)}
+  .hero h1{margin:0 0 8px;font-size:24px;letter-spacing:-.4px}
+  .hero p{margin:0;font-size:13px;line-height:1.65;opacity:.95}
+  .hint{margin:14px 2px 20px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .hint b{color:var(--blue);font-weight:600}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 22px}
+  .nav a{font-size:12px;text-decoration:none;color:var(--purple);background:#fff;border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+  .nav a:hover{background:#efeff4}
+  .card{background:#fff;border-radius:16px;margin:0 0 20px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+  .card-head{padding:15px 18px 12px;border-bottom:.5px solid var(--line)}
+  .card-head h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;background:var(--purple);color:#fff;font-size:12px;font-weight:700;flex:none}
+  .card-head p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .tag{display:inline-block;font-size:11px;color:var(--purple);background:#efefff;padding:2px 8px;border-radius:6px;font-weight:500}
+  .foot{padding:10px 18px 14px;font-size:12px;color:var(--muted);border-top:.5px solid var(--line);line-height:1.65}
+  .foot b{color:var(--ink)}
+  .pz-viewport{position:relative;overflow:hidden;border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport>svg{display:block;width:100%;height:auto;transform-origin:0 0;cursor:grab;touch-action:none;user-select:none}
+  .pz-viewport.zooming{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18),inset 0 1px 3px rgba(15,23,42,.05)}
+  .pz-viewport.zooming>svg{cursor:zoom-in}
+  .pz-viewport.zooming.dragging>svg,.pz-viewport.dragging>svg{cursor:grabbing}
+  .pz-toolbar{position:absolute;right:12px;top:12px;display:flex;gap:6px;z-index:5}
+  .pz-toolbar button{width:32px;height:32px;border:1px solid #cbd5e1;background:rgba(255,255,255,.94);border-radius:8px;font-size:16px;line-height:1;color:#334155;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,.08)}
+  .pz-toolbar button:hover{background:#f1f5f9}
+  @media(max-width:600px){.pz-toolbar{right:8px;top:8px}.pz-toolbar button{width:28px;height:28px}}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>数字人民币系统到底算哪一层</h1>
+  <p>归外围层，入口在渠道，记账落核心。用五张图把这句话拆开：它不是核心，也不只是渠道。</p>
+</div>
+<div class="hint"><span><b>单击图</b> 进入缩放</span><span><b>滚轮 / 双指</b> 缩放</span><span><b>拖拽</b> 平移</span><span><b>双击</b> 复位</span></div>
+<div class="nav">
+  <a href="#e1">三层定位</a><a href="#e2">充钱包穿三层</a><a href="#e3">系统四层</a><a href="#e4">1.0 与 2.0</a><a href="#e5">两类机构</a>
+</div>
+
+<!-- 1 三层定位 -->
+<div class="card" id="e1">
+  <div class="card-head">
+    <h2><span class="num">1</span>定位：它站在外围层 <span class="tag">总览</span></h2>
+    <p>渠道开个门，数币系统管流程，核心记总账。三个问题就能自己定位。</p>
+  </div>
+  <svg viewBox="0 0 1040 580" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">数字人民币在银行三层版图里的位置</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">它不是一个系统归一层，而是一条链路穿三层</text>
+
+      <rect x="44" y="88" width="292" height="180" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="64" y="118" font-size="13" font-weight="700" fill="#0a58ca">渠道层 · 只受理</text>
+      <text x="64" y="146" font-size="11" fill="#48484a">手机银行 / 企业网银 / 柜面</text>
+      <text x="64" y="169" font-size="11" fill="#48484a">ATM / 收单扫码 / 小程序</text>
+      <text x="64" y="192" font-size="11" fill="#48484a">只收件、只展示结果</text>
+      <text x="64" y="228" font-size="10.5" font-weight="700" fill="#0a58ca">数币在这里只是一个入口</text>
+      <text x="64" y="250" font-size="10" fill="#6e6e73">点完按钮就等结果</text>
+
+      <rect x="374" y="88" width="292" height="180" rx="12" fill="#f3f0ff" stroke="#8f8ae8" stroke-width="2"/>
+      <text x="394" y="118" font-size="13" font-weight="700" fill="#4b3fa8">外围层 · 算业务</text>
+      <text x="394" y="146" font-size="11" fill="#48484a">数字人民币系统就在这一层</text>
+      <text x="394" y="169" font-size="11" fill="#48484a">钱包生命周期 + 支付交易</text>
+      <text x="394" y="192" font-size="11" fill="#48484a">智能合约 + 差错对账</text>
+      <text x="394" y="228" font-size="10.5" font-weight="700" fill="#4b3fa8">管业务规则，不改总账</text>
+      <text x="394" y="250" font-size="10" fill="#6e6e73">和信贷、理财、风控同一类</text>
+
+      <rect x="704" y="88" width="292" height="180" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="724" y="118" font-size="13" font-weight="700" fill="#c62828">核心层 · 记账</text>
+      <text x="724" y="146" font-size="11" fill="#48484a">钱包余额的会计科目</text>
+      <text x="724" y="169" font-size="11" fill="#48484a">计息、准备金、存款保险</text>
+      <text x="724" y="192" font-size="11" fill="#48484a">总账过账与报表</text>
+      <text x="724" y="228" font-size="10.5" font-weight="700" fill="#c62828">只在兑出兑回时被调用</text>
+      <text x="724" y="250" font-size="10" fill="#6e6e73">不认界面，只认科目</text>
+
+      <path d="M336,178 L370,178" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e1a)"/>
+      <path d="M666,178 L700,178" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e1a)"/>
+
+      <text x="44" y="306" font-size="13" font-weight="700" fill="#1d1d1f">三问定位法：拿一笔交易自己试</text>
+
+      <rect x="44" y="322" width="292" height="110" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="64" y="350" font-size="12.5" font-weight="700" fill="#1d1d1f">客户点的是谁？</text>
+      <text x="64" y="376" font-size="11" fill="#0a58ca">手机银行 → 渠道层</text>
+      <text x="64" y="400" font-size="10" fill="#6e6e73">这是「入口」问题</text>
+
+      <rect x="374" y="322" width="292" height="110" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="394" y="350" font-size="12.5" font-weight="700" fill="#1d1d1f">谁判断能不能办？</text>
+      <text x="394" y="376" font-size="11" fill="#4b3fa8">数币系统 → 外围层</text>
+      <text x="394" y="400" font-size="10" fill="#6e6e73">这是「规则」问题</text>
+
+      <rect x="704" y="322" width="292" height="110" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="724" y="350" font-size="12.5" font-weight="700" fill="#1d1d1f">谁改余额出总账？</text>
+      <text x="724" y="376" font-size="11" fill="#c62828">核心 → 核心层</text>
+      <text x="724" y="400" font-size="10" fill="#6e6e73">这是「记账」问题</text>
+
+      <rect x="44" y="456" width="952" height="76" rx="12" fill="#1d1d1f"/>
+      <text x="64" y="486" font-size="13.5" font-weight="700" fill="#7dd3fc">户在数币 · 账在核心 · 口在渠道</text>
+      <text x="64" y="512" font-size="11" fill="#d1d5db">所以问「它属于哪层」，正确答案是：主体在外围，两端各伸一截</text>
+
+      <defs><marker id="e1a" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>横着看是三张卡——左边渠道只收件，中间外围管规则，右边核心认账。中间那张卡边框加粗，就是数币系统的真实位置。箭头表示它只和左右两邻打交道：往左收请求，往右调记账。下半部分的三问是个自测工具，一笔「充钱包」问下来，三个答案正好落在三层，这就是它无法被塞进单一层的原因。最下面黑条是全篇的落点。</div>
+</div>
+
+<!-- 2 充钱包穿三层 -->
+<div class="card" id="e2">
+  <div class="card-head">
+    <h2><span class="num">2</span>一笔「充钱包 500 元」怎么穿三层 <span class="tag">流程</span></h2>
+    <p>七步走完，你会看到最难的那一刀在第四步和第五步之间。</p>
+  </div>
+  <svg viewBox="0 0 1040 660" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">充钱包：从点击到落账的七步</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">蓝色＝渠道层　紫色＝外围层　红色＝核心层</text>
+
+      <rect x="44" y="88" width="214" height="104" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="60" y="116" font-size="12" font-weight="700" fill="#0a58ca">① 点「充钱包 500」</text>
+      <text x="60" y="142" font-size="10.5" fill="#48484a">客户在手机银行操作</text>
+      <text x="60" y="165" font-size="10" fill="#6e6e73">渠道层 · 只发请求</text>
+
+      <rect x="282" y="88" width="214" height="104" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <text x="298" y="116" font-size="12" font-weight="700" fill="#0a58ca">② 渠道网关校验</text>
+      <text x="298" y="142" font-size="10.5" fill="#48484a">格式、防重放、限流</text>
+      <text x="298" y="165" font-size="10" fill="#6e6e73">渠道层 · 仍不判断业务</text>
+
+      <rect x="520" y="88" width="214" height="104" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="536" y="116" font-size="12" font-weight="700" fill="#4b3fa8">③ 数币系统校验</text>
+      <text x="536" y="142" font-size="10.5" fill="#48484a">钱包状态 / 等级 / 限额</text>
+      <text x="536" y="165" font-size="10" fill="#6e6e73">外围层 · 规则在这里</text>
+
+      <rect x="758" y="88" width="214" height="104" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="774" y="116" font-size="12" font-weight="700" fill="#4b3fa8">④ 调核心扣存款</text>
+      <text x="774" y="142" font-size="10.5" fill="#48484a">扣减绑定的存款账户</text>
+      <text x="774" y="165" font-size="10" fill="#6e6e73">外围 → 核心</text>
+
+      <path d="M258,140 L278,140" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e2a)"/>
+      <path d="M496,140 L516,140" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e2a)"/>
+      <path d="M734,140 L754,140" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e2a)"/>
+      <path d="M865,192 L865,246" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e2a)"/>
+
+      <rect x="758" y="250" width="214" height="104" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="774" y="278" font-size="12" font-weight="700" fill="#c62828">⑤ 核心记分录</text>
+      <text x="774" y="304" font-size="10.5" fill="#48484a">借 活期存款 500</text>
+      <text x="774" y="327" font-size="10.5" fill="#48484a">贷 数字人民币存款 500</text>
+
+      <rect x="520" y="250" width="214" height="104" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="536" y="278" font-size="12" font-weight="700" fill="#4b3fa8">⑥ 加钱包余额</text>
+      <text x="536" y="304" font-size="10.5" fill="#48484a">生成币串、回写状态</text>
+      <text x="536" y="327" font-size="10" fill="#6e6e73">外围层</text>
+
+      <rect x="282" y="250" width="214" height="104" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <text x="298" y="278" font-size="12" font-weight="700" fill="#4b3fa8">⑦ 回执与对账</text>
+      <text x="298" y="304" font-size="10.5" fill="#48484a">给客户结果，落日终流水</text>
+      <text x="298" y="327" font-size="10" fill="#6e6e73">外围层 · 与央行端核</text>
+
+      <path d="M754,302 L738,302" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e2a)"/>
+      <path d="M516,302 L500,302" stroke="#8e8e93" stroke-width="2" fill="none" marker-end="url(#e2a)"/>
+
+      <rect x="44" y="390" width="460" height="110" rx="12" fill="#fff8ec" stroke="#f5d7a1"/>
+      <text x="64" y="418" font-size="12.5" font-weight="700" fill="#a35b00">最难的一刀：④ 和 ⑤ 必须同成同败</text>
+      <text x="64" y="444" font-size="10.5" fill="#48484a">扣存款和加钱包是两个系统、两套库</text>
+      <text x="64" y="466" font-size="10.5" fill="#48484a">只能靠事务消息 + 补偿 + 日终对账兜住</text>
+      <text x="64" y="488" font-size="10" fill="#6e6e73">渠道层干不了这件事，它连状态都存不住</text>
+
+      <rect x="524" y="390" width="218" height="110" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="544" y="418" font-size="12" font-weight="700" fill="#c62828">扣了没加</text>
+      <text x="544" y="444" font-size="10.5" fill="#48484a">客户的钱悬在空中</text>
+      <text x="544" y="466" font-size="10.5" fill="#48484a">投诉、挂账、差错单</text>
+      <text x="544" y="488" font-size="10" fill="#6e6e73">最常见的一类工单</text>
+
+      <rect x="762" y="390" width="218" height="110" rx="12" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="782" y="418" font-size="12" font-weight="700" fill="#c62828">加了没扣</text>
+      <text x="782" y="444" font-size="10.5" fill="#48484a">银行白送出去钱</text>
+      <text x="782" y="466" font-size="10.5" fill="#48484a">账不平，稽核必查</text>
+      <text x="782" y="488" font-size="10" fill="#6e6e73">性质比前一种更严重</text>
+
+      <rect x="44" y="530" width="952" height="90" rx="12" fill="#1d1d1f"/>
+      <text x="64" y="560" font-size="13" font-weight="700" fill="#7dd3fc">所以它扛不了渠道的活：跨系统强一致，必须由业务系统自己兜</text>
+      <text x="64" y="586" font-size="11" fill="#d1d5db">七步里，渠道只出现在 ① 和 ②；真正决定这笔钱成不成的，全发生在 ③ 到 ⑦</text>
+      <text x="64" y="608" font-size="10.5" fill="#9ca3af">这就是「不只是渠道」的证据：规则、事务、对账，都在外围层</text>
+
+      <defs><marker id="e2a" markerWidth="8" markerHeight="8" refX="5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8e8e93"/></marker></defs>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>按 ① 到 ⑦ 顺着箭头读，颜色就是分层——浅蓝是渠道，浅紫是外围，浅红是核心。注意第 ④ 步到第 ⑤ 步：这是唯一一次跨进核心，也是整条链路唯一不能失败的地方。下面三个框解释为什么：左边讲难点，中间讲「扣了没加」，右边讲「加了没扣」，后者的性质更严重。最下面黑条是全图结论——渠道只占前两步，剩下五步都在外围层。</div>
+</div>
+
+<!-- 3 系统四层 -->
+<div class="card" id="e3">
+  <div class="card-head">
+    <h2><span class="num">3</span>数币系统自己长什么样：四层 <span class="tag">内部结构</span></h2>
+    <p>第四层是它自己的账，但这本账最后要并到核心总账里。</p>
+  </div>
+  <svg viewBox="0 0 1040 540" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">数字人民币系统的四层能力</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">从客户看得到的入口，到只有财务看得懂的流水</text>
+
+      <rect x="44" y="90" width="760" height="76" rx="12" fill="#eef6ff" stroke="#a9cdf5"/>
+      <circle cx="76" cy="128" r="13" fill="#0a58ca"/>
+      <text x="76" y="133" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+      <text x="102" y="122" font-size="12.5" font-weight="700" fill="#0a58ca">渠道触达层</text>
+      <text x="102" y="144" font-size="10" fill="#6e6e73">客户在哪里用</text>
+      <text x="240" y="122" font-size="10.5" fill="#48484a">手机银行 / 企业网银 / 柜面 / 自助设备</text>
+      <text x="240" y="144" font-size="10.5" fill="#48484a">收单扫码 / 开放银行 / 小程序</text>
+
+      <rect x="44" y="180" width="760" height="76" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <circle cx="76" cy="218" r="13" fill="#4b3fa8"/>
+      <text x="76" y="223" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+      <text x="102" y="212" font-size="12.5" font-weight="700" fill="#4b3fa8">钱包业务层</text>
+      <text x="102" y="234" font-size="10" fill="#6e6e73">钱包的一生</text>
+      <text x="240" y="212" font-size="10.5" fill="#48484a">开立、升级、绑定、兑出兑回、注销</text>
+      <text x="240" y="234" font-size="10.5" fill="#48484a">四类钱包等级与限额、挂失、冻结、解冻</text>
+
+      <rect x="44" y="270" width="760" height="76" rx="12" fill="#f3f0ff" stroke="#cfc9f5"/>
+      <circle cx="76" cy="308" r="13" fill="#4b3fa8"/>
+      <text x="76" y="313" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+      <text x="102" y="302" font-size="12.5" font-weight="700" fill="#4b3fa8">支付交易层</text>
+      <text x="102" y="324" font-size="10" fill="#6e6e73">一笔怎么成立</text>
+      <text x="240" y="302" font-size="10.5" fill="#48484a">付款、收款、退款、撤销、冲正、超时查询</text>
+      <text x="240" y="324" font-size="10.5" fill="#48484a">重复防控、离线补记、智能合约条件触发</text>
+
+      <rect x="44" y="360" width="760" height="76" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+      <circle cx="76" cy="398" r="13" fill="#c62828"/>
+      <text x="76" y="403" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+      <text x="102" y="392" font-size="12.5" font-weight="700" fill="#c62828">账务清算层</text>
+      <text x="102" y="414" font-size="10" fill="#6e6e73">钱和账怎么平</text>
+      <text x="240" y="392" font-size="10.5" fill="#48484a">钱包流水、账户流水、商户结算、内部户</text>
+      <text x="240" y="414" font-size="10.5" fill="#48484a">差错账、与运营机构对账文件、报表口径</text>
+
+      <rect x="820" y="90" width="176" height="346" rx="12" fill="#f2fff5" stroke="#a9e5bb"/>
+      <text x="840" y="120" font-size="12.5" font-weight="700" fill="#1d7a45">风控与合规</text>
+      <text x="840" y="148" font-size="10.5" fill="#48484a">身份识别</text>
+      <text x="840" y="172" font-size="10.5" fill="#48484a">反欺诈</text>
+      <text x="840" y="196" font-size="10.5" fill="#48484a">反洗钱监测</text>
+      <text x="840" y="220" font-size="10.5" fill="#48484a">商户风险</text>
+      <text x="840" y="244" font-size="10.5" fill="#48484a">黑灰名单</text>
+      <text x="840" y="268" font-size="10.5" fill="#48484a">权限控制</text>
+      <text x="840" y="292" font-size="10.5" fill="#48484a">审计留痕</text>
+      <text x="840" y="330" font-size="10" fill="#1d7a45">贯穿四层</text>
+      <text x="840" y="352" font-size="10" fill="#6e6e73">不是第五层</text>
+      <text x="840" y="372" font-size="10" fill="#6e6e73">是每层都要过的关</text>
+
+      <rect x="44" y="456" width="952" height="64" rx="12" fill="#f2f2f7" stroke="#dcdce1"/>
+      <text x="64" y="482" font-size="12.5" font-weight="700" fill="#1d1d1f">第 ④ 层是数币自己的一本账，但这本账最后要并到核心总账里</text>
+      <text x="64" y="506" font-size="10.5" fill="#6e6e73">两个账本，一本总账——这就是它和核心的真实关系，也是它不能取代核心的原因</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>从上往下四层，正好对应四个问题——客户在哪用、钱包怎么管、一笔怎么成立、钱和账怎么平。颜色由蓝到紫再到红，代表离钱越来越近。右边绿框不是第五层，而是穿在四层身上的一道关。最下面一句话是全图重点：数币有自己的账务层，但它只有「分账」，没有「总账」。</div>
+</div>
+
+<!-- 4 1.0 与 2.0 -->
+<div class="card" id="e4">
+  <div class="card-head">
+    <h2><span class="num">4</span>1.0 到 2.0：它为什么更贴着核心了 <span class="tag">变化</span></h2>
+    <p>2026 年 1 月 1 日起钱包余额成了银行负债，核心必须给它开一个科目。</p>
+  </div>
+  <svg viewBox="0 0 1040 560" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">两个时代的区别：从数字现金到数字存款货币</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">分界线是 2026 年 1 月 1 日——新一代计量框架正式实施</text>
+
+      <rect x="44" y="88" width="440" height="300" rx="14" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="66" y="120" font-size="13" font-weight="700" fill="#6e6e73">1.0 · 数字现金</text>
+      <text x="66" y="142" font-size="10" fill="#8e8e93">2026 年之前</text>
+      <text x="66" y="178" font-size="11" fill="#48484a">钱包余额 = 央行负债的数字化现金</text>
+      <text x="66" y="208" font-size="11" fill="#48484a">不计息</text>
+      <text x="66" y="238" font-size="11" fill="#48484a">与核心松耦合</text>
+      <text x="66" y="268" font-size="11" fill="#48484a">只在兑出兑回时调一下核心</text>
+      <text x="66" y="298" font-size="11" fill="#48484a">架构上停在外围层就够了</text>
+      <text x="66" y="342" font-size="11" font-weight="700" fill="#6e6e73">本质：数字化的现金</text>
+      <text x="66" y="366" font-size="10" fill="#8e8e93">像钱包里的钞票，不是存款</text>
+
+      <rect x="556" y="88" width="440" height="300" rx="14" fill="#fff8ec" stroke="#f5d7a1" stroke-width="2"/>
+      <text x="578" y="120" font-size="13" font-weight="700" fill="#a35b00">2.0 · 数字存款货币</text>
+      <text x="578" y="142" font-size="10" fill="#b98443">2026 年 1 月 1 日起</text>
+      <text x="578" y="178" font-size="11" fill="#48484a">钱包余额 = 商业银行负债，进表内</text>
+      <text x="578" y="208" font-size="11" fill="#48484a">实名钱包按活期挂牌利率计息</text>
+      <text x="578" y="238" font-size="11" fill="#48484a">计入存款准备金交存基数</text>
+      <text x="578" y="268" font-size="11" fill="#48484a">纳入存款保险</text>
+      <text x="578" y="298" font-size="11" fill="#48484a">核心要新增「数字人民币存款」科目</text>
+      <text x="578" y="342" font-size="11" font-weight="700" fill="#a35b00">本质：会生息的数字存款</text>
+      <text x="578" y="366" font-size="10" fill="#b98443">像存款，所以要进资产负债表</text>
+
+      <text x="44" y="420" font-size="13" font-weight="700" fill="#1d1d1f">于是三件事落到了核心头上</text>
+
+      <rect x="44" y="436" width="292" height="100" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="64" y="464" font-size="12" font-weight="700" fill="#c62828">① 科目</text>
+      <text x="64" y="488" font-size="10.5" fill="#48484a">核心新增「数字人民币存款」</text>
+      <text x="64" y="510" font-size="10.5" fill="#48484a">与活期、定期并列</text>
+
+      <rect x="374" y="436" width="292" height="100" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="394" y="464" font-size="12" font-weight="700" fill="#c62828">② 计息</text>
+      <text x="394" y="488" font-size="10.5" fill="#48484a">3/20、6/20、9/20、12/20 结息</text>
+      <text x="394" y="510" font-size="10.5" fill="#48484a">四类钱包不计息</text>
+
+      <rect x="704" y="436" width="292" height="100" rx="12" fill="#fff1f0" stroke="#ffc9c4"/>
+      <text x="724" y="464" font-size="12" font-weight="700" fill="#c62828">③ 口径</text>
+      <text x="724" y="488" font-size="10.5" fill="#48484a">纳入反洗钱监测</text>
+      <text x="724" y="510" font-size="10.5" fill="#48484a">算进资本充足率风险资产</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左边是旧世界，右边是新世界，黄色那边边框加粗表示这是现在的状态。逐行对比五件事：余额归谁、计不计息、跟核心紧不紧、在哪一层。最关键是最后一行——1.0 停在外围就完事，2.0 必须让核心开一个科目。下面三个红框是这三件事落到核心头上的具体形态：科目、计息、口径。</div>
+</div>
+
+<!-- 5 两类机构 -->
+<div class="card" id="e5">
+  <div class="card-head">
+    <h2><span class="num">5</span>要不要建，看你是哪类机构 <span class="tag">决策</span></h2>
+    <p>30 家运营机构三层全动；其他银行只是一次渠道适配。</p>
+  </div>
+  <svg viewBox="0 0 1040 520" xmlns="http://www.w3.org/2000/svg">
+    <g font-family="-apple-system,PingFang SC,sans-serif">
+      <text x="44" y="40" font-size="15" font-weight="700" fill="#1d1d1f">两类机构的改造范围完全不同</text>
+      <text x="44" y="62" font-size="11" fill="#6e6e73">同样是「做数币」，工作量差一个数量级</text>
+
+      <rect x="44" y="88" width="460" height="280" rx="14" fill="#f3f0ff" stroke="#8f8ae8" stroke-width="2"/>
+      <text x="66" y="120" font-size="13" font-weight="700" fill="#4b3fa8">运营机构 · 30 家</text>
+      <text x="66" y="144" font-size="10" fill="#7c74c9">数字人民币业务运营机构</text>
+      <text x="66" y="178" font-size="11" fill="#48484a">6 家国有大行 + 12 家股份行</text>
+      <text x="66" y="204" font-size="11" fill="#48484a">10 家城商行 + 2 家互联网银行</text>
+      <text x="66" y="234" font-size="11" fill="#48484a">直连央行端数字人民币系统</text>
+      <text x="66" y="260" font-size="11" fill="#48484a">有独立钱包发行权、清算权</text>
+      <text x="66" y="286" font-size="11" fill="#48484a">可自主开发智能合约</text>
+      <rect x="66" y="308" width="416" height="42" rx="9" fill="#e8e3ff"/>
+      <text x="80" y="335" font-size="11" font-weight="700" fill="#4b3fa8">三层全动：渠道 + 数币系统 + 核心加科目</text>
+
+      <rect x="536" y="88" width="460" height="280" rx="14" fill="#fafafa" stroke="#dcdce1"/>
+      <text x="558" y="120" font-size="13" font-weight="700" fill="#48484a">受理 / 合作机构</text>
+      <text x="558" y="144" font-size="10" fill="#8e8e93">没有资质，只做服务</text>
+      <text x="558" y="178" font-size="11" fill="#48484a">通过互联互通平台间接接入</text>
+      <text x="558" y="204" font-size="11" fill="#48484a">只能使用标准合约模板</text>
+      <text x="558" y="234" font-size="11" fill="#48484a">没有独立的数币核心</text>
+      <text x="558" y="260" font-size="11" fill="#48484a">改造落在收单平台与渠道适配</text>
+      <text x="558" y="286" font-size="11" fill="#48484a">核心基本不动</text>
+      <rect x="558" y="308" width="416" height="42" rx="9" fill="#f0f0f4"/>
+      <text x="572" y="335" font-size="11" font-weight="700" fill="#48484a">只动一层半：渠道 + 收单</text>
+
+      <rect x="44" y="392" width="952" height="80" rx="12" fill="#1d1d1f"/>
+      <text x="64" y="422" font-size="13" font-weight="700" fill="#7dd3fc">所以「数币算哪层」，对 30 家是三层都要答，对其他银行只是渠道适配</text>
+      <text x="64" y="448" font-size="10.5" fill="#9ca3af">问这个问题之前，先确认自己有没有运营资质——答案会完全不同</text>
+    </g>
+  </svg>
+  <div class="foot"><b>怎么看：</b>左右两个框是两类机构，左边紫色边框加粗。上面三行是身份和家数，中间三行是能力差异，最下面那条色块是改造范围——这才是你真正要关心的。左边写「三层全动」，右边写「只动一层半」。最下面黑条是提醒：先确认资质，再谈分层，否则讨论的压根不是同一件事。</div>
+</div>
+
+<script>
+(function(){
+  var svgs=Array.prototype.slice.call(document.querySelectorAll('svg[viewBox]'));
+  svgs.forEach(function(svg){
+    if(svg.parentElement&&svg.parentElement.classList.contains('pz-viewport'))return;
+    var vp=document.createElement('div');vp.className='pz-viewport';
+    svg.parentNode.insertBefore(vp,svg);vp.appendChild(svg);
+    var bar=document.createElement('div');bar.className='pz-toolbar';
+    var bOut=document.createElement('button');bOut.textContent='\u2212';bOut.title='\u7f29\u5c0f';
+    var bIn=document.createElement('button');bIn.textContent='+';bIn.title='\u653e\u5927';
+    var bReset=document.createElement('button');bReset.textContent='\u21bb';bReset.title='\u590d\u4f4d';
+    bar.appendChild(bOut);bar.appendChild(bIn);bar.appendChild(bReset);
+    vp.appendChild(bar);
+    var scale=1,tx=0,ty=0,dragging=false,lastX=0,lastY=0;
+    var pointers={},pinch=null,zoomMode=false,moved=false,lastType='mouse',downX=0,downY=0;
+    var tf=String.fromCharCode(109,97,116,114,105,120,40);
+    function apply(){svg.style.transform=tf+scale+',0,0,'+scale+','+tx+','+ty+')';}
+    function zoom(f,cx,cy){
+      var r=vp.getBoundingClientRect();
+      if(cx==null){cx=r.left+r.width/2;cy=r.top+r.height/2;}
+      var px=cx-r.left-tx,py=cy-r.top-ty;
+      var n=Math.min(4,Math.max(0.5,scale*f));
+      tx=tx+px-(px/scale)*n;ty=ty+py-(py/scale)*n;scale=n;apply();
+    }
+    function ids(){return Object.keys(pointers);}
+    function pair(){var k=ids();return k.length>=2?[pointers[k[0]],pointers[k[1]]]:null;}
+    function dist2(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+    bIn.addEventListener('click',function(e){e.stopPropagation();zoom(1.2);});
+    bOut.addEventListener('click',function(e){e.stopPropagation();zoom(1/1.2);});
+    bReset.addEventListener('click',function(e){e.stopPropagation();scale=1;tx=0;ty=0;apply();});
+    svg.addEventListener('wheel',function(e){
+      if(!zoomMode)return;
+      e.preventDefault();zoom(e.deltaY<0?1.12:1/1.12,e.clientX,e.clientY);
+    },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      lastType=e.pointerType;downX=e.clientX;downY=e.clientY;moved=false;
+      pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+      try{svg.setPointerCapture(e.pointerId);}catch(x){}
+      if(ids().length===1){dragging=true;lastX=e.clientX;lastY=e.clientY;vp.classList.add('dragging');}
+      else if(ids().length===2){
+        var p=pair();dragging=false;vp.classList.remove('dragging');
+        pinch={d:dist2(p[0],p[1]),x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+      }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!pointers[e.pointerId])return;
+      pointers[e.pointerId].x=e.clientX;pointers[e.pointerId].y=e.clientY;
+      if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4)moved=true;
+      if(ids().length===2&&pinch){
+        var p=pair(),d=dist2(p[0],p[1]);
+        var mx=(p[0].x+p[1].x)/2,my=(p[0].y+p[1].y)/2;
+        if(pinch.d>0&&d>0)zoom(d/pinch.d,pinch.x,pinch.y);
+        tx+=mx-pinch.x;ty+=my-pinch.y;apply();
+        pinch={d:d,x:mx,y:my};
+      }else if(ids().length===1&&dragging){
+        tx+=e.clientX-lastX;ty+=e.clientY-lastY;
+        lastX=e.clientX;lastY=e.clientY;apply();
+      }
+    });
+    function end(e){
+      if(!pointers[e.pointerId])return;
+      delete pointers[e.pointerId];
+      try{svg.releasePointerCapture(e.pointerId);}catch(x){}
+      var k=ids();
+      if(k.length<2)pinch=null;
+      if(k.length===1){dragging=true;lastX=pointers[k[0]].x;lastY=pointers[k[0]].y;vp.classList.add('dragging');}
+      else if(k.length===0){dragging=false;vp.classList.remove('dragging');}
+    }
+    svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(){
+      if(lastType!=='mouse'||moved)return;
+      zoomMode=!zoomMode;vp.classList.toggle('zooming',zoomMode);
+    });
+    svg.addEventListener('dblclick',function(){scale=1;tx=0;ty=0;apply();});
+  });
+})();
+</script>
+</body>
+</html>
