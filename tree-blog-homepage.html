@@ -285,7 +285,13 @@ gGround.appendChild(el('line',{x1:398,y1:458,x2:604,y2:458,stroke:'var(--fg3)','
    间距太小两块叶区会在垂直方向互相咬住。 */
 var CAT_N=activeCats.length;
 var BASE_Y=458, LOWEST_BRANCH_Y=392, BRANCH_GAP=30, TIP_EXTRA=34;
-var TRUNK_TOP_Y=LOWEST_BRANCH_Y-(CAT_N-1)*BRANCH_GAP-TIP_EXTRA;
+/* B 模式：分类超过 8 个时改成二级枝，主枝数只跟"想撑多高的树冠"有关，不跟分类数走 */
+var USE_SUB=CAT_N>8;
+var MAIN_N=USE_SUB?Math.min(10,Math.max(6,Math.ceil(CAT_N/2))):0;
+var SUB_GAP=64, SUB_LEVELS=Math.ceil(MAIN_N/2);
+var TRUNK_TOP_Y=USE_SUB
+  ? LOWEST_BRANCH_Y-(SUB_LEVELS-1)*SUB_GAP-TIP_EXTRA
+  : LOWEST_BRANCH_Y-(CAT_N-1)*BRANCH_GAP-TIP_EXTRA;
 
 function trunkX(y){
   var h=BASE_Y-y;
@@ -464,22 +470,60 @@ function patchPoints(tip,dir,per,draw,scale,seed){
 /* ---------- 组装树 ---------- */
 var leaves=[], listItems=[], aggEls=[], selected=null;
 
+/* ---------- B 方案：分类超过 8 个时切换成二级枝 ----------
+   主枝固定 6–10 根，多出来的分类挂成主枝上的侧枝。树高只跟主枝层数有关，
+   分类再多也只是枝上更密，不会把主干越拉越长。8 个以内仍用一分类一枝。 */
+var MAIN_CURVES = [];
+if (USE_SUB){
+  for (var mi=0; mi<MAIN_N; mi++){
+    var mlv=Math.floor(mi/2), msd=(mi%2===0?-1:1);
+    var msprd=Math.max(26,64-mlv*9);
+    var my=LOWEST_BRANCH_Y-mlv*SUB_GAP;
+    var mlen=Math.max(120,190-mlv*16);
+    MAIN_CURVES.push(bough({x:trunkX(my), y:my}, -90+msd*msprd, mlen, 5.5, '#8e8578'));
+  }
+}
+
 activeCats.forEach(function(cat,ci){
   var posts=POSTS.filter(function(p){ return p.c===cat.id; })
     .sort(function(a,b){ return a.stamp.localeCompare(b.stamp); }); /* 老的在内圈，新的往外长 */
-  if (!posts.length || !BOUGHS[ci]) return;
+  if (!posts.length) return;
+  if (!USE_SUB && !BOUGHS[ci]) return;
 
-  var spec=BOUGHS[ci];
-  var sp={x:trunkX(spec.y), y:spec.y};
-  var b=bough(sp, spec.ang, spec.len, 5, cat.color);
+  var spec, b, tip, dir, per;
+  if (USE_SUB){
+    /* 轮流挂到 6 根主枝上，越靠后的分类越靠近枝梢 */
+    var mi2=ci % MAIN_N, round=Math.floor(ci / MAIN_N);
+    var curve=MAIN_CURVES[mi2];
+    var tt=Math.min(0.86, 0.42+round*0.15);
+    var q0=bezPt(curve.p0,curve.p1,curve.p2,curve.p3,tt);
+    var q1=bezPt(curve.p0,curve.p1,curve.p2,curve.p3,Math.min(0.99,tt+0.04));
+    var ta=Math.atan2(q1.y-q0.y, q1.x-q0.x);
+    var sa=ta+(round%2?0.46:-0.46);
+    var sl=46-round*5;
+    var send={x:q0.x+Math.cos(sa)*sl, y:q0.y+Math.sin(sa)*sl};
+    gBranch.appendChild(el('path',{
+      d:'M'+q0.x.toFixed(1)+','+q0.y.toFixed(1)+' Q'+((q0.x+send.x)/2).toFixed(1)+','+((q0.y+send.y)/2).toFixed(1)+' '+send.x.toFixed(1)+','+send.y.toFixed(1),
+      fill:'none',stroke:'#8e8578','stroke-width':2.8,'stroke-linecap':'round'
+    }));
+    spec={ang:sa/RAD};
+    b={p0:q0,p1:{x:(q0.x+send.x)/2,y:(q0.y+send.y)/2},p2:send,p3:send};
+    tip=send;
+    dir={x:Math.cos(sa),y:Math.sin(sa)};
+    per={x:-dir.y,y:dir.x};
+  } else {
+    spec=BOUGHS[ci];
+    var sp={x:trunkX(spec.y), y:spec.y};
+    b=bough(sp, spec.ang, spec.len, 5, cat.color);
 
-  /* 朝向用枝梢的真实切线，而不是名义角度——枝条是弯的，用名义角度会让叶簇飘到枝外 */
-  var t0=0.82, t1=0.97;
-  var pa=bezPt(b.p0,b.p1,b.p2,b.p3,t0), pb=bezPt(b.p0,b.p1,b.p2,b.p3,t1);
-  var dl=Math.hypot(pb.x-pa.x,pb.y-pa.y)||1;
-  var dir={x:(pb.x-pa.x)/dl, y:(pb.y-pa.y)/dl};
-  var per={x:-dir.y, y:dir.x};
-  var tip=pb;
+    /* 朝向用枝梢的真实切线，而不是名义角度——枝条是弯的，用名义角度会让叶簇飘到枝外 */
+    var t0=0.82, t1=0.97;
+    var pa=bezPt(b.p0,b.p1,b.p2,b.p3,t0), pb=bezPt(b.p0,b.p1,b.p2,b.p3,t1);
+    var dl=Math.hypot(pb.x-pa.x,pb.y-pa.y)||1;
+    dir={x:(pb.x-pa.x)/dl, y:(pb.y-pa.y)/dl};
+    per={x:-dir.y, y:dir.x};
+    tip=pb;
+  }
 
   var real=Math.min(posts.length, CAP_REAL), draw=real+(posts.length>CAP_REAL?1:0);
   /* 叶子随篇数微缩，一簇 1 片和一簇 10 片占地差不多，不会散成一片也不会挤成一坨 */
@@ -495,7 +539,7 @@ activeCats.forEach(function(cat,ci){
   });
 
   /* 装饰叶：沿枝条撒开、带抖动，把枝干中段填满，树冠才不会只在枝梢长叶 */
-  [0.42,0.55,0.68,0.80].forEach(function(tt,di){
+  (USE_SUB?[0.30,0.72]:[0.42,0.55,0.68,0.80]).forEach(function(tt,di){
     var pt=bezPt(b.p0,b.p1,b.p2,b.p3,tt);
     var side=(di%2?-1:1);
     [1,-1].forEach(function(sgn,si){
