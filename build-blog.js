@@ -12,7 +12,7 @@ const POST_DIR = path.join(OUT_DIR, 'posts');
 
 // 分类不写死：保留「技术」作为基础分类，其余从文章的 category 动态生成
 const BASE_CAT = { id: 'tech', n: '技术', color: '#1d9e75' };
-const CAT_PALETTE = ['#007aff', '#ff9500', '#af52de', '#5ac8fa', '#ff2d55', '#5856d6', '#ff3b30'];
+const CAT_PALETTE = ['#007aff', '#ff9500', '#af52de', '#5ac8fa', '#ff2d55', '#5856d6', '#ff3b30', '#00c7be', '#ffd60a'];
 let CATS = [Object.assign({}, BASE_CAT)];
 let COLORS = { '技术': BASE_CAT.color };
 
