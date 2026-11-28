@@ -10,11 +10,92 @@ const TEMPLATE = path.join(ROOT, 'tree-blog-homepage.html');
 const OUT_DIR = path.join(ROOT, 'dist');
 const POST_DIR = path.join(OUT_DIR, 'posts');
 
-// 分类不写死：保留「技术」作为基础分类，其余从文章的 category 动态生成
+// 分类不写死：颜色与顺序登记在 content/categories.json，构建只读不猜。
+// 新分类出现时用「最远色」算法分配（在 OKLab 里取离所有已有色最远的候选点），
+// 并追加写回登记表 —— 已有分类的颜色和树的排列位置从此永久稳定，
+// 不会因为插入一个新分类导致后面所有分类整体平移或撞色。
 const BASE_CAT = { id: 'tech', n: '技术', color: '#1d9e75' };
-const CAT_PALETTE = ['#007aff', '#ff9500', '#af52de', '#5ac8fa', '#ff2d55', '#5856d6', '#ff3b30', '#00c7be', '#ffd60a'];
+const REGISTRY_FILE = path.join(MD_DIR, 'categories.json');
 let CATS = [Object.assign({}, BASE_CAT)];
 let COLORS = { '技术': BASE_CAT.color };
+
+/* ---------- 颜色工具：sRGB ↔ OKLab，算的是感知色差而不是 RGB 距离 ---------- */
+function srgbToLinear(v) {
+  v /= 255;
+  return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+}
+function linearToSrgb(v) {
+  v = v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+  return Math.round(Math.min(1, Math.max(0, v)) * 255);
+}
+function hexToOklab(hex) {
+  const r = srgbToLinear(parseInt(hex.slice(1, 3), 16));
+  const g = srgbToLinear(parseInt(hex.slice(3, 5), 16));
+  const b = srgbToLinear(parseInt(hex.slice(5, 7), 16));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+  ];
+}
+function oklabDistance(a, b) {
+  const A = hexToOklab(a), B = hexToOklab(b);
+  return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]) * 100;
+}
+function relativeLuminance(hex) {
+  const r = srgbToLinear(parseInt(hex.slice(1, 3), 16));
+  const g = srgbToLinear(parseInt(hex.slice(3, 5), 16));
+  const b = srgbToLinear(parseInt(hex.slice(5, 7), 16));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrastOnWhite(hex) {
+  return 1.05 / (relativeLuminance(hex) + 0.05);
+}
+// OKLCH → 十六进制；超出 sRGB 色域就逐步降彩度，降到 0 仍不行则放弃
+function oklchToHex(L, C, hDeg) {
+  for (let c = C; c > 0; c -= 0.004) {
+    const a = c * Math.cos(hDeg * Math.PI / 180);
+    const b = c * Math.sin(hDeg * Math.PI / 180);
+    const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+    const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+    const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+    const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+    const r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+    const g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+    const bl = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+    if (r >= -0.001 && r <= 1.001 && g >= -0.001 && g <= 1.001 && bl >= -0.001 && bl <= 1.001) {
+      return '#' + [linearToSrgb(r), linearToSrgb(g), linearToSrgb(bl)]
+        .map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
+    }
+  }
+  return null;
+}
+// 候选色：三档亮度 × 三档彩度 × 每 6° 一个色相，滤掉在浅色背景上看不清的
+const COLOR_CANDIDATES = (function () {
+  const out = [];
+  [0.52, 0.58, 0.64, 0.70].forEach(function (L) {
+    [0.14, 0.18, 0.21].forEach(function (C) {
+      for (let h = 0; h < 360; h += 6) {
+        const hex = oklchToHex(L, C, h);
+        if (hex && contrastOnWhite(hex) >= 2.8) out.push(hex);
+      }
+    });
+  });
+  return out.filter(function (v, i) { return out.indexOf(v) === i; });
+})();
+
+function farthestColor(used) {
+  let best = '#007aff', bestGap = -1;
+  COLOR_CANDIDATES.forEach(function (hex) {
+    let gap = 1e9;
+    used.forEach(function (u) { gap = Math.min(gap, oklabDistance(hex, u.color)); });
+    if (gap > bestGap) { bestGap = gap; best = hex; }
+  });
+  return best;
+}
 
 function catHash(name) {
   let h = 5381;
@@ -22,22 +103,53 @@ function catHash(name) {
   return h;
 }
 
-// 每次构建时按当前文章重建分类表：技术常驻，其余分类有文章才出现
+function loadRegistry() {
+  try {
+    const arr = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(function (e) {
+      return e && e.n && typeof e.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(e.color);
+    }).map(function (e) { return { n: e.n, color: e.color.toLowerCase() }; });
+  } catch (e) {
+    return [];
+  }
+}
+function saveRegistry(list) {
+  try {
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(list, null, 2) + '\n');
+  } catch (e) {
+    console.log('  ! categories.json 写入失败：' + e.message);
+  }
+}
+
+// 每次构建时按登记表重建分类：技术常驻，其余分类有文章才出现（但颜色永久保留）
 function buildCats(posts) {
   const names = [];
-  posts.forEach(function(p) {
+  posts.forEach(function (p) {
     if (p.category && names.indexOf(p.category) < 0) names.push(p.category);
   });
-  names.sort();
-  const dynamicNames = names.filter(function(name) { return name !== BASE_CAT.n; });
-  CATS = [Object.assign({}, BASE_CAT)];
-  COLORS = { '技术': BASE_CAT.color };
-  // 按排序顺序依次取色，避免哈希取模导致不同分类撞色
-  dynamicNames.forEach(function(name, index) {
-    const h = catHash(name);
-    const color = CAT_PALETTE[index % CAT_PALETTE.length];
-    CATS.push({ id: 'c' + h.toString(36), n: name, color: color });
-    COLORS[name] = color;
+
+  const reg = loadRegistry();
+  if (!reg.some(function (e) { return e.n === BASE_CAT.n; })) {
+    reg.unshift({ n: BASE_CAT.n, color: BASE_CAT.color });
+  }
+  const known = reg.map(function (e) { return e.n; });
+  const added = names.filter(function (n) { return known.indexOf(n) < 0; }).sort();
+  added.forEach(function (n) { reg.push({ n: n, color: farthestColor(reg) }); });
+  if (added.length) {
+    saveRegistry(reg);
+    console.log('  新分类 ' + added.join('、') + ' 已分配颜色并写入 categories.json');
+  }
+
+  CATS = [];
+  COLORS = {};
+  const tech = reg.filter(function (e) { return e.n === BASE_CAT.n; })[0];
+  CATS.push({ id: BASE_CAT.id, n: BASE_CAT.n, color: tech.color });
+  COLORS[BASE_CAT.n] = tech.color;
+  reg.forEach(function (e) {
+    if (e.n === BASE_CAT.n) return;
+    CATS.push({ id: 'c' + catHash(e.n).toString(36), n: e.n, color: e.color });
+    COLORS[e.n] = e.color;
   });
 }
 
